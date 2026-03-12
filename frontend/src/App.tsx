@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GlobeView } from './components/Globe';
+import { VesselPanel } from './components/VesselPanel';
 
 const queryClient = new QueryClient();
 
@@ -16,11 +17,7 @@ export default function App() {
         <main className="flex-1 relative">
           <GlobeView />
 
-          {/* Right panel slot — hidden by default, for future vessel detail panel */}
-          <div
-            id="vessel-panel-slot"
-            className="hidden fixed right-0 top-12 bottom-0 w-[420px] bg-gray-900 border-l border-gray-800"
-          />
+          <VesselPanel />
         </main>
       </div>
     </QueryClientProvider>

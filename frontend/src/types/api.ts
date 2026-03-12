@@ -5,6 +5,26 @@ export interface PaginatedResponse<T> {
   offset: number;
 }
 
+export interface SanctionsMatch {
+  source: string;
+  confidence: number;
+  matchedField: string;
+  entityUrl?: string;
+}
+
+export interface OwnershipData {
+  registeredOwner?: string;
+  commercialManager?: string;
+  ismManager?: string;
+  beneficialOwner?: string;
+}
+
+export interface ManualEnrichment {
+  ownershipChain?: string;
+  notes?: string;
+  enrichedAt?: string;
+}
+
 export interface VesselDetail {
   mmsi: number;
   imo?: number;
@@ -21,6 +41,11 @@ export interface VesselDetail {
   riskTier: 'green' | 'yellow' | 'red';
   owner?: string;
   operator?: string;
+  yearBuilt?: number;
+  anomalies?: import('./anomaly').AnomalyEvent[];
+  sanctionsMatches?: SanctionsMatch[];
+  ownershipData?: OwnershipData;
+  manualEnrichment?: ManualEnrichment;
 }
 
 export interface TrackPoint {
