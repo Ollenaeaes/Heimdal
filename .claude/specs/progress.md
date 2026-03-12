@@ -143,9 +143,26 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 323 backend unit tests + 28 integration (skipped without Docker)
 - Commits: `034fb09`, `895d24c`, `0d241b2`
 
+### 14-sar-frontend (all 3 stories)
+- Story 1: SAR detection markers — TanStack Query polling (5min), dark ship pulsing animation (white+red border), matched detections (gray), click popup with detection details
+- Story 2: GFW event markers — color-coded by type (orange diamond=encounter, yellow circle=loitering, red triangle=AIS-disabling, blue square=port visit), click popup with event-specific details, per-type filtering
+- Story 3: Dark ship filter — darkShipsOnly toggle in Zustand store, integrated with SAR marker layer and overlay controls
+- New files: SarMarkers.tsx, GfwEventMarkers.tsx, eventIcons.ts, sarMarkers.test.ts, gfwEventMarkers.test.ts
+- Updated: Overlays.tsx (SAR+GFW toggles), GlobeView.tsx, useVesselStore.ts (new filter fields), api.ts (SAR+GFW types)
+- Tests: 27 new (13 SAR + 14 GFW)
+- Commit: `5755f53`
+
+### 15-stats-and-replay (all 3 stories)
+- Story 1: Enhanced stats dashboard — expandable StatsBar with CSS bar charts for risk tiers, severity breakdown, GFW events by type
+- Story 2: Track replay — play/pause/scrub controls, speed selector (0.5x-10x), AIS gap segments in red, GFW event markers on timeline, globe polyline+animated marker via ReplayOverlay
+- Story 3: Vessel dossier export — JSON export with vessel profile, anomalies, GFW events, track, sanctions, enrichment; download as heimdal-dossier-{mmsi}-{date}.json
+- New files: TrackReplay.tsx, DossierExport.tsx, ReplayOverlay.tsx, useTrackReplay.ts, useReplayStore.ts
+- Tests: 52 new (15 stats + 20 replay + 17 export)
+- Commit: `3356dbe`
+
 ## Current Story
 
-Spec 16 (testing-and-docs) complete. Backend: 323 unit tests + 28 integration. Scoring: 148 tests. Enrichment: 192 tests. Total: 691 backend tests.
+Wave 7 complete. All 16 specs across 7 waves implemented.
 
 ## Known Issues
 
@@ -174,10 +191,11 @@ Spec 16 (testing-and-docs) complete. Backend: 323 unit tests + 28 integration. S
 
 ## Notes for Next Session
 
-- Spec 16 (testing-and-docs) fully implemented on branch `feature/wave-7-polish`
+- ALL 16 SPECS COMPLETE across 7 waves on branch `feature/wave-7-polish`
 - Backend tests: 691 total (323 tests/ + 148 scoring + 192 enrichment + 28 integration)
-- Frontend tests: 275 total (226 pre-Wave-6 + 29 enrichment + 20 watchlist)
-- New fixture files: sample_opensanctions.json, sample_vessel_profiles.json, sample_gfw_events.json, sample_gfw_sar_detections.json
+- Frontend tests: 354 total (275 pre-Wave-7 + 27 SAR/GFW + 52 stats/replay/export)
+- Total test count: 1045 (691 backend + 354 frontend)
 - Integration tests in tests/integration/ auto-skip when Docker not running
 - Performance benchmarks: python scripts/benchmark.py (--quick for fast mode)
-- README.md now documents the full platform (replaces old SDD kit readme)
+- README.md documents the full platform
+- Ready for merge to main
