@@ -5,8 +5,8 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 ## Current Feature
 
 **Spec:** Wave Plan — 16 specs across 7 waves (GFW Integration)
-**Branch:** feature/wave-2-pipeline-frontend
-**Status:** Wave 2 complete, ready for Wave 3
+**Branch:** feature/wave-3-api-server
+**Status:** Wave 3 complete, ready for Wave 4
 
 ## Stories Completed
 
@@ -53,13 +53,26 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 28 frontend tests (5 store + 20 utils + 2 globe + 1 app)
 - Commits: `5aad300`, `f4011b0`, `71f2016`
 
+### 06-api-server (all 8 stories)
+- Story 1: FastAPI app factory with lifespan (DB + Redis init/shutdown), Dockerfile, CORS middleware
+- Story 6: Health endpoint (DB/Redis connectivity, AIS state, vessel/anomaly counts, 503 on failure), Stats endpoint (risk tier breakdown, anomalies by severity, dark ship count, ingestion rate, storage estimate)
+- Story 2: Vessel REST endpoints — GET /api/vessels (paginated, filters: risk_tier, bbox, ship_type, sanctions_hit, active_since), GET /api/vessels/{mmsi} (full profile + anomaly count + latest enrichment), GET /api/vessels/{mmsi}/track (time range, ST_Simplify)
+- Story 3: Anomaly REST endpoint — GET /api/anomalies (paginated, filters: severity, time range, bbox, resolved; JOIN with vessel_profiles for vessel_name and risk_tier)
+- Story 4: SAR detections (GET /api/sar/detections with is_dark, bbox), GFW events (GET /api/gfw/events with event_type, mmsi, time range), Watchlist CRUD (GET/POST/DELETE /api/watchlist)
+- Story 5: Enrichment POST — POST /api/vessels/{mmsi}/enrich (Pydantic validation, maps to manual_enrichment table, publishes re-scoring event to Redis)
+- Story 7: WebSocket position streaming — /ws/positions with per-client subscription filters (bbox, risk_tiers, ship_types, mmsi_list) via Redis pub/sub
+- Story 8: WebSocket alert streaming — /ws/alerts broadcasting risk_change and anomaly events from two Redis channels
+- Tests: 110 api-server tests (8 app + 11 health + 17 vessels + 12 anomalies + 6 sar + 5 gfw + 7 watchlist + 7 enrichment + 26 ws_positions + 11 ws_alerts)
+- Commits: `68da694`, `6825d0a`, `207af4e`
+
 ## Current Story
 
-Wave 2 complete. Ready for Wave 3 (06-api-server, 07-scoring-engine).
+Wave 3 complete. Ready for Wave 4 (07-scoring-engine, 08-enrichment-service).
 
 ## Known Issues
 
 - Frontend build produces a large chunk (4.6MB) from CesiumJS — consider code-splitting in a future wave
+- Minor warnings in ws_positions tests (unawaited coroutines from AsyncMock) — cosmetic only, all tests pass
 
 ## Decisions Made
 
@@ -77,8 +90,9 @@ Wave 2 complete. Ready for Wave 3 (06-api-server, 07-scoring-engine).
 
 ## Notes for Next Session
 
-- Wave 2 is fully implemented and tested on branch `feature/wave-2-pipeline-frontend`
-- Wave 3 can start: 06-api-server and 07-scoring-engine (parallel, depend on Waves 1-2)
-- Backend tests: 177 total (80 shared + 97 ais-ingest)
+- Wave 3 is fully implemented and tested on branch `feature/wave-3-api-server`
+- Wave 4 can start: 07-scoring-engine and 08-enrichment-service (parallel, depend on Wave 3)
+- Backend tests: 287 total (80 shared + 97 ais-ingest + 110 api-server)
 - Frontend tests: 28 total
-- Both Docker images build successfully
+- API server has 9 route modules: health, vessels, anomalies, sar, gfw, watchlist, enrichment, ws_positions, ws_alerts
+- All Docker images build successfully
