@@ -69,8 +69,20 @@ def create_app() -> FastAPI:
     # Routes
     # ------------------------------------------------------------------
     from routes.health import router as health_router
+    from routes.vessels import router as vessels_router
+    from routes.anomalies import router as anomalies_router
+    from routes.sar import router as sar_router
+    from routes.gfw import router as gfw_router
+    from routes.watchlist import router as watchlist_router
+    from routes.enrichment import router as enrichment_router
 
     app.include_router(health_router)
+    app.include_router(vessels_router)
+    app.include_router(anomalies_router)
+    app.include_router(sar_router)
+    app.include_router(gfw_router)
+    app.include_router(watchlist_router)
+    app.include_router(enrichment_router)
 
     return app
 
