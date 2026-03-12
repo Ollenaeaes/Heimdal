@@ -21,6 +21,7 @@ describe('useVesselStore', () => {
     // Reset the store between tests
     useVesselStore.setState({
       vessels: new Map(),
+      positionHistory: new Map(),
       selectedMmsi: null,
       filters: {
         riskTiers: new Set(),
