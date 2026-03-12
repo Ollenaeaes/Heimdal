@@ -1,5 +1,11 @@
+import { useState } from 'react';
 import { Viewer, CameraFlyTo } from 'resium';
 import { Ion, Cartesian3 } from 'cesium';
+import { useWebSocket } from '../../hooks/useWebSocket';
+import { VesselCluster } from './VesselCluster';
+import { TrackTrails } from './TrackTrails';
+import { Overlays, OverlayToggles } from './Overlays';
+import type { OverlayToggleState } from './Overlays';
 
 // Set Cesium Ion token if available
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
@@ -15,22 +21,45 @@ export const INITIAL_ALT = 5_000_000;
 const initialPosition = Cartesian3.fromDegrees(INITIAL_LON, INITIAL_LAT, INITIAL_ALT);
 
 export function GlobeView() {
+  // Establish WebSocket connection on mount
+  useWebSocket();
+
+  const [trackTrailsEnabled] = useState(true);
+  const [overlayState, setOverlayState] = useState<OverlayToggleState>({
+    showStsZones: false,
+    showTerminals: false,
+    showEez: false,
+  });
+
   return (
-    <Viewer
-      full
-      shouldAnimate
-      infoBox={false}
-      selectionIndicator={false}
-      homeButton={false}
-      baseLayerPicker={false}
-      navigationHelpButton={false}
-      animation={false}
-      timeline={false}
-      fullscreenButton={false}
-      geocoder={false}
-      sceneModePicker={false}
-    >
-      <CameraFlyTo destination={initialPosition} duration={0} />
-    </Viewer>
+    <>
+      <Viewer
+        full
+        shouldAnimate
+        infoBox={false}
+        selectionIndicator={false}
+        homeButton={false}
+        baseLayerPicker={false}
+        navigationHelpButton={false}
+        animation={false}
+        timeline={false}
+        fullscreenButton={false}
+        geocoder={false}
+        sceneModePicker={false}
+      >
+        <CameraFlyTo destination={initialPosition} duration={0} />
+        <VesselCluster />
+        <TrackTrails enabled={trackTrailsEnabled} />
+        <Overlays
+          showStsZones={overlayState.showStsZones}
+          showTerminals={overlayState.showTerminals}
+          showEez={overlayState.showEez}
+        />
+      </Viewer>
+      {/* Overlay toggle controls */}
+      <div className="absolute bottom-4 left-4 z-10">
+        <OverlayToggles state={overlayState} onChange={setOverlayState} />
+      </div>
+    </>
   );
 }
