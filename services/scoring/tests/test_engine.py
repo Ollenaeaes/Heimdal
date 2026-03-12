@@ -425,14 +425,16 @@ class TestRedisSubscription:
     """Verify that main.py subscribes to both expected channels."""
 
     def _reload_main(self):
-        """Force-reload the main module so patches take effect."""
-        import importlib
+        """Load the scoring main module by file path to avoid module name collisions."""
+        import importlib.util
 
-        if "main" in sys.modules:
-            return importlib.reload(sys.modules["main"])
-        import main
-
-        return main
+        main_path = Path(__file__).resolve().parent.parent / "main.py"
+        module_name = "scoring_main"
+        spec = importlib.util.spec_from_file_location(module_name, main_path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = mod
+        spec.loader.exec_module(mod)
+        return mod
 
     @pytest.mark.asyncio
     async def test_subscribes_to_both_channels(self):
