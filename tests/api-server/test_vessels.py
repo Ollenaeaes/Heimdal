@@ -243,7 +243,7 @@ class TestListVessels:
         item = body["items"][0]
         assert "mmsi" in item
         assert "imo" in item
-        assert "name" in item
+        assert "ship_name" in item
         assert "flag_state" in item
         assert "ship_type" in item
         assert "risk_tier" in item

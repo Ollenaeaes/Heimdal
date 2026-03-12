@@ -42,7 +42,7 @@ async def list_watchlist():
             )
         )
         rows = [dict(r) for r in result.mappings().all()]
-    return {"items": rows, "count": len(rows)}
+    return {"items": rows, "total": len(rows)}
 
 
 @router.post("/{mmsi}", status_code=201)

@@ -122,9 +122,9 @@ class TestGfwEvents:
         assert resp.status_code == 200
         body = resp.json()
         assert "items" in body
-        assert body["count"] == 3
-        assert body["limit"] == 100
-        assert body["offset"] == 0
+        assert body["total"] == 3
+        assert body["page"] == 1
+        assert body["per_page"] == 100
 
     def test_filters_by_event_type(self, _mock_deps):
         """GET /api/gfw/events?event_type=ENCOUNTER returns only encounter events."""
@@ -143,7 +143,7 @@ class TestGfwEvents:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["count"] == 2
+        assert body["total"] == 2
         for item in body["items"]:
             assert item["event_type"] == "ENCOUNTER"
 
@@ -167,7 +167,7 @@ class TestGfwEvents:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["count"] == 2
+        assert body["total"] == 2
         for item in body["items"]:
             assert item["mmsi"] == 211234567
 
@@ -200,11 +200,11 @@ class TestGfwEvents:
         assert resp.status_code == 200
         body = resp.json()
         # Only event 2 (June 12) falls within June 11 - June 13 range
-        assert body["count"] == 1
+        assert body["total"] == 1
         assert body["items"][0]["gfw_event_id"] == "evt-002"
 
     def test_pagination_params_passed(self, _mock_deps):
-        """Custom limit and offset are forwarded to the repository."""
+        """Page and per_page are converted to limit/offset for the repository."""
         from fastapi.testclient import TestClient
 
         with patch(
@@ -214,7 +214,7 @@ class TestGfwEvents:
         ) as mock_list:
             app = api_main.create_app()
             with TestClient(app) as client:
-                resp = client.get("/api/gfw/events?limit=25&offset=50")
+                resp = client.get("/api/gfw/events?page=3&per_page=25")
 
         assert resp.status_code == 200
         call_kwargs = mock_list.call_args

@@ -129,7 +129,7 @@ class TestWatchlistGet:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["count"] == 2
+        assert body["total"] == 2
         assert len(body["items"]) == 2
         assert body["items"][0]["mmsi"] == 211234567
         assert body["items"][0]["reason"] == "Suspected sanctions evasion"
@@ -153,7 +153,7 @@ class TestWatchlistGet:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["count"] == 0
+        assert body["total"] == 0
         assert body["items"] == []
 
 
@@ -340,6 +340,6 @@ class TestWatchlistAddThenGet:
 
         assert get_resp.status_code == 200
         body = get_resp.json()
-        assert body["count"] == 1
+        assert body["total"] == 1
         assert body["items"][0]["mmsi"] == 211234567
         assert body["items"][0]["reason"] == "Monitoring for STS activity"

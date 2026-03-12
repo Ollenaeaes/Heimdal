@@ -133,9 +133,9 @@ class TestSarDetections:
         assert resp.status_code == 200
         body = resp.json()
         assert "items" in body
-        assert body["count"] == 3
-        assert body["limit"] == 100
-        assert body["offset"] == 0
+        assert body["total"] == 3
+        assert body["page"] == 1
+        assert body["per_page"] == 100
         assert len(body["items"]) == 3
 
     def test_filters_by_is_dark_true(self, _mock_deps):
@@ -155,7 +155,7 @@ class TestSarDetections:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["count"] == 2
+        assert body["total"] == 2
         # Verify all returned items are dark
         for item in body["items"]:
             assert item["is_dark"] is True
@@ -181,7 +181,7 @@ class TestSarDetections:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["count"] == 1
+        assert body["total"] == 1
         assert body["items"][0]["is_dark"] is False
         call_kwargs = mock_list.call_args
         assert call_kwargs[1]["is_dark"] is False
@@ -197,13 +197,13 @@ class TestSarDetections:
         ):
             app = api_main.create_app()
             with TestClient(app) as client:
-                # bbox covers the Gulf area (items 1 and 2), not item 3 (Norway)
-                resp = client.get("/api/sar/detections?bbox=54,25,57,27")
+                # bbox sw_lat=25,sw_lon=54,ne_lat=27,ne_lon=57 covers the Gulf area
+                resp = client.get("/api/sar/detections?bbox=25,54,27,57")
 
         assert resp.status_code == 200
         body = resp.json()
         # Only detections at lat=25.5,lon=55.3 and lat=26.0,lon=56.0 should match
-        assert body["count"] == 2
+        assert body["total"] == 2
         lats = {item["lat"] for item in body["items"]}
         assert 25.5 in lats
         assert 26.0 in lats
@@ -223,10 +223,10 @@ class TestSarDetections:
                 resp = client.get("/api/sar/detections?bbox=0,0,1,1")
 
         assert resp.status_code == 200
-        assert resp.json()["count"] == 0
+        assert resp.json()["total"] == 0
 
     def test_pagination_params_passed(self, _mock_deps):
-        """Custom limit and offset are forwarded to the repository."""
+        """Page and per_page are converted to limit/offset for the repository."""
         from fastapi.testclient import TestClient
 
         with patch(
@@ -236,7 +236,7 @@ class TestSarDetections:
         ) as mock_list:
             app = api_main.create_app()
             with TestClient(app) as client:
-                resp = client.get("/api/sar/detections?limit=10&offset=20")
+                resp = client.get("/api/sar/detections?page=3&per_page=10")
 
         assert resp.status_code == 200
         call_kwargs = mock_list.call_args

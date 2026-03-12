@@ -106,7 +106,7 @@ async def list_vessels(
         items.append({
             "mmsi": r["mmsi"],
             "imo": r.get("imo"),
-            "name": r.get("ship_name"),
+            "ship_name": r.get("ship_name"),
             "flag_state": r.get("flag_country"),
             "ship_type": r.get("ship_type"),
             "risk_tier": r.get("risk_tier"),

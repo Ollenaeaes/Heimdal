@@ -92,9 +92,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
     environment:
       DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
       REDIS_URL: "redis://redis:6379/0"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
@@ -106,7 +113,8 @@ services:
   frontend:
     build: ./frontend
     depends_on:
-      - api-server
+      api-server:
+        condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-3000}:80"
 

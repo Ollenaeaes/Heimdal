@@ -164,14 +164,18 @@ async def stats(request: Request):
         logger.warning("Failed to read ingestion rate from Redis", exc_info=True)
 
     # --- Storage usage estimate (row counts as proxy) ---
+    _STORAGE_QUERIES = {
+        "vessel_positions": text("SELECT COUNT(*) FROM vessel_positions"),
+        "vessel_profiles": text("SELECT COUNT(*) FROM vessel_profiles"),
+        "anomaly_events": text("SELECT COUNT(*) FROM anomaly_events"),
+        "sar_detections": text("SELECT COUNT(*) FROM sar_detections"),
+    }
     storage_estimate: dict[str, int] = {}
     try:
         async with session_factory() as session:
-            for table in ("vessel_positions", "vessel_profiles", "anomaly_events", "sar_detections"):
-                result = await session.execute(
-                    text(f"SELECT COUNT(*) FROM {table}")  # noqa: S608
-                )
-                storage_estimate[table] = result.scalar() or 0
+            for table_name, query in _STORAGE_QUERIES.items():
+                result = await session.execute(query)
+                storage_estimate[table_name] = result.scalar() or 0
     except Exception:
         logger.warning("Failed to estimate storage usage", exc_info=True)
 

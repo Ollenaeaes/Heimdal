@@ -26,14 +26,16 @@ async def get_gfw_events(
     mmsi: Optional[int] = Query(None, description="Filter by vessel MMSI"),
     start: Optional[datetime] = Query(None, description="Filter events starting after this time"),
     end: Optional[datetime] = Query(None, description="Filter events ending before this time"),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(100, ge=1, le=1000),
 ):
     """Return paginated GFW events with optional filters.
 
     Supports filtering by ``event_type``, ``mmsi``, and time range
     (``start`` / ``end``).
     """
+    offset = (page - 1) * per_page
+
     session_factory = get_session()
     async with session_factory() as session:
         rows = await list_gfw_events(
@@ -41,7 +43,7 @@ async def get_gfw_events(
             event_type=event_type,
             mmsi=mmsi,
             start_after=start,
-            limit=limit,
+            limit=per_page,
             offset=offset,
         )
 
@@ -52,4 +54,4 @@ async def get_gfw_events(
             if r.get("start_time") is not None and r["start_time"] <= end
         ]
 
-    return {"items": rows, "count": len(rows), "limit": limit, "offset": offset}
+    return {"items": rows, "total": len(rows), "page": page, "per_page": per_page}
