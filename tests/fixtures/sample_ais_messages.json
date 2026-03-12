@@ -1,0 +1,344 @@
+{
+  "valid_position_reports": [
+    {
+      "description": "Standard cargo vessel off Norway coast",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Tanker in Baltic Sea at anchor",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 211234567, "time_utc": "2024-06-20T14:15:30Z"},
+      "Message": {"PositionReport": {"Sog": 0.0, "Cog": 45.2, "TrueHeading": 44, "Latitude": 54.321, "Longitude": 18.789, "NavigationalStatus": 1, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 15}}
+    },
+    {
+      "description": "Container ship transiting Suez approach",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 636012345, "time_utc": "2024-03-10T08:45:00Z"},
+      "Message": {"PositionReport": {"Sog": 14.7, "Cog": 170.0, "TrueHeading": 168, "Latitude": 31.250, "Longitude": 32.310, "NavigationalStatus": 0, "RateOfTurn": -2.5, "SpecialManoeuvreIndicator": 0, "Timestamp": 45}}
+    },
+    {
+      "description": "Fishing vessel in North Sea",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 244123456, "time_utc": "2024-07-05T06:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 3.2, "Cog": 290.0, "TrueHeading": 288, "Latitude": 57.500, "Longitude": 3.750, "NavigationalStatus": 7, "RateOfTurn": 10.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 0}}
+    },
+    {
+      "description": "Passenger ferry in Mediterranean",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 247000001, "time_utc": "2024-08-12T18:20:00Z"},
+      "Message": {"PositionReport": {"Sog": 22.5, "Cog": 95.0, "TrueHeading": 94, "Latitude": 40.500, "Longitude": 14.200, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 20}}
+    },
+    {
+      "description": "Tug with minimal speed in port",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 538004321, "time_utc": "2024-02-28T22:10:00Z"},
+      "Message": {"PositionReport": {"Sog": 0.1, "Cog": 0.0, "TrueHeading": 350, "Latitude": 1.267, "Longitude": 103.850, "NavigationalStatus": 5, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 50}}
+    },
+    {
+      "description": "Bulk carrier in southern hemisphere",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 710000001, "time_utc": "2024-04-01T03:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 11.0, "Cog": 220.0, "TrueHeading": 218, "Latitude": -33.900, "Longitude": 18.400, "NavigationalStatus": 0, "RateOfTurn": 1.5, "SpecialManoeuvreIndicator": 0, "Timestamp": 10}}
+    },
+    {
+      "description": "Vessel near date line (positive longitude)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 431000001, "time_utc": "2024-05-15T12:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 8.0, "Cog": 5.0, "TrueHeading": 4, "Latitude": 35.600, "Longitude": 179.900, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 25}}
+    },
+    {
+      "description": "Vessel near date line (negative longitude)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 503000001, "time_utc": "2024-05-15T12:05:00Z"},
+      "Message": {"PositionReport": {"Sog": 6.5, "Cog": 180.0, "TrueHeading": 180, "Latitude": -36.800, "Longitude": -179.500, "NavigationalStatus": 0, "RateOfTurn": -3.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 35}}
+    },
+    {
+      "description": "Vessel at equator and prime meridian",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 620000001, "time_utc": "2024-09-01T00:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 5.0, "Cog": 90.0, "TrueHeading": 90, "Latitude": 0.0, "Longitude": 0.0, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 0}}
+    },
+    {
+      "description": "Vessel at extreme valid coordinates",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 123456789, "time_utc": "2024-01-01T00:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 0.0, "Cog": 0.0, "TrueHeading": 0, "Latitude": 90.0, "Longitude": 180.0, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 0}}
+    },
+    {
+      "description": "Vessel at extreme negative coordinates",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 987654321, "time_utc": "2024-01-01T00:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 0.0, "Cog": 0.0, "TrueHeading": 0, "Latitude": -90.0, "Longitude": -180.0, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 0}}
+    },
+    {
+      "description": "Vessel with max valid SOG (102.2)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 305000001, "time_utc": "2024-03-20T16:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 102.2, "Cog": 270.0, "TrueHeading": 270, "Latitude": 25.000, "Longitude": -80.000, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 40}}
+    },
+    {
+      "description": "Vessel with max valid ROT (127.0)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 220000001, "time_utc": "2024-04-10T09:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 2.0, "Cog": 120.0, "TrueHeading": 118, "Latitude": 55.700, "Longitude": 12.600, "NavigationalStatus": 0, "RateOfTurn": 127.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 55}}
+    },
+    {
+      "description": "Vessel with negative ROT",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 226000001, "time_utc": "2024-04-10T09:35:00Z"},
+      "Message": {"PositionReport": {"Sog": 4.0, "Cog": 300.0, "TrueHeading": 298, "Latitude": 48.860, "Longitude": 2.350, "NavigationalStatus": 0, "RateOfTurn": -127.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 5}}
+    }
+  ],
+
+  "not_available_markers": [
+    {
+      "description": "SOG not available (102.3)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000421, "time_utc": "2024-01-15T10:31:00Z"},
+      "Message": {"PositionReport": {"Sog": 102.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 31}}
+    },
+    {
+      "description": "COG not available (360.0)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000422, "time_utc": "2024-01-15T10:32:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 360.0, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 32}}
+    },
+    {
+      "description": "Heading not available (511)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000423, "time_utc": "2024-01-15T10:33:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 511, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 33}}
+    },
+    {
+      "description": "ROT not available (-128)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000424, "time_utc": "2024-01-15T10:34:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": -128, "SpecialManoeuvreIndicator": 0, "Timestamp": 34}}
+    },
+    {
+      "description": "All not-available markers at once",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000425, "time_utc": "2024-01-15T10:35:00Z"},
+      "Message": {"PositionReport": {"Sog": 102.3, "Cog": 360.0, "TrueHeading": 511, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": -128, "SpecialManoeuvreIndicator": 0, "Timestamp": 35}}
+    }
+  ],
+
+  "invalid_messages": [
+    {
+      "description": "MMSI too short (8 digits)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 12345678, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "MMSI too long (10 digits)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 1234567890, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "MMSI all zeros",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 0, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Latitude out of range (91.0)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 91.0, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Latitude out of range (-91.0)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": -91.0, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Longitude out of range (181.0)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 181.0, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Longitude out of range (-181.0)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": -181.0, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Missing MetaData entirely",
+      "MessageType": "PositionReport",
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Missing MMSI in MetaData",
+      "MessageType": "PositionReport",
+      "MetaData": {"time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Missing timestamp in MetaData",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Missing Message payload entirely",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"}
+    },
+    {
+      "description": "Empty Message.PositionReport",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {}}
+    },
+    {
+      "description": "Missing Latitude in position report",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Missing Longitude in position report",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "NavigationalStatus": 0, "RateOfTurn": 5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    }
+  ],
+
+  "valid_static_data": [
+    {
+      "description": "Full static data with all fields",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9876543, "Name": "NORDIC EXPLORER", "CallSign": "LABC1", "Type": 70, "Destination": "BERGEN", "Eta": {"Month": 3, "Day": 15, "Hour": 8, "Minute": 0}, "MaximumStaticDraught": 8.5, "Dimension": {"A": 100, "B": 50, "C": 15, "D": 15}}}
+    },
+    {
+      "description": "Tanker with large dimensions",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 211234567, "time_utc": "2024-06-20T14:15:30Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9812345, "Name": "BALTIC TANKER", "CallSign": "DGTZ2", "Type": 80, "Destination": "ROTTERDAM", "Eta": {"Month": 7, "Day": 1, "Hour": 12, "Minute": 30}, "MaximumStaticDraught": 14.2, "Dimension": {"A": 200, "B": 130, "C": 25, "D": 25}}}
+    },
+    {
+      "description": "Fishing vessel with minimal data",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 244123456, "time_utc": "2024-07-05T06:00:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 0, "Name": "STELLA MARIS", "CallSign": "PCDE3", "Type": 30, "Destination": "", "Eta": {"Month": 0, "Day": 0, "Hour": 0, "Minute": 0}, "MaximumStaticDraught": 3.5, "Dimension": {"A": 20, "B": 10, "C": 5, "D": 5}}}
+    },
+    {
+      "description": "Passenger ship",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 247000001, "time_utc": "2024-08-12T18:20:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9654321, "Name": "MARE NOSTRUM", "CallSign": "IBXY4", "Type": 60, "Destination": "NAPOLI", "Eta": {"Month": 8, "Day": 13, "Hour": 6, "Minute": 0}, "MaximumStaticDraught": 7.0, "Dimension": {"A": 150, "B": 100, "C": 20, "D": 20}}}
+    },
+    {
+      "description": "Tug boat",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 538004321, "time_utc": "2024-02-28T22:10:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9543210, "Name": "HARBOUR TUG 5", "CallSign": "V7AB5", "Type": 52, "Destination": "SINGAPORE", "Eta": {"Month": 0, "Day": 0, "Hour": 0, "Minute": 0}, "MaximumStaticDraught": 4.0, "Dimension": {"A": 15, "B": 15, "C": 6, "D": 6}}}
+    },
+    {
+      "description": "Static data with only MMSI and name",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 636012345, "time_utc": "2024-03-10T08:45:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 0, "Name": "DESERT WIND", "CallSign": "", "Type": 0, "Destination": "", "MaximumStaticDraught": 0.0, "Dimension": {"A": 0, "B": 0, "C": 0, "D": 0}}}
+    },
+    {
+      "description": "Container ship with no ETA",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 710000001, "time_utc": "2024-04-01T03:30:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9111222, "Name": "SANTOS EXPRESS", "CallSign": "PPQR6", "Type": 71, "Destination": "SANTOS", "Dimension": {"A": 250, "B": 100, "C": 20, "D": 20}}}
+    }
+  ],
+
+  "invalid_static_data": [
+    {
+      "description": "MMSI too short for static data",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 12345678, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9876543, "Name": "INVALID VESSEL", "Type": 70, "Dimension": {"A": 100, "B": 50, "C": 15, "D": 15}}}
+    },
+    {
+      "description": "Missing MMSI in static data MetaData",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9876543, "Name": "NO MMSI VESSEL", "Type": 70}}
+    },
+    {
+      "description": "Missing Message.ShipStaticData",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {}
+    },
+    {
+      "description": "Empty ShipStaticData payload",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"ShipStaticData": {}}
+    }
+  ],
+
+  "unsupported_message_types": [
+    {
+      "description": "StandardClassBPositionReport (type 18)",
+      "MessageType": "StandardClassBPositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"StandardClassBPositionReport": {"Sog": 5.0, "Cog": 90.0, "TrueHeading": 88, "Latitude": 59.900, "Longitude": 10.750}}
+    },
+    {
+      "description": "AddressedSafetyMessage",
+      "MessageType": "AddressedSafetyMessage",
+      "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"AddressedSafetyMessage": {"Text": "SECURITE"}}
+    },
+    {
+      "description": "AidsToNavigationReport",
+      "MessageType": "AidsToNavigationReport",
+      "MetaData": {"MMSI": 992351001, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"AidsToNavigationReport": {"Name": "BUOY A1", "Latitude": 60.0, "Longitude": 5.0}}
+    }
+  ],
+
+  "edge_cases": [
+    {
+      "description": "Completely empty message",
+      "raw": {}
+    },
+    {
+      "description": "Null MessageType",
+      "raw": {"MessageType": null, "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"}}
+    },
+    {
+      "description": "Numeric MessageType",
+      "raw": {"MessageType": 1, "MetaData": {"MMSI": 259000420, "time_utc": "2024-01-15T10:30:00Z"}}
+    },
+    {
+      "description": "Malformed timestamp string",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 259000420, "time_utc": "not-a-date"},
+      "Message": {"PositionReport": {"Sog": 12.3, "Cog": 180.5, "TrueHeading": 179, "Latitude": 68.123, "Longitude": 15.456, "NavigationalStatus": 0, "RateOfTurn": 5.0}}
+    },
+    {
+      "description": "MMSI exactly at lower bound (100000000)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 100000000, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 10.0, "Cog": 90.0, "TrueHeading": 90, "Latitude": 50.0, "Longitude": 10.0, "NavigationalStatus": 0, "RateOfTurn": 0.0}}
+    },
+    {
+      "description": "MMSI exactly at upper bound (999999999)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 999999999, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 10.0, "Cog": 90.0, "TrueHeading": 90, "Latitude": 50.0, "Longitude": 10.0, "NavigationalStatus": 0, "RateOfTurn": 0.0}}
+    },
+    {
+      "description": "MMSI just below lower bound (99999999)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 99999999, "time_utc": "2024-01-15T10:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 10.0, "Cog": 90.0, "TrueHeading": 90, "Latitude": 50.0, "Longitude": 10.0, "NavigationalStatus": 0, "RateOfTurn": 0.0}}
+    }
+  ]
+}
