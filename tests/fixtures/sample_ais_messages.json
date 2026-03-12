@@ -89,6 +89,84 @@
       "MessageType": "PositionReport",
       "MetaData": {"MMSI": 226000001, "time_utc": "2024-04-10T09:35:00Z"},
       "Message": {"PositionReport": {"Sog": 4.0, "Cog": 300.0, "TrueHeading": 298, "Latitude": 48.860, "Longitude": 2.350, "NavigationalStatus": 0, "RateOfTurn": -127.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 5}}
+    },
+    {
+      "description": "Shadow fleet tanker TURBA off Ceuta STS zone",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 273412340, "time_utc": "2024-02-10T04:20:00Z"},
+      "Message": {"PositionReport": {"Sog": 2.1, "Cog": 135.0, "TrueHeading": 134, "Latitude": 35.890, "Longitude": -5.310, "NavigationalStatus": 1, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 12}}
+    },
+    {
+      "description": "Shadow fleet tanker NS CHAMPION near Kalamata STS zone",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 273567890, "time_utc": "2024-03-05T11:45:00Z"},
+      "Message": {"PositionReport": {"Sog": 1.8, "Cog": 220.0, "TrueHeading": 218, "Latitude": 36.750, "Longitude": 22.100, "NavigationalStatus": 1, "RateOfTurn": 0.5, "SpecialManoeuvreIndicator": 0, "Timestamp": 22}}
+    },
+    {
+      "description": "Shadow fleet tanker KARA SEA in Barents Sea",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 273890123, "time_utc": "2024-04-15T16:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 10.5, "Cog": 45.0, "TrueHeading": 44, "Latitude": 72.500, "Longitude": 33.100, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 30}}
+    },
+    {
+      "description": "Shadow fleet tanker LINDA off Skaw STS zone, slow steaming",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 636091234, "time_utc": "2024-05-20T07:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 3.5, "Cog": 315.0, "TrueHeading": 314, "Latitude": 57.730, "Longitude": 10.580, "NavigationalStatus": 0, "RateOfTurn": -1.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 45}}
+    },
+    {
+      "description": "Shadow fleet VLCC OCEAN HERMANA near Primorsk terminal",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 538007890, "time_utc": "2024-06-01T20:15:00Z"},
+      "Message": {"PositionReport": {"Sog": 0.3, "Cog": 90.0, "TrueHeading": 88, "Latitude": 60.340, "Longitude": 28.680, "NavigationalStatus": 5, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 8}}
+    },
+    {
+      "description": "Cameroon-flagged tanker POSEIDON near Novorossiysk terminal",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 613456789, "time_utc": "2024-07-10T13:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 0.0, "Cog": 270.0, "TrueHeading": 268, "Latitude": 44.720, "Longitude": 37.790, "NavigationalStatus": 1, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 55}}
+    },
+    {
+      "description": "Gabon-flagged tanker FORTUNA at Kozmino terminal",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 626012345, "time_utc": "2024-08-22T02:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 0.1, "Cog": 180.0, "TrueHeading": 179, "Latitude": 42.730, "Longitude": 133.070, "NavigationalStatus": 5, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 18}}
+    },
+    {
+      "description": "Vessel with nav_status 8 (sailing by AIS)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 219000100, "time_utc": "2024-01-20T08:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 7.2, "Cog": 45.0, "TrueHeading": 44, "Latitude": 56.100, "Longitude": 12.350, "NavigationalStatus": 8, "RateOfTurn": 2.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 40}}
+    },
+    {
+      "description": "High-speed craft in Gulf of Aden",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 422012345, "time_utc": "2024-09-15T15:45:00Z"},
+      "Message": {"PositionReport": {"Sog": 35.0, "Cog": 260.0, "TrueHeading": 258, "Latitude": 12.500, "Longitude": 45.300, "NavigationalStatus": 0, "RateOfTurn": -5.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 33}}
+    },
+    {
+      "description": "Russian-flagged tanker ARKTIKA in Black Sea",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 273111222, "time_utc": "2024-10-01T09:15:00Z"},
+      "Message": {"PositionReport": {"Sog": 12.0, "Cog": 200.0, "TrueHeading": 199, "Latitude": 43.500, "Longitude": 34.000, "NavigationalStatus": 0, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 15}}
+    },
+    {
+      "description": "Palau-flagged tanker EMPEROR near Laconian Gulf STS zone",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 511123456, "time_utc": "2024-11-05T18:30:00Z"},
+      "Message": {"PositionReport": {"Sog": 1.2, "Cog": 150.0, "TrueHeading": 148, "Latitude": 36.400, "Longitude": 22.900, "NavigationalStatus": 1, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 28}}
+    },
+    {
+      "description": "Vessel with special manoeuvre indicator set",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 235098765, "time_utc": "2024-12-01T14:00:00Z"},
+      "Message": {"PositionReport": {"Sog": 5.5, "Cog": 60.0, "TrueHeading": 58, "Latitude": 50.800, "Longitude": -1.100, "NavigationalStatus": 0, "RateOfTurn": 15.0, "SpecialManoeuvreIndicator": 1, "Timestamp": 50}}
+    },
+    {
+      "description": "Vessel aground (nav status 6)",
+      "MessageType": "PositionReport",
+      "MetaData": {"MMSI": 311000100, "time_utc": "2024-02-14T03:20:00Z"},
+      "Message": {"PositionReport": {"Sog": 0.0, "Cog": 0.0, "TrueHeading": 125, "Latitude": 18.450, "Longitude": -66.100, "NavigationalStatus": 6, "RateOfTurn": 0.0, "SpecialManoeuvreIndicator": 0, "Timestamp": 5}}
     }
   ],
 
@@ -252,6 +330,30 @@
       "MessageType": "ShipStaticData",
       "MetaData": {"MMSI": 710000001, "time_utc": "2024-04-01T03:30:00Z"},
       "Message": {"ShipStaticData": {"ImoNumber": 9111222, "Name": "SANTOS EXPRESS", "CallSign": "PPQR6", "Type": 71, "Destination": "SANTOS", "Dimension": {"A": 250, "B": 100, "C": 20, "D": 20}}}
+    },
+    {
+      "description": "Shadow fleet tanker TURBA (Russian-flagged)",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 273412340, "time_utc": "2024-02-10T04:21:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9189890, "Name": "TURBA", "CallSign": "UBCS7", "Type": 80, "Destination": "FOR ORDERS", "Eta": {"Month": 0, "Day": 0, "Hour": 0, "Minute": 0}, "MaximumStaticDraught": 16.5, "Dimension": {"A": 170, "B": 104, "C": 24, "D": 24}}}
+    },
+    {
+      "description": "Shadow fleet tanker NS CHAMPION",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 273567890, "time_utc": "2024-03-05T11:46:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9246654, "Name": "NS CHAMPION", "CallSign": "UBDQ5", "Type": 80, "Destination": "INDIAN OCEAN", "Eta": {"Month": 0, "Day": 0, "Hour": 0, "Minute": 0}, "MaximumStaticDraught": 17.2, "Dimension": {"A": 180, "B": 94, "C": 22, "D": 22}}}
+    },
+    {
+      "description": "Shadow fleet VLCC OCEAN HERMANA (Marshall Islands flag)",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 538007890, "time_utc": "2024-06-01T20:16:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9298399, "Name": "OCEAN HERMANA", "CallSign": "V7GK8", "Type": 80, "Destination": "SINGAPORE", "Eta": {"Month": 7, "Day": 15, "Hour": 10, "Minute": 0}, "MaximumStaticDraught": 21.5, "Dimension": {"A": 200, "B": 133, "C": 32, "D": 32}}}
+    },
+    {
+      "description": "Destination spoof — placeholder destination",
+      "MessageType": "ShipStaticData",
+      "MetaData": {"MMSI": 636091234, "time_utc": "2024-05-20T07:01:00Z"},
+      "Message": {"ShipStaticData": {"ImoNumber": 9345678, "Name": "LINDA", "CallSign": "A8XY9", "Type": 80, "Destination": "TBN", "Eta": {"Month": 0, "Day": 0, "Hour": 0, "Minute": 0}, "MaximumStaticDraught": 15.0, "Dimension": {"A": 155, "B": 90, "C": 20, "D": 20}}}
     }
   ],
 

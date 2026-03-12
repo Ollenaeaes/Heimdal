@@ -2,7 +2,7 @@
 
 **Slug:** `stats-and-replay`
 **Created:** 2026-03-11
-**Status:** draft
+**Status:** completed
 **Priority:** low
 **Wave:** 7 (Polish)
 

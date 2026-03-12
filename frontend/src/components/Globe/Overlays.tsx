@@ -3,6 +3,9 @@ import { Cartesian3, Color, LabelStyle, VerticalOrigin, Cartesian2, MaterialProp
 import stsZonesData from '../../data/stsZones.json';
 import terminalsData from '../../data/terminals.json';
 import eezData from '../../data/eezBoundaries.json';
+import { useVesselStore } from '../../hooks/useVesselStore';
+import type { GfwEventType } from '../../types/api';
+import { GFW_EVENT_COLORS } from '../../utils/eventIcons';
 
 export interface OverlayProps {
   showStsZones: boolean;
@@ -121,6 +124,8 @@ export interface OverlayToggleState {
   showStsZones: boolean;
   showTerminals: boolean;
   showEez: boolean;
+  showSarDetections: boolean;
+  showGfwEvents: boolean;
 }
 
 export interface OverlayTogglesProps {
@@ -128,9 +133,35 @@ export interface OverlayTogglesProps {
   onChange: (newState: OverlayToggleState) => void;
 }
 
+const ALL_GFW_EVENT_TYPES: GfwEventType[] = ['ENCOUNTER', 'LOITERING', 'AIS_DISABLING', 'PORT_VISIT'];
+const GFW_EVENT_LABELS: Record<GfwEventType, string> = {
+  ENCOUNTER: 'Encounters',
+  LOITERING: 'Loitering',
+  AIS_DISABLING: 'AIS Disabling',
+  PORT_VISIT: 'Port Visits',
+};
+
 export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
+  const darkShipsOnly = useVesselStore((s) => s.filters.darkShipsOnly);
+  const showGfwEventTypes = useVesselStore((s) => s.filters.showGfwEventTypes);
+  const setFilter = useVesselStore((s) => s.setFilter);
+
   const toggle = (key: keyof OverlayToggleState) => {
     onChange({ ...state, [key]: !state[key] });
+  };
+
+  const toggleDarkShips = () => {
+    setFilter({ darkShipsOnly: !darkShipsOnly });
+  };
+
+  const toggleGfwEventType = (eventType: GfwEventType) => {
+    const current = new Set(showGfwEventTypes);
+    if (current.has(eventType)) {
+      current.delete(eventType);
+    } else {
+      current.add(eventType);
+    }
+    setFilter({ showGfwEventTypes: Array.from(current) });
   };
 
   return (
@@ -162,6 +193,51 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
         />
         Norwegian EEZ
       </label>
+      <div className="border-t border-gray-700 my-1" />
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={state.showSarDetections}
+          onChange={() => toggle('showSarDetections')}
+          className="accent-white"
+        />
+        SAR Detections
+      </label>
+      {state.showSarDetections && (
+        <label className="flex items-center gap-2 cursor-pointer ml-4" data-testid="dark-ships-toggle">
+          <input
+            type="checkbox"
+            checked={darkShipsOnly}
+            onChange={toggleDarkShips}
+            className="accent-red-500"
+          />
+          <span className="text-red-300">Dark Ships Only</span>
+        </label>
+      )}
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={state.showGfwEvents}
+          onChange={() => toggle('showGfwEvents')}
+          className="accent-orange-500"
+        />
+        GFW Events
+      </label>
+      {state.showGfwEvents && (
+        <div className="ml-4 flex flex-col gap-1.5">
+          {ALL_GFW_EVENT_TYPES.map((eventType) => (
+            <label key={eventType} className="flex items-center gap-2 cursor-pointer" data-testid={`gfw-type-${eventType}`}>
+              <input
+                type="checkbox"
+                checked={showGfwEventTypes.includes(eventType)}
+                onChange={() => toggleGfwEventType(eventType)}
+                style={{ accentColor: GFW_EVENT_COLORS[eventType] }}
+              />
+              <span className="text-gray-300">{GFW_EVENT_LABELS[eventType]}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,10 +1,13 @@
 import { useVesselStore } from '../../hooks/useVesselStore';
 import { useVesselDetail } from '../../hooks/useVesselDetail';
+import { useTrackReplay } from '../../hooks/useTrackReplay';
 import { WatchButton } from './WatchButton';
+import { DossierExport } from './DossierExport';
 import { IdentitySection } from './IdentitySection';
 import { StatusSection } from './StatusSection';
 import { RiskSection } from './RiskSection';
 import { VoyageTimeline } from './VoyageTimeline';
+import { TrackReplay } from './TrackReplay';
 import { SanctionsSection } from './SanctionsSection';
 import { OwnershipSection } from './OwnershipSection';
 import { EnrichmentForm } from './EnrichmentForm';
@@ -14,6 +17,7 @@ export function VesselPanel() {
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
   const selectVessel = useVesselStore((s) => s.selectVessel);
   const { data: vessel, isLoading } = useVesselDetail(selectedMmsi);
+  const replay = useTrackReplay(selectedMmsi);
 
   const isOpen = selectedMmsi !== null;
 
@@ -25,16 +29,24 @@ export function VesselPanel() {
       }`}
       aria-hidden={!isOpen}
     >
-      {/* Close button + Watch */}
+      {/* Close button + Watch + Export */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
-        {selectedMmsi !== null ? (
-          <WatchButton mmsi={selectedMmsi} />
-        ) : (
-          <span />
-        )}
+        <div className="flex items-center gap-2">
+          {selectedMmsi !== null ? (
+            <>
+              <WatchButton mmsi={selectedMmsi} />
+              {vessel && <DossierExport vessel={vessel} />}
+            </>
+          ) : (
+            <span />
+          )}
+        </div>
         <button
           data-testid="panel-close"
-          onClick={() => selectVessel(null)}
+          onClick={() => {
+            replay.deactivate();
+            selectVessel(null);
+          }}
           className="text-gray-400 hover:text-white text-lg leading-none"
           aria-label="Close panel"
         >
@@ -65,6 +77,7 @@ export function VesselPanel() {
           <StatusSection vessel={vessel} mmsi={vessel.mmsi} />
           <RiskSection vessel={vessel} />
           <VoyageTimeline mmsi={vessel.mmsi} anomalies={vessel.anomalies ?? []} />
+          <TrackReplay replay={replay} />
           <SanctionsSection matches={vessel.sanctionsMatches} />
           <OwnershipSection
             ownershipData={vessel.ownershipData}

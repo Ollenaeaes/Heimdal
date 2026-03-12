@@ -15,6 +15,8 @@ export interface FilterState {
   shipTypes: number[];
   bbox: [number, number, number, number] | null;
   activeSince: string | null;
+  darkShipsOnly: boolean;
+  showGfwEventTypes: string[];
 }
 
 export interface VesselStore {
@@ -37,6 +39,8 @@ export const useVesselStore = create<VesselStore>((set) => ({
     shipTypes: [],
     bbox: null,
     activeSince: null,
+    darkShipsOnly: false,
+    showGfwEventTypes: ['ENCOUNTER', 'LOITERING', 'AIS_DISABLING', 'PORT_VISIT'],
   },
   updatePosition: (update) =>
     set((state) => {

@@ -134,9 +134,35 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 20 watchlist tests
 - Commits: `165ff4a`
 
+### 16-testing-and-docs (all 5 stories)
+- Story 2: Test fixtures — enhanced AIS messages (28 valid position reports with shadow fleet MMSIs), plus 4 new fixture files: OpenSanctions NDJSON (10+5), vessel profiles (green/yellow/red), GFW events (all 4 types), SAR detections (dark+matched)
+- Story 5: README.md — project overview, architecture diagram, prerequisites, installation, first-run walkthrough, configuration reference, API endpoints, scoring rules, troubleshooting
+- Story 1: Fixture validation tests — 36 tests validating all fixture files parse to Pydantic models, structural integrity, shadow fleet coverage
+- Story 3: Integration tests — 28 tests in tests/integration/ (pipeline, WebSocket delivery, enrichment pipeline, GFW scoring); auto-skip when Docker not running
+- Story 4: Performance benchmarks — scripts/benchmark.py with ingest throughput (474K msg/sec), scoring latency (0.3ms p99), API response benchmarks
+- Tests: 323 backend unit tests + 28 integration (skipped without Docker)
+- Commits: `034fb09`, `895d24c`, `0d241b2`
+
+### 14-sar-frontend (all 3 stories)
+- Story 1: SAR detection markers — TanStack Query polling (5min), dark ship pulsing animation (white+red border), matched detections (gray), click popup with detection details
+- Story 2: GFW event markers — color-coded by type (orange diamond=encounter, yellow circle=loitering, red triangle=AIS-disabling, blue square=port visit), click popup with event-specific details, per-type filtering
+- Story 3: Dark ship filter — darkShipsOnly toggle in Zustand store, integrated with SAR marker layer and overlay controls
+- New files: SarMarkers.tsx, GfwEventMarkers.tsx, eventIcons.ts, sarMarkers.test.ts, gfwEventMarkers.test.ts
+- Updated: Overlays.tsx (SAR+GFW toggles), GlobeView.tsx, useVesselStore.ts (new filter fields), api.ts (SAR+GFW types)
+- Tests: 27 new (13 SAR + 14 GFW)
+- Commit: `5755f53`
+
+### 15-stats-and-replay (all 3 stories)
+- Story 1: Enhanced stats dashboard — expandable StatsBar with CSS bar charts for risk tiers, severity breakdown, GFW events by type
+- Story 2: Track replay — play/pause/scrub controls, speed selector (0.5x-10x), AIS gap segments in red, GFW event markers on timeline, globe polyline+animated marker via ReplayOverlay
+- Story 3: Vessel dossier export — JSON export with vessel profile, anomalies, GFW events, track, sanctions, enrichment; download as heimdal-dossier-{mmsi}-{date}.json
+- New files: TrackReplay.tsx, DossierExport.tsx, ReplayOverlay.tsx, useTrackReplay.ts, useReplayStore.ts
+- Tests: 52 new (15 stats + 20 replay + 17 export)
+- Commit: `3356dbe`
+
 ## Current Story
 
-Wave 6 complete. Ready for Wave 7 (14-sar-frontend, 15-stats-and-replay, 16-testing-and-docs).
+Wave 7 complete. All 16 specs across 7 waves implemented.
 
 ## Known Issues
 
@@ -165,13 +191,11 @@ Wave 6 complete. Ready for Wave 7 (14-sar-frontend, 15-stats-and-replay, 16-test
 
 ## Notes for Next Session
 
-- Wave 6 is fully implemented and tested on branch `feature/wave-6-advanced-features`
-- Wave 7 can start: 14-sar-frontend, 15-stats-and-replay, 16-testing-and-docs (parallel)
-- Backend tests: 627 total (unchanged from Wave 4)
-- Frontend tests: 275 total (226 pre-Wave-6 + 29 enrichment + 20 watchlist)
-- Manual enrichment: collapsible form in vessel panel, POST mutation with toast, enrichment history cards
-- Watchlist: Zustand store + TanStack mutations, WatchlistPanel dropdown in header, browser notifications via alert WS
-- Watchlisted vessels have white halo indicator on globe markers
-- New hooks: useWatchlist.ts (store, queries, mutations, alerts)
-- New components: EnrichmentForm, EnrichmentHistory, WatchButton, WatchlistPanel
-- App.tsx uses AppInner wrapper for hooks inside QueryClientProvider
+- ALL 16 SPECS COMPLETE across 7 waves on branch `feature/wave-7-polish`
+- Backend tests: 691 total (323 tests/ + 148 scoring + 192 enrichment + 28 integration)
+- Frontend tests: 354 total (275 pre-Wave-7 + 27 SAR/GFW + 52 stats/replay/export)
+- Total test count: 1045 (691 backend + 354 frontend)
+- Integration tests in tests/integration/ auto-skip when Docker not running
+- Performance benchmarks: python scripts/benchmark.py (--quick for fast mode)
+- README.md documents the full platform
+- Ready for merge to main

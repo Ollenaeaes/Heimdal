@@ -4,3 +4,6 @@ export type { OverlayProps, OverlayToggleState, OverlayTogglesProps } from './Ov
 export { VesselCluster, CLUSTER_PIXEL_RANGE, getHighestRiskTier } from './VesselCluster';
 export { VesselMarkers } from './VesselMarkers';
 export { TrackTrails } from './TrackTrails';
+export { SarMarkers } from './SarMarkers';
+export { GfwEventMarkers } from './GfwEventMarkers';
+export { ReplayOverlay } from './ReplayOverlay';
