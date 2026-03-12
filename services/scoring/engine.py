@@ -4,6 +4,13 @@ The engine subscribes to two Redis pub/sub channels:
 
 - ``heimdal:positions`` — triggers real-time rule evaluation
 - ``heimdal:enrichment_complete`` — triggers GFW-sourced rule evaluation
+
+After rule evaluation, the engine:
+- Aggregates anomaly scores (with per-rule caps)
+- Calculates risk tier (green/yellow/red)
+- Updates the vessel profile in the database
+- Publishes tier changes and new anomalies to Redis
+- Deduplicates overlapping GFW and real-time anomalies
 """
 
 from __future__ import annotations
@@ -14,7 +21,9 @@ import json
 import logging
 import pkgutil
 from datetime import datetime, timedelta, timezone
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
+
+from sqlalchemy import text
 
 from shared.db.connection import get_session
 from shared.db.repositories import (
@@ -26,6 +35,13 @@ from shared.db.repositories import (
 )
 from shared.models.anomaly import RuleResult
 
+from aggregator import (
+    aggregate_score,
+    calculate_tier,
+    find_suppressed_anomalies,
+    publish_anomaly,
+    publish_risk_change,
+)
 from rules.base import ScoringRule
 
 logger = logging.getLogger("scoring.engine")
@@ -81,8 +97,13 @@ def discover_rules() -> list[ScoringRule]:
 class ScoringEngine:
     """Orchestrates rule evaluation for vessels."""
 
-    def __init__(self, rules: list[ScoringRule] | None = None) -> None:
+    def __init__(
+        self,
+        rules: list[ScoringRule] | None = None,
+        redis_client: Any | None = None,
+    ) -> None:
         self.rules: list[ScoringRule] = rules if rules is not None else discover_rules()
+        self.redis_client = redis_client
 
     # -- Helpers to partition rules by category --
 
@@ -100,7 +121,9 @@ class ScoringEngine:
         """Evaluate all real-time rules for *mmsi*.
 
         Loads the vessel profile, recent positions (last 48 h) and existing
-        anomalies from the database.
+        anomalies from the database.  After persisting new anomalies,
+        recalculates the aggregate score, updates the vessel profile, and
+        publishes events to Redis.
         """
         session_factory = get_session()
         async with session_factory() as session:
@@ -125,12 +148,28 @@ class ScoringEngine:
                 if result is not None:
                     results.append(result)
 
-            # Persist fired anomalies
-            for result in results:
-                if result.fired:
-                    await self._create_anomaly(session, mmsi, result)
+            # Persist fired anomalies and publish anomaly events
+            fired_results = [r for r in results if r.fired]
+            for result in fired_results:
+                await self._create_anomaly(session, mmsi, result)
+                if self.redis_client is not None:
+                    await publish_anomaly(
+                        self.redis_client,
+                        mmsi,
+                        result.rule_id,
+                        result.severity or "unknown",
+                        result.points,
+                        result.details,
+                    )
 
             await session.commit()
+
+            # Recalculate score and update tier
+            if fired_results:
+                trigger_rule = fired_results[0].rule_id
+                await self._update_score_and_tier(
+                    session, mmsi, profile, trigger_rule
+                )
 
         return results
 
@@ -138,7 +177,9 @@ class ScoringEngine:
         """Evaluate all GFW-sourced rules for *mmsi*.
 
         Loads the vessel profile, GFW events and existing anomalies from
-        the database.
+        the database.  After persisting new anomalies, runs dedup to
+        suppress overlapping real-time anomalies, recalculates the
+        aggregate score, updates the vessel profile, and publishes events.
         """
         session_factory = get_session()
         async with session_factory() as session:
@@ -160,14 +201,76 @@ class ScoringEngine:
                 if result is not None:
                     results.append(result)
 
-            # Persist fired anomalies
-            for result in results:
-                if result.fired:
-                    await self._create_anomaly(session, mmsi, result)
+            # Persist fired anomalies, run dedup, publish anomaly events
+            fired_results = [r for r in results if r.fired]
+            for result in fired_results:
+                await self._create_anomaly(session, mmsi, result)
+
+                # Dedup: suppress real-time anomalies that overlap
+                gfw_time = datetime.now(timezone.utc)
+                suppressed = find_suppressed_anomalies(
+                    result.rule_id, gfw_time, existing_anomalies
+                )
+                for anomaly in suppressed:
+                    anomaly_id = anomaly.get("id")
+                    if anomaly_id is not None:
+                        await self._resolve_anomaly(session, anomaly_id)
+
+                if self.redis_client is not None:
+                    await publish_anomaly(
+                        self.redis_client,
+                        mmsi,
+                        result.rule_id,
+                        result.severity or "unknown",
+                        result.points,
+                        result.details,
+                    )
 
             await session.commit()
 
+            # Recalculate score and update tier
+            if fired_results:
+                trigger_rule = fired_results[0].rule_id
+                await self._update_score_and_tier(
+                    session, mmsi, profile, trigger_rule
+                )
+
         return results
+
+    # -- Score and tier update --
+
+    async def _update_score_and_tier(
+        self,
+        session: Any,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        trigger_rule: str,
+    ) -> None:
+        """Recalculate aggregate score, update the vessel profile, and
+        publish a tier change event if the tier changed."""
+        # Re-fetch anomalies to include newly persisted + deduped ones
+        all_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
+        new_score = aggregate_score(all_anomalies)
+        new_tier = calculate_tier(new_score)
+
+        old_tier = (profile or {}).get("risk_tier", "green") or "green"
+
+        # Update vessel profile
+        await session.execute(
+            text(
+                "UPDATE vessel_profiles "
+                "SET risk_score = :score, risk_tier = :tier, updated_at = NOW() "
+                "WHERE mmsi = :mmsi"
+            ),
+            {"score": new_score, "tier": new_tier, "mmsi": mmsi},
+        )
+        await session.commit()
+
+        # Publish tier change only if tier actually changed
+        if new_tier != old_tier and self.redis_client is not None:
+            await publish_risk_change(
+                self.redis_client, mmsi, old_tier, new_tier, new_score, trigger_rule
+            )
 
     # -- Persistence helpers --
 
@@ -184,3 +287,11 @@ class ScoringEngine:
             "details": json.dumps(result.details),
         }
         return await create_anomaly_event(session, data)
+
+    @staticmethod
+    async def _resolve_anomaly(session: Any, anomaly_id: int) -> None:
+        """Mark an anomaly as resolved (used by dedup logic)."""
+        await session.execute(
+            text("UPDATE anomaly_events SET resolved = true WHERE id = :id"),
+            {"id": anomaly_id},
+        )
