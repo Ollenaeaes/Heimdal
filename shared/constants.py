@@ -15,7 +15,7 @@ SEVERITY_POINTS: dict[str, int] = {
 
 # ---------------------------------------------------------------------------
 # Maximum points per rule (caps prevent a single rule from dominating)
-# 5 GFW-sourced + 8 real-time = 13 rules
+# 5 GFW-sourced + 9 real-time = 14 rules
 # ---------------------------------------------------------------------------
 MAX_PER_RULE: dict[str, int] = {
     # GFW-sourced rules
@@ -33,9 +33,10 @@ MAX_PER_RULE: dict[str, int] = {
     "sanctions_match": 50,
     "vessel_age": 15,
     "speed_anomaly": 15,
+    "identity_mismatch": 50,
 }
 
-# All 13 rule IDs as a frozenset for validation
+# All 14 rule IDs as a frozenset for validation
 ALL_RULE_IDS: frozenset[str] = frozenset(MAX_PER_RULE.keys())
 
 # ---------------------------------------------------------------------------
@@ -342,7 +343,7 @@ MID_TO_FLAG: dict[int, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Scoring rule IDs — all 13 rules
+# Scoring rule IDs — all 14 rules
 # ---------------------------------------------------------------------------
 GFW_RULE_IDS: list[str] = [
     "gfw_ais_disabling",
@@ -361,6 +362,7 @@ REALTIME_RULE_IDS: list[str] = [
     "sanctions_match",
     "vessel_age",
     "speed_anomaly",
+    "identity_mismatch",
 ]
 
 # ---------------------------------------------------------------------------

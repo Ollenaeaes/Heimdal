@@ -76,8 +76,8 @@ class TestMaxPerRule:
     def test_is_dict(self):
         assert isinstance(MAX_PER_RULE, dict)
 
-    def test_has_13_rules(self):
-        assert len(MAX_PER_RULE) == 13
+    def test_has_14_rules(self):
+        assert len(MAX_PER_RULE) == 14
 
     def test_gfw_rules_present(self):
         expected_gfw = {
@@ -110,7 +110,7 @@ class TestMaxPerRule:
 
     def test_all_rule_ids_frozenset(self):
         assert isinstance(ALL_RULE_IDS, frozenset)
-        assert len(ALL_RULE_IDS) == 13
+        assert len(ALL_RULE_IDS) == 14
 
 
 class TestSeverityPoints:
@@ -142,12 +142,12 @@ class TestRuleIdLists:
     def test_gfw_has_5_rules(self):
         assert len(GFW_RULE_IDS) == 5
 
-    def test_realtime_has_8_rules(self):
-        assert len(REALTIME_RULE_IDS) == 8
+    def test_realtime_has_9_rules(self):
+        assert len(REALTIME_RULE_IDS) == 9
 
-    def test_combined_equals_13(self):
+    def test_combined_equals_14(self):
         combined = set(GFW_RULE_IDS) | set(REALTIME_RULE_IDS)
-        assert len(combined) == 13
+        assert len(combined) == 14
         assert combined == ALL_RULE_IDS
 
 
