@@ -1,0 +1,2 @@
+-r /app/shared/requirements-base.txt
+websockets>=12.0,<13
