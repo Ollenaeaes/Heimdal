@@ -1,0 +1,3 @@
+# Permission settings are personal preference — don't commit
+# Each developer runs: .claude/scripts/set-permissions.sh <profile>
+.claude/settings.json

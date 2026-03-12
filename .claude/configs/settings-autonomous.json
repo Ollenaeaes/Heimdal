@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "MultiEdit",
+      "Read",
+      "Grep",
+      "Glob",
+      "TodoRead",
+      "TodoWrite",
+      "Bash(npm test*)",
+      "Bash(npm run test*)",
+      "Bash(npx jest*)",
+      "Bash(npx vitest*)",
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(go test*)",
+      "Bash(cargo test*)",
+      "Bash(npm run lint*)",
+      "Bash(npm run build*)",
+      "Bash(npx tsc*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git checkout*)",
+      "Bash(git branch*)",
+      "Bash(git diff*)",
+      "Bash(git status)",
+      "Bash(git log*)",
+      "Bash(ls*)",
+      "Bash(cat*)",
+      "Bash(find*)",
+      "Bash(mkdir*)",
+      "Bash(cp*)",
+      "Bash(mv*)",
+      "Bash(head*)",
+      "Bash(tail*)",
+      "Bash(wc*)",
+      "Bash(echo*)",
+      "Bash(npm install*)",
+      "Bash(npm ci*)",
+      "Bash(pip install*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Bash(curl*|*bash)",
+      "Bash(wget*|*bash)",
+      "Bash(git push*)",
+      "Bash(> *)"
+    ]
+  }
+}

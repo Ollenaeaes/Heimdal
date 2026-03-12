@@ -1,0 +1,36 @@
+# SDD Kit: Collapse spec and context files in GitHub PR diffs
+# These files are still visible in PRs but collapsed by default,
+# so reviewers can focus on the actual code changes.
+#
+# To expand any collapsed file in a PR, click "Load diff" on GitHub.
+# To see them locally: git diff --stat (they'll show as changed but diff is hidden)
+
+# Spec files — collapsed in PRs, excluded from language stats
+.claude/specs/** linguist-generated=true
+.claude/specs/**/*.md linguist-generated=true
+
+# Progress tracking — changes frequently, not code
+.claude/specs/progress.md linguist-generated=true
+
+# Spec templates — rarely changes, not code
+.claude/specs/templates/** linguist-generated=true
+
+# Skill definitions — collapsed in PRs since they're AI workflow config
+.claude/skills/** linguist-generated=true
+
+# Lessons learned — documentation
+.claude/LESSONS.md linguist-documentation
+
+# SDD templates
+.claude/templates/** linguist-generated=true
+
+# SDD documentation and scripts
+.claude/docs/** linguist-generated=true
+.claude/scripts/** linguist-generated=true
+.claude/configs/** linguist-generated=true
+
+# Subdirectory context files — documentation, not code
+**/CLAUDE.md linguist-documentation
+
+# Root CLAUDE.md — documentation
+CLAUDE.md linguist-documentation
