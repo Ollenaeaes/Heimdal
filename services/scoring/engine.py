@@ -1,0 +1,297 @@
+"""Scoring engine: auto-discovers rules, evaluates them, persists anomalies.
+
+The engine subscribes to two Redis pub/sub channels:
+
+- ``heimdal:positions`` — triggers real-time rule evaluation
+- ``heimdal:enrichment_complete`` — triggers GFW-sourced rule evaluation
+
+After rule evaluation, the engine:
+- Aggregates anomaly scores (with per-rule caps)
+- Calculates risk tier (green/yellow/red)
+- Updates the vessel profile in the database
+- Publishes tier changes and new anomalies to Redis
+- Deduplicates overlapping GFW and real-time anomalies
+"""
+
+from __future__ import annotations
+
+import importlib
+import inspect
+import json
+import logging
+import pkgutil
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional, Sequence
+
+from sqlalchemy import text
+
+from shared.db.connection import get_session
+from shared.db.repositories import (
+    create_anomaly_event,
+    get_vessel_profile_by_mmsi,
+    get_vessel_track,
+    list_anomaly_events_by_mmsi,
+    list_gfw_events_by_mmsi,
+)
+from shared.models.anomaly import RuleResult
+
+from aggregator import (
+    aggregate_score,
+    calculate_tier,
+    find_suppressed_anomalies,
+    publish_anomaly,
+    publish_risk_change,
+)
+from rules.base import ScoringRule
+
+logger = logging.getLogger("scoring.engine")
+
+
+# ---------------------------------------------------------------------------
+# Rule discovery
+# ---------------------------------------------------------------------------
+
+
+def discover_rules() -> list[ScoringRule]:
+    """Import every module inside the ``rules`` package and return instances
+    of all concrete :class:`ScoringRule` subclasses found."""
+    import rules as rules_pkg
+
+    rule_instances: list[ScoringRule] = []
+    seen_classes: set[type] = set()
+
+    for importer, modname, ispkg in pkgutil.walk_packages(
+        rules_pkg.__path__, prefix=rules_pkg.__name__ + "."
+    ):
+        if ispkg:
+            continue
+        try:
+            module = importlib.import_module(modname)
+        except Exception:
+            logger.exception("Failed to import rule module %s", modname)
+            continue
+
+        for _name, obj in inspect.getmembers(module, inspect.isclass):
+            if (
+                issubclass(obj, ScoringRule)
+                and obj is not ScoringRule
+                and not inspect.isabstract(obj)
+                and obj not in seen_classes
+            ):
+                seen_classes.add(obj)
+                rule_instances.append(obj())
+
+    logger.info(
+        "Discovered %d scoring rules: %s",
+        len(rule_instances),
+        [r.rule_id for r in rule_instances],
+    )
+    return rule_instances
+
+
+# ---------------------------------------------------------------------------
+# Engine
+# ---------------------------------------------------------------------------
+
+
+class ScoringEngine:
+    """Orchestrates rule evaluation for vessels."""
+
+    def __init__(
+        self,
+        rules: list[ScoringRule] | None = None,
+        redis_client: Any | None = None,
+    ) -> None:
+        self.rules: list[ScoringRule] = rules if rules is not None else discover_rules()
+        self.redis_client = redis_client
+
+    # -- Helpers to partition rules by category --
+
+    @property
+    def realtime_rules(self) -> list[ScoringRule]:
+        return [r for r in self.rules if r.rule_category == "realtime"]
+
+    @property
+    def gfw_rules(self) -> list[ScoringRule]:
+        return [r for r in self.rules if r.rule_category == "gfw_sourced"]
+
+    # -- Core evaluation --
+
+    async def evaluate_realtime(self, mmsi: int) -> list[RuleResult]:
+        """Evaluate all real-time rules for *mmsi*.
+
+        Loads the vessel profile, recent positions (last 48 h) and existing
+        anomalies from the database.  After persisting new anomalies,
+        recalculates the aggregate score, updates the vessel profile, and
+        publishes events to Redis.
+        """
+        session_factory = get_session()
+        async with session_factory() as session:
+            profile = await get_vessel_profile_by_mmsi(session, mmsi)
+            now = datetime.now(timezone.utc)
+            recent_positions = await get_vessel_track(
+                session, mmsi, now - timedelta(hours=48), now
+            )
+            existing_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
+
+            results: list[RuleResult] = []
+            for rule in self.realtime_rules:
+                try:
+                    result = await rule.evaluate(
+                        mmsi, profile, recent_positions, existing_anomalies, []
+                    )
+                except Exception:
+                    logger.exception(
+                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi
+                    )
+                    continue
+                if result is not None:
+                    results.append(result)
+
+            # Persist fired anomalies and publish anomaly events
+            fired_results = [r for r in results if r.fired]
+            for result in fired_results:
+                await self._create_anomaly(session, mmsi, result)
+                if self.redis_client is not None:
+                    await publish_anomaly(
+                        self.redis_client,
+                        mmsi,
+                        result.rule_id,
+                        result.severity or "unknown",
+                        result.points,
+                        result.details,
+                    )
+
+            await session.commit()
+
+            # Recalculate score and update tier
+            if fired_results:
+                trigger_rule = fired_results[0].rule_id
+                await self._update_score_and_tier(
+                    session, mmsi, profile, trigger_rule
+                )
+
+        return results
+
+    async def evaluate_gfw(self, mmsi: int) -> list[RuleResult]:
+        """Evaluate all GFW-sourced rules for *mmsi*.
+
+        Loads the vessel profile, GFW events and existing anomalies from
+        the database.  After persisting new anomalies, runs dedup to
+        suppress overlapping real-time anomalies, recalculates the
+        aggregate score, updates the vessel profile, and publishes events.
+        """
+        session_factory = get_session()
+        async with session_factory() as session:
+            profile = await get_vessel_profile_by_mmsi(session, mmsi)
+            gfw_events = await list_gfw_events_by_mmsi(session, mmsi)
+            existing_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
+
+            results: list[RuleResult] = []
+            for rule in self.gfw_rules:
+                try:
+                    result = await rule.evaluate(
+                        mmsi, profile, [], existing_anomalies, gfw_events
+                    )
+                except Exception:
+                    logger.exception(
+                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi
+                    )
+                    continue
+                if result is not None:
+                    results.append(result)
+
+            # Persist fired anomalies, run dedup, publish anomaly events
+            fired_results = [r for r in results if r.fired]
+            for result in fired_results:
+                await self._create_anomaly(session, mmsi, result)
+
+                # Dedup: suppress real-time anomalies that overlap
+                gfw_time = datetime.now(timezone.utc)
+                suppressed = find_suppressed_anomalies(
+                    result.rule_id, gfw_time, existing_anomalies
+                )
+                for anomaly in suppressed:
+                    anomaly_id = anomaly.get("id")
+                    if anomaly_id is not None:
+                        await self._resolve_anomaly(session, anomaly_id)
+
+                if self.redis_client is not None:
+                    await publish_anomaly(
+                        self.redis_client,
+                        mmsi,
+                        result.rule_id,
+                        result.severity or "unknown",
+                        result.points,
+                        result.details,
+                    )
+
+            await session.commit()
+
+            # Recalculate score and update tier
+            if fired_results:
+                trigger_rule = fired_results[0].rule_id
+                await self._update_score_and_tier(
+                    session, mmsi, profile, trigger_rule
+                )
+
+        return results
+
+    # -- Score and tier update --
+
+    async def _update_score_and_tier(
+        self,
+        session: Any,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        trigger_rule: str,
+    ) -> None:
+        """Recalculate aggregate score, update the vessel profile, and
+        publish a tier change event if the tier changed."""
+        # Re-fetch anomalies to include newly persisted + deduped ones
+        all_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
+        new_score = aggregate_score(all_anomalies)
+        new_tier = calculate_tier(new_score)
+
+        old_tier = (profile or {}).get("risk_tier", "green") or "green"
+
+        # Update vessel profile
+        await session.execute(
+            text(
+                "UPDATE vessel_profiles "
+                "SET risk_score = :score, risk_tier = :tier, updated_at = NOW() "
+                "WHERE mmsi = :mmsi"
+            ),
+            {"score": new_score, "tier": new_tier, "mmsi": mmsi},
+        )
+        await session.commit()
+
+        # Publish tier change only if tier actually changed
+        if new_tier != old_tier and self.redis_client is not None:
+            await publish_risk_change(
+                self.redis_client, mmsi, old_tier, new_tier, new_score, trigger_rule
+            )
+
+    # -- Persistence helpers --
+
+    @staticmethod
+    async def _create_anomaly(
+        session: Any, mmsi: int, result: RuleResult
+    ) -> int:
+        """Write a single anomaly_event row from a fired rule result."""
+        data = {
+            "mmsi": mmsi,
+            "rule_id": result.rule_id,
+            "severity": result.severity,
+            "points": result.points,
+            "details": json.dumps(result.details),
+        }
+        return await create_anomaly_event(session, data)
+
+    @staticmethod
+    async def _resolve_anomaly(session: Any, anomaly_id: int) -> None:
+        """Mark an anomaly as resolved (used by dedup logic)."""
+        await session.execute(
+            text("UPDATE anomaly_events SET resolved = true WHERE id = :id"),
+            {"id": anomaly_id},
+        )

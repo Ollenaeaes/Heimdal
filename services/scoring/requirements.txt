@@ -1,0 +1,2 @@
+-r /app/shared/requirements-base.txt
+shapely>=2.0,<3.0

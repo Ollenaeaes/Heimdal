@@ -237,13 +237,14 @@ class TestRuleResult:
 
     def test_has_required_fields(self):
         fields = {f.name for f in dataclasses.fields(RuleResult)}
-        assert fields == {"fired", "rule_id", "severity", "points", "details"}
+        assert fields == {"fired", "rule_id", "severity", "points", "details", "source"}
 
     def test_defaults(self):
         rr = RuleResult(fired=False, rule_id="test")
         assert rr.severity is None
         assert rr.points == 0.0
         assert rr.details == {}
+        assert rr.source is None
 
     def test_construction(self):
         rr = RuleResult(

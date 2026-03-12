@@ -5,8 +5,8 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 ## Current Feature
 
 **Spec:** Wave Plan — 16 specs across 7 waves (GFW Integration)
-**Branch:** feature/wave-3-api-server
-**Status:** Wave 3 complete, ready for Wave 4
+**Branch:** feature/wave-4-intelligence
+**Status:** Wave 4 complete, ready for Wave 5
 
 ## Stories Completed
 
@@ -27,7 +27,7 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 
 ### 03-shared-library (all 4 stories)
 - Story 3: config.py — pydantic-settings + YAML merge, singleton settings
-- Story 4: constants.py — MID_TO_FLAG (289 entries), MAX_PER_RULE (13 rules), SEVERITY_POINTS
+- Story 4: constants.py — MID_TO_FLAG (289 entries), MAX_PER_RULE (14 rules), SEVERITY_POINTS
 - Story 1: Pydantic models — vessel, ais_message, anomaly, enrichment, sar, gfw_event (all with validators)
 - Story 2: DB layer — async SQLAlchemy engine/session, repository functions for all 6 tables
 - Also: requirements-base.txt, 80 tests all passing
@@ -65,14 +65,37 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 110 api-server tests (8 app + 11 health + 17 vessels + 12 anomalies + 6 sar + 5 gfw + 7 watchlist + 7 enrichment + 26 ws_positions + 11 ws_alerts)
 - Commits: `68da694`, `6825d0a`, `207af4e`
 
+### 07-scoring-engine (all 14 stories)
+- Story 1: Rule framework — abstract ScoringRule base class, engine with auto-discovery via pkgutil, Redis subscription on positions + enrichment_complete channels
+- Story 2: Score aggregation — per-rule caps (MAX_PER_RULE), tier calculation (green <30, yellow 30-99, red 100+), Redis publishing for tier changes + new anomalies, GFW dedup logic (suppresses real-time anomalies when GFW covers same behavior within ±6h window)
+- Stories 3-7: GFW-sourced rules — gfw_ais_disabling (critical/high by location), gfw_encounter (STS zone or sanctioned partner), gfw_loitering (STS zone vs open ocean), gfw_port_visit (Russian terminals), gfw_dark_sar (SAR + AIS gap correlation)
+- Stories 8-13: Realtime rules — ais_gap (with 24h cooldown), sts_proximity (slow speed + 6h duration), destination_spoof (placeholders/sea areas/frequency), draft_change (at-sea draught increase), flag_hopping (MID-based), sanctions_match (direct/fuzzy confidence), vessel_age (tankers), speed_anomaly (slow steaming/abrupt change), identity_mismatch (dimensions/flag)
+- Story 14: Dockerfile + requirements.txt
+- Shared: zone_helpers.py for PostGIS spatial queries
+- Tests: 148 scoring tests (19 engine + 27 aggregator + 49 gfw_rules + 53 realtime_rules)
+- Commits: `bd587a4`, `47ac217`, `c0984d4`, `5ee7a56`, `5054685`
+
+### 08-enrichment-service (all 9 stories)
+- Story 1: GFW API client — JWT auth with auto-refresh, rate limiting, exponential backoff retry on 429/5xx, offset + cursor pagination
+- Stories 2-4: GFW data fetchers — SAR detections from 4Wings API, behavioral events from Events API (4 types), vessel identity from Vessel API with Redis caching
+- Story 6: OpenSanctions bulk matching — IMO (1.0), MMSI (0.9), fuzzy name Levenshtein (0.7) confidence levels, NDJSON index loading
+- Story 8: Flag state derivation — MID-to-flag lookup, multi-source flag comparison, flag_history tracking
+- Story 7: GISIS/MARS optional lookups — stub clients with rate limiting, graceful failure, GFW priority merge
+- Story 5: Service runner — 6-hour cycle loop, Redis-based enrichment tracking, pipeline orchestration (GFW → OpenSanctions → optional GISIS/MARS), batch processing, enrichment_complete publishing
+- Story 9: Dockerfile + requirements.txt
+- Also: download-opensanctions.sh script
+- Tests: 192 enrichment tests (28 gfw_client + 17 sar + 26 events + 23 vessel + 30 sanctions + 30 flags + 18 gisis_mars + 20 runner)
+- Commits: `f248903`, `3315335`, `3b699f9`, `0056364`, `5054685`
+
 ## Current Story
 
-Wave 3 complete. Ready for Wave 4 (07-scoring-engine, 08-enrichment-service).
+Wave 4 complete. Ready for Wave 5 (09-globe-rendering, 10-vessel-detail-panel, 11-controls-and-filtering).
 
 ## Known Issues
 
 - Frontend build produces a large chunk (4.6MB) from CesiumJS — consider code-splitting in a future wave
 - Minor warnings in ws_positions tests (unawaited coroutines from AsyncMock) — cosmetic only, all tests pass
+- identity_mismatch rule added as 14th rule (spec originally said 13 but had 14 distinct rules)
 
 ## Decisions Made
 
@@ -87,12 +110,18 @@ Wave 3 complete. Ready for Wave 4 (07-scoring-engine, 08-enrichment-service).
 - D9: Removed obsolete `version: "3.8"` from docker-compose.yml (Compose V2 ignores it).
 - D10: Used asyncpg executemany (not COPY) for position inserts — PostGIS GEOGRAPHY type doesn't work with raw COPY protocol.
 - D11: AIS ingest directory is `services/ais-ingest/` (hyphen) on disk; Python imports use sys.path manipulation.
+- D12: Added identity_mismatch as 14th scoring rule (dimensions + flag mismatch detection).
+- D13: Enrichment tracking uses Redis hash `heimdal:enriched` instead of DB column (avoids migration).
+- D14: Flag history stored in vessel profile ownership_data JSONB (no schema migration needed).
+- D15: GISIS/MARS implemented as stubs with proper interfaces — ready for real scraping later.
 
 ## Notes for Next Session
 
-- Wave 3 is fully implemented and tested on branch `feature/wave-3-api-server`
-- Wave 4 can start: 07-scoring-engine and 08-enrichment-service (parallel, depend on Wave 3)
-- Backend tests: 287 total (80 shared + 97 ais-ingest + 110 api-server)
+- Wave 4 is fully implemented and tested on branch `feature/wave-4-intelligence`
+- Wave 5 can start: 09-globe-rendering, 10-vessel-detail-panel, 11-controls-and-filtering (parallel, frontend specs)
+- Backend tests: 627 total (287 pre-Wave-4 + 148 scoring + 192 enrichment)
 - Frontend tests: 28 total
-- API server has 9 route modules: health, vessels, anomalies, sar, gfw, watchlist, enrichment, ws_positions, ws_alerts
-- All Docker images build successfully
+- Scoring engine has 14 rules (5 GFW + 9 realtime) with zone_helpers for PostGIS spatial queries
+- Enrichment service has full GFW integration, OpenSanctions matching, flag derivation, and GISIS/MARS stubs
+- Both services have Dockerfiles and docker-compose entries
+- All Docker images build configuration is complete

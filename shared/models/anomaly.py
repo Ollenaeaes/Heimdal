@@ -36,3 +36,4 @@ class RuleResult:
     severity: Optional[str] = None
     points: float = 0.0
     details: dict = field(default_factory=dict)
+    source: Optional[str] = None  # 'gfw' or 'realtime'

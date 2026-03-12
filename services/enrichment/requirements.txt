@@ -1,0 +1,3 @@
+-r /app/shared/requirements-base.txt
+httpx>=0.27,<1.0
+python-Levenshtein>=0.25,<1.0
