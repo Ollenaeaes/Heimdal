@@ -477,7 +477,7 @@ describe('SanctionsSection data rendering logic', () => {
   });
 
   it('handles undefined matches as no-match state', () => {
-    const noMatches = undefined;
+    const noMatches: { source: string; confidence: number; matchedField: string }[] | undefined = undefined;
     expect(!noMatches || noMatches.length === 0).toBe(true);
   });
 });
@@ -492,7 +492,7 @@ describe('OwnershipSection component exports', () => {
 
 describe('OwnershipSection data rendering logic', () => {
   it('detects ownership data presence', () => {
-    const ownershipData = {
+    const ownershipData: Record<string, string | undefined> = {
       registeredOwner: 'Gotland Shipping AB',
       commercialManager: 'Nordic Marine Services',
       ismManager: 'Baltic Safety Management',
@@ -508,7 +508,7 @@ describe('OwnershipSection data rendering logic', () => {
   });
 
   it('detects empty ownership data', () => {
-    const ownershipData = {
+    const ownershipData: Record<string, string | undefined> = {
       registeredOwner: undefined,
       commercialManager: undefined,
       ismManager: undefined,
@@ -524,7 +524,7 @@ describe('OwnershipSection data rendering logic', () => {
   });
 
   it('detects manual enrichment with ownership chain', () => {
-    const enrichment = {
+    const enrichment: Record<string, string | undefined> = {
       ownershipChain: 'Gotland Holdings Ltd → Baltic Trust → Nordic Fund',
       notes: 'Verified via Lloyd\'s List Intelligence',
       enrichedAt: '2026-03-10T14:30:00Z',
@@ -534,8 +534,8 @@ describe('OwnershipSection data rendering logic', () => {
   });
 
   it('shows prompt when no data at all', () => {
-    const ownershipData = undefined;
-    const manualEnrichment = undefined;
+    const ownershipData: Record<string, string | undefined> | undefined = undefined;
+    const manualEnrichment: Record<string, string | undefined> | undefined = undefined;
     const hasOwnership = ownershipData && (
       ownershipData.registeredOwner ||
       ownershipData.commercialManager ||

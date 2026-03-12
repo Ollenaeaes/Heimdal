@@ -1,11 +1,14 @@
 import { useVesselStore } from '../../hooks/useVesselStore';
 import { useVesselDetail } from '../../hooks/useVesselDetail';
+import { WatchButton } from './WatchButton';
 import { IdentitySection } from './IdentitySection';
 import { StatusSection } from './StatusSection';
 import { RiskSection } from './RiskSection';
 import { VoyageTimeline } from './VoyageTimeline';
 import { SanctionsSection } from './SanctionsSection';
 import { OwnershipSection } from './OwnershipSection';
+import { EnrichmentForm } from './EnrichmentForm';
+import { EnrichmentHistory } from './EnrichmentHistory';
 
 export function VesselPanel() {
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
@@ -22,8 +25,13 @@ export function VesselPanel() {
       }`}
       aria-hidden={!isOpen}
     >
-      {/* Close button */}
-      <div className="flex items-center justify-end px-4 py-2 border-b border-gray-700">
+      {/* Close button + Watch */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
+        {selectedMmsi !== null ? (
+          <WatchButton mmsi={selectedMmsi} />
+        ) : (
+          <span />
+        )}
         <button
           data-testid="panel-close"
           onClick={() => selectVessel(null)}
@@ -62,6 +70,8 @@ export function VesselPanel() {
             ownershipData={vessel.ownershipData}
             manualEnrichment={vessel.manualEnrichment}
           />
+          <EnrichmentForm mmsi={vessel.mmsi} />
+          <EnrichmentHistory enrichments={vessel.manualEnrichments} />
         </>
       )}
     </div>

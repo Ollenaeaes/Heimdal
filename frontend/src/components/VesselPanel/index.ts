@@ -5,3 +5,6 @@ export { RiskSection } from './RiskSection';
 export { VoyageTimeline } from './VoyageTimeline';
 export { SanctionsSection } from './SanctionsSection';
 export { OwnershipSection } from './OwnershipSection';
+export { EnrichmentForm } from './EnrichmentForm';
+export { EnrichmentHistory } from './EnrichmentHistory';
+export { WatchButton } from './WatchButton';
