@@ -1,0 +1,130 @@
+# =============================================================================
+# Heimdal Operational Configuration
+# =============================================================================
+# This file controls runtime behavior for all services. It is mounted
+# read-only into each container at /app/config.yaml.
+#
+# Changes here take effect on service restart (or config reload where
+# supported). Environment-specific secrets belong in .env, not here.
+# =============================================================================
+
+# -- Scoring Engine -----------------------------------------------------------
+# Thresholds and weights for the risk scoring pipeline.
+scoring:
+  # Tier thresholds (cumulative score → tier mapping)
+  tiers:
+    critical: 80    # score >= 80 → Critical
+    high: 60        # score >= 60 → High
+    moderate: 40    # score >= 40 → Moderate
+    low: 20         # score >= 20 → Low
+    # score < 20 → None
+
+  # Per-rule configuration. Weights control how much each rule contributes
+  # to the aggregate score. Enable/disable individual rules here.
+  rules:
+    # GFW-sourced rules (higher confidence, ~3-5 day delay)
+    gfw_ais_disabling:
+      enabled: true
+      weight: 1.0
+    gfw_encounter:
+      enabled: true
+      weight: 1.0
+    gfw_loitering:
+      enabled: true
+      weight: 1.0
+    gfw_port_visit:
+      enabled: true
+      weight: 1.0
+    gfw_dark_sar:
+      enabled: true
+      weight: 1.0
+
+    # Real-time rules (from AIS stream)
+    ais_gap:
+      enabled: true
+      weight: 0.8       # downgraded — GFW ais_disabling is preferred
+    sts_proximity:
+      enabled: true
+      weight: 0.7       # downgraded — GFW encounter is preferred
+    dark_activity:
+      enabled: true
+      weight: 1.0
+    zone_violation:
+      enabled: true
+      weight: 1.0
+    speed_anomaly:
+      enabled: true
+      weight: 0.9
+    flag_risk:
+      enabled: true
+      weight: 1.0
+    sanctions_match:
+      enabled: true
+      weight: 1.0
+    identity_mismatch:
+      enabled: true
+      weight: 1.0
+
+# -- AIS Ingest Service -------------------------------------------------------
+ingest:
+  # Number of positions to buffer before flushing to the database.
+  batch_size: 500
+
+  # Maximum seconds to wait before flushing a partial batch.
+  flush_interval: 5
+
+  # WebSocket reconnection settings.
+  reconnect:
+    initial_delay: 1       # seconds before first reconnect attempt
+    max_delay: 60          # maximum backoff delay in seconds
+    backoff_factor: 2      # exponential backoff multiplier
+
+# -- Enrichment Service -------------------------------------------------------
+enrichment:
+  # Rate limits for external API calls (requests per second).
+  rate_limits:
+    gfw: 2
+    opensanctions: 5
+    gisis: 1
+
+  # Fuzzy matching threshold for sanctions/name matching (0.0 - 1.0).
+  # Higher = stricter matching, fewer false positives.
+  fuzzy_threshold: 0.85
+
+# -- Global Fishing Watch API --------------------------------------------------
+gfw:
+  base_url: "https://gateway.api.globalfishingwatch.org"
+
+  # Max requests per second to GFW APIs.
+  rate_limit_per_second: 2
+
+  # How many days back to fetch fishing events.
+  events_lookback_days: 30
+
+  # How many days back to fetch SAR detections.
+  sar_lookback_days: 14
+
+  # How long to cache vessel identity data (hours).
+  vessel_cache_ttl_hours: 168   # 7 days
+
+# -- Data Retention -----------------------------------------------------------
+retention:
+  # Number of days to keep raw AIS positions before archiving/deleting.
+  positions_days: 90
+
+  # Enable TimescaleDB compression on older position chunks.
+  compression: true
+
+# -- Frontend Defaults --------------------------------------------------------
+frontend:
+  # Initial camera position when the globe loads [longitude, latitude, altitude_m].
+  initial_camera:
+    longitude: 0.0
+    latitude: 20.0
+    altitude: 20000000   # ~20,000 km — full globe view
+
+  # Number of hours of track trail to display behind a vessel.
+  track_trail_hours: 24
+
+  # Pixel radius for clustering nearby vessel markers on the globe.
+  cluster_pixel_range: 45

@@ -1,0 +1,20 @@
+# Environment secrets (only .env.example is committed)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Node / Frontend
+node_modules/
+dist/
+.next/
+
+# Docker volumes (if mounted locally)
+pgdata/
+opensanctions-data/

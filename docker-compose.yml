@@ -1,0 +1,118 @@
+# =============================================================================
+# Heimdal Platform — Docker Compose Orchestration
+# =============================================================================
+# Usage:
+#   cp .env.example .env   # fill in your API keys
+#   make up                 # start all services
+#   make help               # see all available commands
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    build: ./db
+    environment:
+      POSTGRES_USER: heimdal
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-heimdal_dev}
+      POSTGRES_DB: heimdal
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heimdal -d heimdal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Backend Services
+  # ---------------------------------------------------------------------------
+
+  ais-ingest:
+    build: ./services/ais-ingest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      AIS_API_KEY: ${AIS_API_KEY}
+      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      REDIS_URL: "redis://redis:6379/0"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+
+  scoring:
+    build: ./services/scoring
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      REDIS_URL: "redis://redis:6379/0"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+
+  enrichment:
+    build: ./services/enrichment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      REDIS_URL: "redis://redis:6379/0"
+      GFW_API_TOKEN: ${GFW_API_TOKEN}
+      OPENSANCTIONS_DATA_PATH: /data/opensanctions
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - opensanctions-data:/data/opensanctions
+
+  api-server:
+    build: ./services/api-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      REDIS_URL: "redis://redis:6379/0"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - api-server
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
+# =============================================================================
+# Persistent Volumes
+# =============================================================================
+volumes:
+  pgdata:
+  opensanctions-data:
