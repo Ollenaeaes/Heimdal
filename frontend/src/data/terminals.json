@@ -1,0 +1,40 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Primorsk", "id": "terminal-primorsk" },
+      "geometry": { "type": "Point", "coordinates": [28.67, 60.35] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Ust-Luga", "id": "terminal-ust-luga" },
+      "geometry": { "type": "Point", "coordinates": [28.40, 59.68] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Novorossiysk", "id": "terminal-novorossiysk" },
+      "geometry": { "type": "Point", "coordinates": [37.79, 44.72] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Kozmino", "id": "terminal-kozmino" },
+      "geometry": { "type": "Point", "coordinates": [132.89, 42.73] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Murmansk", "id": "terminal-murmansk" },
+      "geometry": { "type": "Point", "coordinates": [33.08, 68.97] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "De-Kastri", "id": "terminal-de-kastri" },
+      "geometry": { "type": "Point", "coordinates": [140.78, 51.47] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Vysotsk", "id": "terminal-vysotsk" },
+      "geometry": { "type": "Point", "coordinates": [28.57, 60.63] }
+    }
+  ]
+}
