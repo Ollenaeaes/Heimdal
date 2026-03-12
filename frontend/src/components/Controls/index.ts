@@ -7,3 +7,4 @@ export { StatsBar, STATS_REFETCH_INTERVAL } from './StatsBar';
 export type { StatsResponse } from './StatsBar';
 export { HealthIndicator, computeHealthLevel, HEALTH_REFETCH_INTERVAL, AIS_STALE_THRESHOLD_MS } from './HealthIndicator';
 export type { HealthResponse, HealthLevel, ServiceHealth } from './HealthIndicator';
+export { WatchlistPanel } from './WatchlistPanel';

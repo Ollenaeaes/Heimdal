@@ -25,6 +25,31 @@ export interface ManualEnrichment {
   enrichedAt?: string;
 }
 
+export interface ManualEnrichmentRecord {
+  id: number;
+  source: string;
+  analystNotes?: string;
+  piTier?: string;
+  attachments?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface EnrichmentPayload {
+  source: string;
+  ownership_chain?: {
+    registered_owner?: string;
+    commercial_manager?: string;
+    beneficial_owner?: string;
+  };
+  pi_insurer?: string;
+  pi_insurer_tier?: 'ig_member' | 'non_ig_western' | 'russian_state' | 'unknown' | 'fraudulent' | 'none';
+  classification_society?: string;
+  classification_iacs?: boolean;
+  psc_detentions?: number;
+  psc_deficiencies?: number;
+  notes?: string;
+}
+
 export interface VesselDetail {
   mmsi: number;
   imo?: number;
@@ -46,6 +71,7 @@ export interface VesselDetail {
   sanctionsMatches?: SanctionsMatch[];
   ownershipData?: OwnershipData;
   manualEnrichment?: ManualEnrichment;
+  manualEnrichments?: ManualEnrichmentRecord[];
 }
 
 export interface TrackPoint {

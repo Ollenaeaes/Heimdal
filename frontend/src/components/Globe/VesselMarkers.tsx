@@ -9,8 +9,29 @@ import {
 } from 'cesium';
 import { useCesium } from 'resium';
 import { useVesselStore } from '../../hooks/useVesselStore';
+import { useWatchlistStore } from '../../hooks/useWatchlist';
 import type { VesselState } from '../../types/vessel';
 import { getVesselIcon, MARKER_STYLE, cogToRotation } from '../../utils/vesselIcons';
+
+/** Create a simple white circle data URI for the watchlist halo. */
+const HALO_IMAGE = (() => {
+  if (typeof document === 'undefined') return '';
+  const size = 48;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  return canvas.toDataURL();
+})();
 
 /**
  * Filter vessels according to the active FilterState.
@@ -55,6 +76,7 @@ function VesselMarkersInner() {
   const vessels = useVesselStore((s) => s.vessels);
   const filters = useVesselStore((s) => s.filters);
   const selectVessel = useVesselStore((s) => s.selectVessel);
+  const watchedMmsis = useWatchlistStore((s) => s.watchedMmsis);
 
   // Pulsing scale for red vessels — oscillates between 0.8 and 1.2
   const pulseRef = useRef(0);
@@ -89,7 +111,6 @@ function VesselMarkersInner() {
         const style = MARKER_STYLE[v.riskTier];
         const isRed = v.riskTier === 'red';
         const position = Cartesian3.fromDegrees(v.lon, v.lat);
-
         return (
           <Entity
             key={v.mmsi}
@@ -109,6 +130,21 @@ function VesselMarkersInner() {
           </Entity>
         );
       })}
+      {/* Watchlist halo indicators — rendered behind vessel markers */}
+      {HALO_IMAGE && visibleVessels
+        .filter((v) => watchedMmsis.has(v.mmsi))
+        .map((v) => (
+          <Entity
+            key={`halo-${v.mmsi}`}
+            position={Cartesian3.fromDegrees(v.lon, v.lat)}
+          >
+            <BillboardGraphics
+              image={HALO_IMAGE}
+              scale={0.8}
+              translucencyByDistance={new NearFarScalar(1.0e3, 0.8, 1.5e7, 0.3)}
+            />
+          </Entity>
+        ))}
     </>
   );
 }

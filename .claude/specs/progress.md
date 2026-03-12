@@ -5,8 +5,8 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 ## Current Feature
 
 **Spec:** Wave Plan — 16 specs across 7 waves (GFW Integration)
-**Branch:** feature/wave-5-frontend-features
-**Status:** Wave 5 complete, ready for Wave 6
+**Branch:** feature/wave-6-advanced-features
+**Status:** Wave 6 complete, ready for Wave 7
 
 ## Stories Completed
 
@@ -118,15 +118,32 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 38 control tests (18 + 20)
 - Commits: `928add3`, `ebfa218`
 
+### 12-manual-enrichment (all 3 stories)
+- Story 1: EnrichmentForm UI — collapsible section with all fields (source dropdown, ownership, P&I insurer+tier, classification+IACS, PSC detentions/deficiencies, notes)
+- Story 2: Form submission — TanStack Query useMutation, success/error toast notifications (3s auto-dismiss), query invalidation, loading state
+- Story 3: Enrichment history — collapsible cards sorted newest-first, empty state message
+- Supporting: ManualEnrichmentRecord type, EnrichmentPayload type, updated VesselDetail with manualEnrichments array
+- Tests: 29 enrichment tests
+- Commits: `5a4c10b`
+
+### 13-watchlist-notifications (all 3 stories)
+- Story 1: Watchlist store (Zustand) + TanStack Query mutations with optimistic updates, Watch/Unwatch toggle button in vessel panel header
+- Story 2: WatchlistPanel dropdown in app header — watched vessels with name, risk tier dot, time-ago, click-to-select
+- Story 3: Browser desktop notifications via alert WebSocket — risk_change and anomaly events for watched vessels, notification click focuses app and selects vessel
+- Halo indicator on globe for watchlisted vessel markers (semi-transparent white circle billboard)
+- Tests: 20 watchlist tests
+- Commits: `165ff4a`
+
 ## Current Story
 
-Wave 5 complete. Ready for Wave 6 (12-manual-enrichment, 13-watchlist-notifications).
+Wave 6 complete. Ready for Wave 7 (14-sar-frontend, 15-stats-and-replay, 16-testing-and-docs).
 
 ## Known Issues
 
 - Frontend build produces a large chunk (4.6MB) from CesiumJS — consider code-splitting in a future wave
 - Minor warnings in ws_positions tests (unawaited coroutines from AsyncMock) — cosmetic only, all tests pass
 - identity_mismatch rule added as 14th rule (spec originally said 13 but had 14 distinct rules)
+- Pre-existing TS errors in vesselPanel.test.ts (type narrowing on undefined) and VesselCluster.tsx (Cesium type mismatch) — cosmetic only, all tests pass
 
 ## Decisions Made
 
@@ -148,13 +165,13 @@ Wave 5 complete. Ready for Wave 6 (12-manual-enrichment, 13-watchlist-notificati
 
 ## Notes for Next Session
 
-- Wave 5 is fully implemented and tested on branch `feature/wave-5-frontend-features`
-- Wave 6 can start: 12-manual-enrichment, 13-watchlist-notifications (parallel)
+- Wave 6 is fully implemented and tested on branch `feature/wave-6-advanced-features`
+- Wave 7 can start: 14-sar-frontend, 15-stats-and-replay, 16-testing-and-docs (parallel)
 - Backend tests: 627 total (unchanged from Wave 4)
-- Frontend tests: 226 total (28 pre-Wave-5 + 198 new in Wave 5)
-- Globe rendering has WebSocket connection, vessel markers with clustering, overlays, track trails
-- Vessel detail panel has 6 sections: identity, status (real-time), risk, voyage timeline, sanctions, ownership
-- Controls: search bar, risk/type/time filters, stats bar (30s poll), health indicator (60s poll)
-- New utilities: shipTypes, flagEmoji, navStatus, ruleNames, severityColors, vesselIcons
-- Zustand store extended with positionHistory (ring buffer, 500/vessel)
-- App.tsx fully integrated with all Wave 5 components
+- Frontend tests: 275 total (226 pre-Wave-6 + 29 enrichment + 20 watchlist)
+- Manual enrichment: collapsible form in vessel panel, POST mutation with toast, enrichment history cards
+- Watchlist: Zustand store + TanStack mutations, WatchlistPanel dropdown in header, browser notifications via alert WS
+- Watchlisted vessels have white halo indicator on globe markers
+- New hooks: useWatchlist.ts (store, queries, mutations, alerts)
+- New components: EnrichmentForm, EnrichmentHistory, WatchButton, WatchlistPanel
+- App.tsx uses AppInner wrapper for hooks inside QueryClientProvider
