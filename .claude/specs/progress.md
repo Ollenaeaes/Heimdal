@@ -5,8 +5,8 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 ## Current Feature
 
 **Spec:** Wave Plan — 16 specs across 7 waves (GFW Integration)
-**Branch:** feature/wave-1-foundation
-**Status:** Wave 1 complete, ready for Wave 2
+**Branch:** feature/wave-2-pipeline-frontend
+**Status:** Wave 2 complete, ready for Wave 3
 
 ## Stories Completed
 
@@ -33,13 +33,33 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Also: requirements-base.txt, 80 tests all passing
 - Commit: `aef222a`
 
+### 04-ais-ingest (all 6 stories)
+- Story 2: AIS message parser — parses PositionReport and ShipStaticData from aisstream.io JSON, sentinel value handling (SOG 102.3, COG 360, heading 511, ROT -128 → None), validation via Pydantic
+- Story 4: Redis deduplication — SET NX EX 10, key format `heimdal:dedup:{mmsi}:{ts}`
+- Story 5: Metrics publisher — ingest_rate (60s rolling), last_message_at, total_vessels in Redis
+- Story 3: Batch writer — asyncpg executemany with PostGIS ST_MakePoint, periodic + size-based flush, vessel profile upserts, Redis publish on flush
+- Story 1: WebSocket connection — persistent auto-reconnecting to aisstream.io, exponential backoff 1s-60s, stale connection detection at 120s
+- Story 6: Dockerfile — Python 3.12-slim, asyncpg + websockets deps
+- Tests: 97 backend tests (56 parser + 9 dedup + 9 metrics + 14 websocket + 9 writer)
+- Commits: `59580e8`, `6530188`, `f49895c`
+
+### 05-frontend-shell (all 6 stories)
+- Story 1: Vite + React 18 + TypeScript 5 project with CesiumJS 1.115+, Resium, Zustand 4, TanStack Query 5, Tailwind CSS v4, date-fns 3
+- Story 3: TypeScript interfaces (VesselState, AnomalyEvent, PaginatedResponse, VesselDetail, TrackPoint), Zustand store skeleton (vessels Map, selectedMmsi, filters, actions)
+- Story 6: Risk colors (green/yellow/red hex), formatters (DMS coords, speed, course, timestamps), STS zones GeoJSON (6 zones), terminals GeoJSON (7 Russian terminals), vessel SVG icons
+- Story 2: CesiumJS GlobeView component — Resium Viewer, Norwegian EEZ camera (lat 68, lon 15, 5000km), all widgets disabled, real-time mode
+- Story 4: App layout — dark theme, header bar, full-height globe, hidden vessel panel slot, QueryClientProvider
+- Story 5: Dockerfile — multi-stage (node:20-alpine build → nginx:alpine serve), nginx.conf with SPA fallback, /api/ and /ws/ proxy, Cesium asset caching
+- Tests: 28 frontend tests (5 store + 20 utils + 2 globe + 1 app)
+- Commits: `5aad300`, `f4011b0`, `71f2016`
+
 ## Current Story
 
-Wave 1 complete. Ready for Wave 2 (04-ais-ingest, 05-frontend-shell).
+Wave 2 complete. Ready for Wave 3 (06-api-server, 07-scoring-engine).
 
 ## Known Issues
 
-[none]
+- Frontend build produces a large chunk (4.6MB) from CesiumJS — consider code-splitting in a future wave
 
 ## Decisions Made
 
@@ -52,10 +72,13 @@ Wave 1 complete. Ready for Wave 2 (04-ais-ingest, 05-frontend-shell).
 - D7: GFW-sourced rules have higher confidence than real-time rules. Dedup logic suppresses real-time when GFW covers same behavior.
 - D8: ~3-5 day data delay for GFW data is acceptable (compensated by higher detection quality).
 - D9: Removed obsolete `version: "3.8"` from docker-compose.yml (Compose V2 ignores it).
+- D10: Used asyncpg executemany (not COPY) for position inserts — PostGIS GEOGRAPHY type doesn't work with raw COPY protocol.
+- D11: AIS ingest directory is `services/ais-ingest/` (hyphen) on disk; Python imports use sys.path manipulation.
 
 ## Notes for Next Session
 
-- Wave 1 is fully implemented and tested on branch `feature/wave-1-foundation`
-- Wave 2 can start: 04-ais-ingest and 05-frontend-shell (parallel, depend on Wave 1)
-- Each Wave 2 service needs its own Dockerfile and service-specific code
-- The shared library, database, and infrastructure are ready for services to build on
+- Wave 2 is fully implemented and tested on branch `feature/wave-2-pipeline-frontend`
+- Wave 3 can start: 06-api-server and 07-scoring-engine (parallel, depend on Waves 1-2)
+- Backend tests: 177 total (80 shared + 97 ais-ingest)
+- Frontend tests: 28 total
+- Both Docker images build successfully
