@@ -75,6 +75,8 @@ def create_app() -> FastAPI:
     from routes.gfw import router as gfw_router
     from routes.watchlist import router as watchlist_router
     from routes.enrichment import router as enrichment_router
+    from routes.ws_alerts import router as ws_alerts_router
+    from routes.ws_positions import router as ws_positions_router
 
     app.include_router(health_router)
     app.include_router(vessels_router)
@@ -83,6 +85,8 @@ def create_app() -> FastAPI:
     app.include_router(gfw_router)
     app.include_router(watchlist_router)
     app.include_router(enrichment_router)
+    app.include_router(ws_alerts_router)
+    app.include_router(ws_positions_router)
 
     return app
 
