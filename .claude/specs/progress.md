@@ -5,8 +5,8 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 ## Current Feature
 
 **Spec:** Wave Plan — 16 specs across 7 waves (GFW Integration)
-**Branch:** feature/wave-4-intelligence
-**Status:** Wave 4 complete, ready for Wave 5
+**Branch:** feature/wave-5-frontend-features
+**Status:** Wave 5 complete, ready for Wave 6
 
 ## Stories Completed
 
@@ -87,9 +87,40 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 192 enrichment tests (28 gfw_client + 17 sar + 26 events + 23 vessel + 30 sanctions + 30 flags + 18 gisis_mars + 20 runner)
 - Commits: `f248903`, `3315335`, `3b699f9`, `0056364`, `5054685`
 
+### 09-globe-rendering (all 5 stories)
+- Story 1: WebSocket connection — useWebSocket hook with auto-reconnect (1s-60s exponential backoff), filter-based subscription, store integration
+- Story 4: Geographic overlays — STS zones (6 amber polygons), Russian terminals (7 red markers), Norwegian EEZ (blue dashed polyline), toggle controls
+- Story 2: Vessel markers — risk-tier colored billboards (green/yellow/red with opacity+scale), COG rotation, click-to-select, red pulsing effect
+- Story 5: Track trails — position history ring buffer (500/vessel) in Zustand store, fading polylines colored by risk tier
+- Story 3: Entity clustering — Cesium EntityCluster (50px range), highest-risk-tier color inheritance, count labels
+- Integration: GlobeView updated with all components + overlay toggles
+- Tests: 60 new (11 ws + 11 overlays + 18 markers + 13 trails + 10 cluster) = 91 total frontend
+- Commits: `a365817`, `f0e3662`, `af0986b`, `02b5469`, `f07e9ec`
+
+### 10-vessel-detail-panel (all 6 stories)
+- Story 1: Panel container — 420px slide-in from right, close button, loading skeleton, TanStack Query data fetch
+- Story 2: Identity section — vessel name, IMO, MMSI, flag emoji, risk tier badge, ship type labels, dimensions
+- Story 3: Status section — real-time position/SOG/COG/heading from WebSocket store, nav status labels, fallback to API
+- Story 4: Risk section — score bar (0-200 gradient), unresolved anomaly cards with rule names, severity colors
+- Story 5: Voyage timeline — 7-day horizontal scrollable timeline, color-coded anomaly markers (ais=red, sts=amber, port=blue)
+- Story 6: Sanctions + Ownership — sanctions match cards with confidence %, ownership chain display, empty states
+- Supporting utils: shipTypes.ts, flagEmoji.ts, navStatus.ts, ruleNames.ts, severityColors.ts
+- Tests: 97 panel tests
+- Commits: `104fa38`, `1c930bc`, `0cd30f4`, `e6dd71b`
+
+### 11-controls-and-filtering (all 6 stories)
+- Story 1: Search bar — debounced (300ms) autocomplete, MMSI/IMO pattern detection, TanStack Query
+- Story 2: Risk tier filter — three color toggles with live vessel counts, Zustand filter integration
+- Story 3: Type filter — dropdown (All/Tankers/Cargo/Passenger), ship type code ranges
+- Story 4: Time range filter — preset buttons (1h/6h/24h/7d/All), date-fns calculations, activeSince filter
+- Story 5: Stats bar — polled every 30s, total vessels, tier counts, anomalies, ingestion rate
+- Story 6: Health indicator — polled every 60s, green/yellow/red dot, AIS staleness detection (2min threshold)
+- Tests: 38 control tests (18 + 20)
+- Commits: `928add3`, `ebfa218`
+
 ## Current Story
 
-Wave 4 complete. Ready for Wave 5 (09-globe-rendering, 10-vessel-detail-panel, 11-controls-and-filtering).
+Wave 5 complete. Ready for Wave 6 (12-manual-enrichment, 13-watchlist-notifications).
 
 ## Known Issues
 
@@ -117,11 +148,13 @@ Wave 4 complete. Ready for Wave 5 (09-globe-rendering, 10-vessel-detail-panel, 1
 
 ## Notes for Next Session
 
-- Wave 4 is fully implemented and tested on branch `feature/wave-4-intelligence`
-- Wave 5 can start: 09-globe-rendering, 10-vessel-detail-panel, 11-controls-and-filtering (parallel, frontend specs)
-- Backend tests: 627 total (287 pre-Wave-4 + 148 scoring + 192 enrichment)
-- Frontend tests: 28 total
-- Scoring engine has 14 rules (5 GFW + 9 realtime) with zone_helpers for PostGIS spatial queries
-- Enrichment service has full GFW integration, OpenSanctions matching, flag derivation, and GISIS/MARS stubs
-- Both services have Dockerfiles and docker-compose entries
-- All Docker images build configuration is complete
+- Wave 5 is fully implemented and tested on branch `feature/wave-5-frontend-features`
+- Wave 6 can start: 12-manual-enrichment, 13-watchlist-notifications (parallel)
+- Backend tests: 627 total (unchanged from Wave 4)
+- Frontend tests: 226 total (28 pre-Wave-5 + 198 new in Wave 5)
+- Globe rendering has WebSocket connection, vessel markers with clustering, overlays, track trails
+- Vessel detail panel has 6 sections: identity, status (real-time), risk, voyage timeline, sanctions, ownership
+- Controls: search bar, risk/type/time filters, stats bar (30s poll), health indicator (60s poll)
+- New utilities: shipTypes, flagEmoji, navStatus, ruleNames, severityColors, vesselIcons
+- Zustand store extended with positionHistory (ring buffer, 500/vessel)
+- App.tsx fully integrated with all Wave 5 components
