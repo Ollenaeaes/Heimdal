@@ -1,6 +1,11 @@
 import { useVesselStore } from '../../hooks/useVesselStore';
 import { useVesselDetail } from '../../hooks/useVesselDetail';
 import { IdentitySection } from './IdentitySection';
+import { StatusSection } from './StatusSection';
+import { RiskSection } from './RiskSection';
+import { VoyageTimeline } from './VoyageTimeline';
+import { SanctionsSection } from './SanctionsSection';
+import { OwnershipSection } from './OwnershipSection';
 
 export function VesselPanel() {
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
@@ -46,7 +51,19 @@ export function VesselPanel() {
         </div>
       )}
 
-      {vessel && !isLoading && <IdentitySection vessel={vessel} />}
+      {vessel && !isLoading && (
+        <>
+          <IdentitySection vessel={vessel} />
+          <StatusSection vessel={vessel} mmsi={vessel.mmsi} />
+          <RiskSection vessel={vessel} />
+          <VoyageTimeline mmsi={vessel.mmsi} anomalies={vessel.anomalies ?? []} />
+          <SanctionsSection matches={vessel.sanctionsMatches} />
+          <OwnershipSection
+            ownershipData={vessel.ownershipData}
+            manualEnrichment={vessel.manualEnrichment}
+          />
+        </>
+      )}
     </div>
   );
 }
