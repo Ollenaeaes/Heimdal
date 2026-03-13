@@ -20,6 +20,7 @@ import inspect
 import json
 import logging
 import pkgutil
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
 
@@ -165,6 +166,7 @@ class ScoringEngine:
         recalculates the aggregate score, updates the vessel profile, and
         publishes events to Redis.
         """
+        eval_start = time.monotonic()
         session_factory = get_session()
         async with session_factory() as session:
             profile = await get_vessel_profile_by_mmsi(session, mmsi)
@@ -184,18 +186,41 @@ class ScoringEngine:
             existing_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
 
             results: list[RuleResult] = []
+            rules_fired = 0
             for rule in self.realtime_rules:
+                rule_start = time.monotonic()
                 try:
                     result = await rule.evaluate(
                         mmsi, profile, recent_positions, existing_anomalies, []
                     )
                 except Exception:
+                    rule_ms = (time.monotonic() - rule_start) * 1000
                     logger.exception(
-                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi
+                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi,
+                        extra={"rule_id": rule.rule_id, "mmsi": mmsi, "duration_ms": round(rule_ms, 2)},
                     )
                     continue
+                rule_ms = (time.monotonic() - rule_start) * 1000
+                if rule_ms > 100:
+                    logger.warning(
+                        "Slow rule evaluation",
+                        extra={"slow_rule": True, "rule_id": rule.rule_id, "duration_ms": round(rule_ms, 2), "mmsi": mmsi},
+                    )
                 if result is not None:
                     results.append(result)
+                    if result.fired:
+                        rules_fired += 1
+
+            total_ms = (time.monotonic() - eval_start) * 1000
+            logger.info(
+                "Vessel evaluation complete",
+                extra={
+                    "mmsi": mmsi,
+                    "total_evaluation_ms": round(total_ms, 2),
+                    "rules_evaluated": len(self.realtime_rules),
+                    "rules_fired": rules_fired,
+                },
+            )
 
             # Persist fired anomalies — skip if an unresolved anomaly for the
             # same rule_id already exists (prevents duplicate rows on every
@@ -241,6 +266,7 @@ class ScoringEngine:
         suppress overlapping real-time anomalies, recalculates the
         aggregate score, updates the vessel profile, and publishes events.
         """
+        eval_start = time.monotonic()
         session_factory = get_session()
         async with session_factory() as session:
             profile = await get_vessel_profile_by_mmsi(session, mmsi)
@@ -251,18 +277,41 @@ class ScoringEngine:
             existing_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
 
             results: list[RuleResult] = []
+            rules_fired = 0
             for rule in self.gfw_rules:
+                rule_start = time.monotonic()
                 try:
                     result = await rule.evaluate(
                         mmsi, profile, [], existing_anomalies, gfw_events
                     )
                 except Exception:
+                    rule_ms = (time.monotonic() - rule_start) * 1000
                     logger.exception(
-                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi
+                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi,
+                        extra={"rule_id": rule.rule_id, "mmsi": mmsi, "duration_ms": round(rule_ms, 2)},
                     )
                     continue
+                rule_ms = (time.monotonic() - rule_start) * 1000
+                if rule_ms > 100:
+                    logger.warning(
+                        "Slow rule evaluation",
+                        extra={"slow_rule": True, "rule_id": rule.rule_id, "duration_ms": round(rule_ms, 2), "mmsi": mmsi},
+                    )
                 if result is not None:
                     results.append(result)
+                    if result.fired:
+                        rules_fired += 1
+
+            total_ms = (time.monotonic() - eval_start) * 1000
+            logger.info(
+                "Vessel evaluation complete",
+                extra={
+                    "mmsi": mmsi,
+                    "total_evaluation_ms": round(total_ms, 2),
+                    "rules_evaluated": len(self.gfw_rules),
+                    "rules_fired": rules_fired,
+                },
+            )
 
             # Persist fired anomalies, run dedup, publish anomaly events
             # Skip if an unresolved anomaly for the same rule already exists
@@ -320,7 +369,13 @@ class ScoringEngine:
         """Recalculate aggregate score, update the vessel profile, and
         publish a tier change event if the tier changed."""
         # Re-fetch anomalies to include newly persisted + deduped ones
+        query_start = time.monotonic()
         all_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
+        query_ms = (time.monotonic() - query_start) * 1000
+        logger.debug(
+            "Aggregate score query completed",
+            extra={"mmsi": mmsi, "query_duration_ms": round(query_ms, 2), "anomaly_count": len(all_anomalies)},
+        )
         new_score = aggregate_score(all_anomalies)
         new_tier = calculate_tier(new_score)
 
