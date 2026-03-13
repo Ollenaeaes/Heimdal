@@ -2,11 +2,15 @@
 
 Creates the GFW client, Redis client, optional GISIS/MARS clients,
 loads the sanctions index, and starts the enrichment loop.
+
+Also listens for tier-change events on ``heimdal:risk_changes`` and
+triggers immediate enrichment for vessels transitioning to yellow or red.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -46,8 +50,74 @@ def _load_aois() -> list[dict]:
     return aois
 
 
+async def listen_for_tier_changes(
+    *,
+    redis_client,
+    gfw_client,
+    session_factory,
+    sanctions_index,
+    gisis_client,
+    mars_client,
+    aois,
+) -> None:
+    """Listen for tier-change events and trigger immediate enrichment.
+
+    Subscribes to ``heimdal:risk_changes`` and, when a vessel transitions to
+    yellow or red, runs the full enrichment pipeline for that MMSI (subject
+    to debounce).
+    """
+    from runner import enrich_single_vessel, should_trigger_enrichment
+
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe("heimdal:risk_changes")
+    logger.info("Listening for tier changes on heimdal:risk_changes")
+
+    async for message in pubsub.listen():
+        if message["type"] != "message":
+            continue
+        try:
+            payload = json.loads(message["data"])
+            mmsi = payload.get("mmsi")
+            new_tier = payload.get("new_tier")
+            old_tier = payload.get("old_tier")
+
+            if not mmsi or not new_tier:
+                continue
+
+            should = await should_trigger_enrichment(redis_client, mmsi, new_tier)
+            if not should:
+                logger.debug(
+                    "Skipping tier-change enrichment for MMSI %d (debounce or tier=%s)",
+                    mmsi,
+                    new_tier,
+                )
+                continue
+
+            logger.info(
+                "Tier change %s->%s for MMSI %d — triggering immediate enrichment",
+                old_tier,
+                new_tier,
+                mmsi,
+            )
+
+            async with session_factory() as session:
+                await enrich_single_vessel(
+                    mmsi,
+                    gfw_client=gfw_client,
+                    session=session,
+                    redis_client=redis_client,
+                    sanctions_index=sanctions_index,
+                    gisis_client=gisis_client,
+                    mars_client=mars_client,
+                    aois=aois,
+                )
+                await session.commit()
+        except Exception:
+            logger.exception("Error handling tier-change trigger")
+
+
 async def main() -> None:
-    """Initialize all clients and start the enrichment loop."""
+    """Initialize all clients and start the enrichment loop + tier-change listener."""
     import redis.asyncio as aioredis
 
     from gfw_client import GFWClient
@@ -92,16 +162,27 @@ async def main() -> None:
 
     # GFW client
     async with GFWClient() as gfw_client:
-        await run_loop(
-            gfw_client=gfw_client,
-            session_factory=session_factory,
-            redis_client=redis_client,
-            sanctions_index=sanctions_index,
-            gisis_client=gisis_client,
-            mars_client=mars_client,
-            aois=aois,
-            batch_size=batch_size,
-            interval_seconds=interval,
+        await asyncio.gather(
+            run_loop(
+                gfw_client=gfw_client,
+                session_factory=session_factory,
+                redis_client=redis_client,
+                sanctions_index=sanctions_index,
+                gisis_client=gisis_client,
+                mars_client=mars_client,
+                aois=aois,
+                batch_size=batch_size,
+                interval_seconds=interval,
+            ),
+            listen_for_tier_changes(
+                redis_client=redis_client,
+                gfw_client=gfw_client,
+                session_factory=session_factory,
+                sanctions_index=sanctions_index,
+                gisis_client=gisis_client,
+                mars_client=mars_client,
+                aois=aois,
+            ),
         )
 
 

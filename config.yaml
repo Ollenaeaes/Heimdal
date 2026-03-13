@@ -97,6 +97,14 @@ enrichment:
   # Higher = stricter matching, fewer false positives.
   fuzzy_threshold: 0.85
 
+  # Tier-change triggered enrichment.
+  # When a vessel transitions to yellow or red, trigger immediate enrichment
+  # instead of waiting for the 6-hour cycle.
+  tier_change_trigger:
+    enabled: true
+    debounce_hours: 1
+    trigger_tiers: ["yellow", "red"]
+
 # -- Global Fishing Watch API --------------------------------------------------
 gfw:
   base_url: "https://gateway.api.globalfishingwatch.org"

@@ -37,6 +37,15 @@ ENRICHED_KEY = "heimdal:enriched"
 # Redis channel for enrichment completion events
 ENRICHMENT_CHANNEL = "heimdal:enrichment_complete"
 
+# Redis key for tracking tier-change triggered enrichment timestamps per MMSI
+TRIGGER_KEY = "heimdal:enrichment_triggered"
+
+# Tiers that trigger immediate enrichment on transition
+TRIGGER_TIERS = {"yellow", "red"}
+
+# Default debounce window for tier-change triggered enrichment (hours)
+DEFAULT_DEBOUNCE_HOURS = 1
+
 # Default enrichment interval in seconds (6 hours)
 DEFAULT_INTERVAL_SECONDS = 6 * 3600
 
@@ -288,6 +297,105 @@ async def enrich_batch(
         "sar_detections_count": sar_detections_count,
         "failed_mmsis": failed_mmsis,
     }
+
+
+async def should_trigger_enrichment(
+    redis_client: Any,
+    mmsi: int,
+    new_tier: str,
+    debounce_hours: float = DEFAULT_DEBOUNCE_HOURS,
+) -> bool:
+    """Check if a tier-change should trigger immediate enrichment.
+
+    Returns True if the new tier is in TRIGGER_TIERS and the vessel has not
+    been triggered within the debounce window.
+
+    Args:
+        redis_client: An async Redis client.
+        mmsi: Vessel MMSI.
+        new_tier: The tier the vessel transitioned to.
+        debounce_hours: Hours to wait before allowing another triggered enrichment.
+
+    Returns:
+        True if enrichment should be triggered.
+    """
+    if new_tier not in TRIGGER_TIERS:
+        return False
+
+    last_triggered = await redis_client.hget(TRIGGER_KEY, str(mmsi))
+    if last_triggered:
+        try:
+            ts = float(last_triggered)
+        except (ValueError, TypeError):
+            return True
+        cutoff = datetime.now(timezone.utc).timestamp() - (debounce_hours * 3600)
+        if ts > cutoff:
+            return False  # debounce: too recent
+
+    return True
+
+
+async def mark_triggered(redis_client: Any, mmsi: int) -> None:
+    """Record that tier-change enrichment was triggered for this MMSI.
+
+    Args:
+        redis_client: An async Redis client.
+        mmsi: Vessel MMSI.
+    """
+    now = str(datetime.now(timezone.utc).timestamp())
+    await redis_client.hset(TRIGGER_KEY, str(mmsi), now)
+
+
+async def enrich_single_vessel(
+    mmsi: int,
+    *,
+    gfw_client: Any,
+    session: Any,
+    redis_client: Any,
+    sanctions_index: Any = None,
+    gisis_client: Any = None,
+    mars_client: Any = None,
+    aois: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Enrich a single vessel immediately (triggered by tier change).
+
+    Runs the full enrichment pipeline for the given MMSI. On success, marks
+    the vessel as enriched and records the trigger timestamp.
+
+    Args:
+        mmsi: Vessel MMSI to enrich.
+        gfw_client: An initialized GFWClient instance.
+        session: An async SQLAlchemy session.
+        redis_client: An async Redis client.
+        sanctions_index: Loaded SanctionsIndex (or None).
+        gisis_client: GISISClient instance (or None).
+        mars_client: MARSClient instance (or None).
+        aois: List of AOI dicts for SAR fetching.
+
+    Returns:
+        Dict with enrichment result from enrich_batch.
+    """
+    result = await enrich_batch(
+        [mmsi],
+        gfw_client=gfw_client,
+        session=session,
+        redis_client=redis_client,
+        sanctions_index=sanctions_index,
+        gisis_client=gisis_client,
+        mars_client=mars_client,
+        aois=aois,
+    )
+    failed = result.get("failed_mmsis", set())
+    if mmsi not in failed:
+        await mark_enriched(redis_client, [mmsi])
+        await mark_triggered(redis_client, mmsi)
+        await publish_enrichment_complete(
+            redis_client,
+            [mmsi],
+            result["gfw_events_count"],
+            result["sar_detections_count"],
+        )
+    return result
 
 
 async def run_cycle(
