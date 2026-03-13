@@ -265,3 +265,16 @@ class OwnershipRiskRule(ScoringRule):
             },
             source="realtime",
         )
+
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """End the anomaly if re-evaluation no longer fires."""
+        result = await self.evaluate(mmsi, profile, recent_positions, [], [])
+        if result is None or not result.fired:
+            return True
+        return False

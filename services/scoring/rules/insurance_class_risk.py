@@ -67,6 +67,24 @@ def _is_tanker(ship_type: Any) -> bool:
     return _TANKER_TYPE_MIN <= st <= _TANKER_TYPE_MAX
 
 
+# International Group of P&I Clubs — 12 member clubs (+ common name variants)
+_IG_PI_CLUBS: list[str] = [
+    "AMERICAN",       # American Steamship Owners Mutual Protection and Indemnity Association
+    "BRITANNIA",      # Britannia P&I Club
+    "GARD",           # Assuranceforeningen Gard
+    "JAPAN P&I",      # Japan Ship Owners' Mutual Protection & Indemnity Association
+    "LONDON P&I",     # London P&I Club
+    "NORTH OF ENGLAND", # North of England P&I Association
+    "SHIPOWNERS",     # Shipowners' Mutual Protection and Indemnity Association (Luxembourg)
+    "SKULD",          # Assuranceforeningen Skuld
+    "STANDARD",       # Standard Club
+    "STEAMSHIP MUTUAL", # Steamship Mutual Underwriting Association
+    "SWEDISH CLUB",   # Sveriges Ångfartygs Assurans Förening (The Swedish Club)
+    "UK P&I",         # United Kingdom Mutual Steam Ship Assurance Association
+    "WEST OF ENGLAND", # West of England Ship Owners Mutual Insurance Association
+]
+
+
 def _has_ig_pi(profile: dict[str, Any]) -> bool:
     """Check if vessel has International Group P&I coverage."""
     # Check pi_details first (most reliable)
@@ -78,6 +96,13 @@ def _has_ig_pi(profile: dict[str, Any]) -> bool:
     pi_tier = profile.get("pi_tier")
     if pi_tier and str(pi_tier).upper() in ("IG", "TIER_1", "TIER1"):
         return True
+    # Check insurer name against known IG P&I clubs
+    insurer = profile.get("insurer")
+    if insurer and isinstance(insurer, str):
+        upper = insurer.upper()
+        for club in _IG_PI_CLUBS:
+            if club in upper:
+                return True
     return False
 
 
@@ -355,6 +380,31 @@ class InsuranceClassRiskRule(ScoringRule):
             },
             source="realtime",
         )
+
+
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """End the anomaly if re-evaluation no longer fires the same checks."""
+        result = await self.evaluate(mmsi, profile, recent_positions, [], [])
+        if result is None or not result.fired:
+            return True
+        # Also end if the specific findings have changed (e.g. classification
+        # was missing but is now populated)
+        old_details = active_anomaly.get("details", {})
+        if isinstance(old_details, str):
+            import json as _json
+            old_details = _json.loads(old_details)
+        old_checks = {f["check"] for f in old_details.get("findings", []) if isinstance(f, dict)}
+        new_checks = {f["check"] for f in result.details.get("findings", []) if isinstance(f, dict)}
+        # If old findings no longer appear, the situation has improved
+        if not old_checks.issubset(new_checks):
+            return True
+        return False
 
 
 _SEVERITY_ORDER = {"low": 0, "moderate": 1, "high": 2, "critical": 3}

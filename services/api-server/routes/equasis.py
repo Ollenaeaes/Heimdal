@@ -199,11 +199,18 @@ async def upload_equasis_pdf_endpoint(
                 class_society = entry.get("society")
                 break
 
+        # Extract P&I insurer (most recent entry)
+        p_and_i = parsed.get("p_and_i", [])
+        insurer = None
+        if p_and_i and isinstance(p_and_i, list):
+            insurer = p_and_i[0].get("insurer")
+
         update_data = {
             "registered_owner": registered_owner,
             "technical_manager": technical_manager,
             "operator": operator,
             "class_society": class_society,
+            "insurer": insurer,
             "build_year": ship_particulars.get("build_year"),
             "dwt": ship_particulars.get("dwt"),
             "gross_tonnage": ship_particulars.get("gross_tonnage"),

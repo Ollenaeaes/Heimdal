@@ -62,6 +62,7 @@ def parse_equasis_pdf(pdf_bytes: bytes) -> dict:
         "name_history": _parse_name_history(clean_text),
         "flag_history": _parse_flag_history(clean_text),
         "company_history": _parse_company_history(clean_text),
+        "p_and_i": _parse_p_and_i(clean_text),
         "edition_date": edition_date,
     }
 
@@ -853,3 +854,77 @@ def _parse_company_entry(lines: list) -> dict:
         "date_of_effect": date_of_effect,
         "sources": sources,
     }
+
+
+def _parse_p_and_i(text: str) -> list:
+    """Parse P&I information section.
+
+    Format:
+        • P&I information
+        Name of P&I insurer Recorded
+        on
+        <insurer name> <dd/mm/yyyy>
+        <insurer name continued (optional)>
+    """
+    entries = []
+
+    section = _extract_section(text, r"P&I information", r"List of port state control|PSC inspections|Human element|Name history|Flag|Company|Equasis")
+    if not section:
+        return entries
+
+    lines = [l.strip() for l in section.strip().split("\n") if l.strip()]
+
+    # Skip header lines ("Name of P&I insurer", "Recorded", "on")
+    data_start = 0
+    for i, line in enumerate(lines):
+        if line.lower().startswith("on") and len(line) <= 3:
+            data_start = i + 1
+            break
+        if "recorded" in line.lower():
+            # "on" might be on the same line or next
+            if i + 1 < len(lines) and lines[i + 1].lower().strip() == "on":
+                data_start = i + 2
+            else:
+                data_start = i + 1
+            break
+
+    # Parse insurer entries: lines with a date dd/mm/yyyy
+    data_lines = lines[data_start:]
+    current_name_parts = []
+    current_date = None
+
+    for line in data_lines:
+        # Skip page footer and section boundary lines
+        if line.startswith("Equasis -") or line == "Ship inspections":
+            continue
+
+        date_match = re.search(r"(\d{2}/\d{2}/\d{4})", line)
+        if date_match:
+            # If we had a previous entry, save it
+            if current_name_parts and current_date:
+                entries.append({
+                    "insurer": " ".join(current_name_parts).strip(),
+                    "recorded_on": current_date,
+                })
+                current_name_parts = []
+
+            # Extract name part (before the date)
+            name_part = line[:date_match.start()].strip()
+            current_date = date_match.group(1)
+            if name_part:
+                current_name_parts = [name_part]
+            else:
+                current_name_parts = []
+        else:
+            # Continuation line for insurer name
+            if line and not line.startswith("Name of"):
+                current_name_parts.append(line)
+
+    # Save last entry
+    if current_name_parts and current_date:
+        entries.append({
+            "insurer": " ".join(current_name_parts).strip(),
+            "recorded_on": current_date,
+        })
+
+    return entries
