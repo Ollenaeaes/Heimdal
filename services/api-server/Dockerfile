@@ -25,7 +25,8 @@ RUN pip install --no-cache-dir \
     'pyyaml>=6.0,<7.0' \
     'fastapi>=0.110,<1.0' \
     'uvicorn[standard]>=0.29,<1.0' \
-    'pdfplumber>=0.11,<1.0'
+    'pdfplumber>=0.11,<1.0' \
+    'python-multipart>=0.0.7'
 
 # Copy service code
 COPY . .
