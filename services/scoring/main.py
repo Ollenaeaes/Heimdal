@@ -25,6 +25,7 @@ import redis.asyncio as aioredis
 from shared.config import settings
 from shared.logging import setup_logging
 
+from debouncer import ScoringDebouncer
 from engine import ScoringEngine
 
 logger = logging.getLogger("scoring")
@@ -45,6 +46,20 @@ async def main() -> None:
         len(engine.rules),
         len(engine.realtime_rules),
         len(engine.gfw_rules),
+    )
+
+    debounce_cfg = settings.scoring.debounce
+    debouncer = ScoringDebouncer(
+        engine,
+        default_seconds=debounce_cfg.default_seconds,
+        red_tier_seconds=debounce_cfg.red_tier_seconds,
+        max_concurrent=debounce_cfg.max_concurrent,
+    )
+    logger.info(
+        "Scoring debouncer initialised (default=%ss, red=%ss, max_concurrent=%d)",
+        debounce_cfg.default_seconds,
+        debounce_cfg.red_tier_seconds,
+        debounce_cfg.max_concurrent,
     )
 
     await pubsub.subscribe(POSITIONS_CHANNEL, ENRICHMENT_CHANNEL)
@@ -76,10 +91,10 @@ async def main() -> None:
             if channel == POSITIONS_CHANNEL:
                 for mmsi in mmsis:
                     try:
-                        await engine.evaluate_realtime(mmsi)
+                        await debouncer.on_position(mmsi)
                     except Exception:
                         logger.exception(
-                            "Realtime evaluation failed for MMSI %d", mmsi
+                            "Debounced position handling failed for MMSI %d", mmsi
                         )
 
             elif channel == ENRICHMENT_CHANNEL:
@@ -105,6 +120,7 @@ async def main() -> None:
     except asyncio.CancelledError:
         pass
     finally:
+        debouncer.shutdown()
         await pubsub.unsubscribe()
         await redis.close()
         logger.info("Scoring service stopped")

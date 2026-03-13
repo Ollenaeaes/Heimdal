@@ -19,6 +19,14 @@ scoring:
     low: 20         # score >= 20 → Low
     # score < 20 → None
 
+  # Debounce settings for position-triggered evaluations.
+  # Prevents re-evaluating the same vessel on every position report.
+  debounce:
+    default_seconds: 60      # standard debounce window
+    red_tier_seconds: 30     # faster evaluation for red-tier vessels
+    max_batch_size: 50       # max vessels per batch evaluation
+    max_concurrent: 10       # max concurrent evaluations
+
   # Escalation settings for repeat events
   escalation:
     multipliers: [1.0, 1.5, 2.0]

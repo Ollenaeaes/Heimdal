@@ -19,9 +19,17 @@ from pydantic_settings import BaseSettings
 # Nested config sections (loaded from YAML, overridable via env)
 # ---------------------------------------------------------------------------
 
+class ScoringDebounceConfig(BaseSettings):
+    default_seconds: float = 60.0
+    red_tier_seconds: float = 30.0
+    max_batch_size: int = 50
+    max_concurrent: int = 10
+
+
 class ScoringConfig(BaseSettings):
     yellow_threshold: float = 30.0
     red_threshold: float = 80.0
+    debounce: ScoringDebounceConfig = Field(default_factory=ScoringDebounceConfig)
 
 
 class IngestConfig(BaseSettings):
