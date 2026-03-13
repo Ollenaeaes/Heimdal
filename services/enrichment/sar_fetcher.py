@@ -22,7 +22,7 @@ logger = logging.getLogger("enrichment.sar_fetcher")
 SAR_ENDPOINT = "/v3/4wings/report"
 
 # GFW dataset for SAR detections
-SAR_DATASET = "public-global-sar:latest"
+SAR_DATASET = "public-global-sar-presence:latest"
 
 # Event types to filter for vessel detections
 SAR_EVENT_TYPE = "detect"
@@ -66,6 +66,7 @@ def parse_detection(raw: dict[str, Any]) -> dict[str, Any]:
 
     Maps GFW API fields to our sar_detections table columns.
     """
+    matched_category = raw.get("matchedCategory") or raw.get("matched_category")
     return {
         "gfw_detection_id": raw.get("id") or raw.get("detectionId"),
         "detection_time": raw.get("timestamp") or raw.get("date"),
@@ -75,8 +76,9 @@ def parse_detection(raw: dict[str, Any]) -> dict[str, Any]:
         "width_m": raw.get("estimatedWidth") or raw.get("width"),
         "heading_deg": raw.get("heading"),
         "confidence": raw.get("confidence"),
-        "is_dark": not bool(raw.get("matchedMmsi") or raw.get("matched_mmsi")),
+        "is_dark": matched_category == "unmatched" if matched_category else not bool(raw.get("matchedMmsi") or raw.get("matched_mmsi")),
         "matched_mmsi": raw.get("matchedMmsi") or raw.get("matched_mmsi"),
+        "matched_category": matched_category,
         "match_distance_m": raw.get("matchDistance") or raw.get("match_distance"),
         "source": "gfw",
         "matching_score": raw.get("matchingScore") or raw.get("matching_score"),

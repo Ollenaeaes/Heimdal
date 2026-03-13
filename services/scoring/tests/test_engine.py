@@ -297,7 +297,7 @@ class TestEngineEvaluation:
 
         with (
             patch("engine.get_session", return_value=mock_factory),
-            patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=None),
+            patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value={"mmsi": 123456789}),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
@@ -338,7 +338,7 @@ class TestAnomalyPersistence:
 
         with (
             patch("engine.get_session", return_value=mock_factory),
-            patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=None),
+            patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value={"mmsi": 234567890}),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=42) as mock_create,
@@ -404,7 +404,7 @@ class TestAnomalyPersistence:
 
         with (
             patch("engine.get_session", return_value=mock_factory),
-            patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=None),
+            patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value={"mmsi": 567890123}),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1) as mock_create,
@@ -557,7 +557,8 @@ class TestRedisSubscription:
             await main_mod.main()
 
         mock_engine.evaluate_gfw.assert_called_once_with(987654321)
-        mock_engine.evaluate_realtime.assert_not_called()
+        # Post-enrichment also triggers realtime re-evaluation
+        mock_engine.evaluate_realtime.assert_called_once_with(987654321)
 
 
 # ---------------------------------------------------------------------------

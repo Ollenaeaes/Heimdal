@@ -28,6 +28,8 @@ describe('useVesselStore', () => {
         shipTypes: [],
         bbox: null,
         activeSince: null,
+        darkShipsOnly: false,
+        showGfwEventTypes: [],
       },
     });
   });

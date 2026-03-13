@@ -86,8 +86,16 @@ def matches_filter(position: dict[str, Any], sub: Subscription) -> bool:
 
 
 def _parse_subscription(data: dict[str, Any]) -> Subscription:
-    """Parse a subscription filter message from the client."""
+    """Parse a subscription filter message from the client.
+
+    Accepts both flat format ``{"bbox": [...]}`` and nested format
+    ``{"type": "subscribe", "filters": {"bbox": [...]}}``.
+    """
     sub = Subscription()
+
+    # Unwrap nested filters envelope if present
+    if "filters" in data and isinstance(data["filters"], dict):
+        data = data["filters"]
 
     bbox = data.get("bbox")
     if bbox is not None:
@@ -145,6 +153,8 @@ class PositionConnectionManager:
             "lon": position.get("lon"),
             "sog": position.get("sog"),
             "cog": position.get("cog"),
+            "heading": position.get("heading"),
+            "nav_status": position.get("nav_status"),
             "risk_tier": position.get("risk_tier"),
             "risk_score": position.get("risk_score"),
             "timestamp": position.get("timestamp"),

@@ -5,3 +5,11 @@ html, body, #root {
   margin: 0;
   padding: 0;
 }
+
+/* Ensure Cesium viewer fills its container */
+.cesium-viewer,
+.cesium-widget,
+.cesium-widget canvas {
+  width: 100% !important;
+  height: 100% !important;
+}

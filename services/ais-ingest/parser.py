@@ -25,7 +25,11 @@ _ROT_NOT_AVAILABLE = -128
 
 
 def _parse_timestamp(meta: dict) -> Optional[datetime]:
-    """Extract and parse timestamp from MetaData.time_utc."""
+    """Extract and parse timestamp from MetaData.time_utc.
+
+    aisstream.io sends Go-style timestamps like:
+    "2026-03-12 17:47:42.32216511 +0000 UTC"
+    """
     raw = meta.get("time_utc")
     if raw is None:
         return None
@@ -35,6 +39,36 @@ def _parse_timestamp(meta: dict) -> Optional[datetime]:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        # Go-style: "2026-03-12 17:47:42.32216511 +0000 UTC"
+        # Strip trailing " UTC", truncate fractional seconds to 6 digits
+        cleaned = raw.replace(" UTC", "").strip()
+        # Split off the timezone offset
+        # Format: "2026-03-12 17:47:42.32216511 +0000"
+        parts = cleaned.rsplit(" ", 1)
+        if len(parts) == 2:
+            dt_part, tz_part = parts
+            # Truncate nanoseconds to microseconds
+            if "." in dt_part:
+                base, frac = dt_part.split(".", 1)
+                frac = frac[:6].ljust(6, "0")
+                dt_part = f"{base}.{frac}"
+            # Parse with timezone
+            dt = datetime.strptime(
+                f"{dt_part} {tz_part}", "%Y-%m-%d %H:%M:%S.%f %z"
+            )
+            return dt
+
+        # No timezone offset, just parse directly
+        if "." in cleaned:
+            base, frac = cleaned.split(".", 1)
+            frac = frac[:6].ljust(6, "0")
+            cleaned = f"{base}.{frac}"
+        dt = datetime.strptime(cleaned, "%Y-%m-%d %H:%M:%S.%f")
+        return dt.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         logger.warning("Failed to parse timestamp: %s", raw)
         return None
@@ -190,13 +224,17 @@ def parse_vessel_extras(raw: dict) -> dict:
         except (ValueError, TypeError):
             pass
 
-    # Beam from Dimension C + D
+    # Dimensions from AIS: A+B = length, C+D = width
     dim_data = msg.get("Dimension")
     if dim_data and isinstance(dim_data, dict):
+        a = dim_data.get("A", 0)
+        b = dim_data.get("B", 0)
         c = dim_data.get("C", 0)
         d = dim_data.get("D", 0)
+        if a + b > 0:
+            extras["length"] = float(a + b)
         if c + d > 0:
-            extras["beam"] = c + d
+            extras["width"] = float(c + d)
 
     return extras
 

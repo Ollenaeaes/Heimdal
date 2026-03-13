@@ -54,9 +54,6 @@ class AISWebSocket:
                             raw = await asyncio.wait_for(
                                 ws.recv(), timeout=self._stale_timeout
                             )
-                            self._last_message_time = time.time()
-                            msg = json.loads(raw)
-                            await self.on_message(msg)
                         except asyncio.TimeoutError:
                             logger.warning(
                                 "Stale connection detected (no message for %.0fs),"
@@ -64,6 +61,15 @@ class AISWebSocket:
                                 self._stale_timeout,
                             )
                             break
+
+                        self._last_message_time = time.time()
+                        try:
+                            msg = json.loads(raw)
+                            await self.on_message(msg)
+                        except Exception:
+                            # Don't let message processing errors kill the
+                            # WebSocket connection — log and continue
+                            logger.exception("Error processing message")
 
             except (websockets.ConnectionClosed, OSError, ConnectionRefusedError) as e:
                 self._set_state("disconnected")
@@ -92,7 +98,7 @@ class AISWebSocket:
         """Build aisstream.io subscription message."""
         return {
             "APIKey": self.api_key,
-            "BoundingBoxes": [[-90, -180, 90, 180]],  # worldwide
+            "BoundingBoxes": [[[-180, -90], [180, 90]]],  # worldwide
             "FilterMessageTypes": ["PositionReport", "ShipStaticData"],
         }
 

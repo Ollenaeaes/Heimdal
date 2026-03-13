@@ -21,6 +21,7 @@ class SarDetection(BaseModel):
     confidence: Optional[float] = None
     is_dark: bool = False
     matched_mmsi: Optional[int] = None
+    matched_category: Optional[str] = None
     match_distance_m: Optional[float] = None
     source: str = "gfw"
     gfw_detection_id: Optional[str] = None

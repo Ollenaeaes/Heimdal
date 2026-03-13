@@ -14,7 +14,17 @@ export interface StatsResponse {
 async function fetchStats(): Promise<StatsResponse> {
   const res = await fetch('/api/stats');
   if (!res.ok) throw new Error(`Stats fetch failed: ${res.status}`);
-  return res.json();
+  const raw = await res.json();
+  // Map actual API shape to expected frontend shape
+  return {
+    risk_tiers: raw.vessels_by_risk_tier ?? raw.risk_tiers ?? { green: 0, yellow: 0, red: 0 },
+    anomalies: raw.anomalies ?? { total_active: 0, by_severity: raw.active_anomalies_by_severity ?? {} },
+    dark_ships: raw.dark_ship_candidates ?? raw.dark_ships ?? 0,
+    ingestion_rate: raw.ingestion_rate ?? 0,
+    total_vessels: raw.total_vessels ?? 0,
+    storage_estimate_gb: raw.storage_estimate_gb ?? 0,
+    gfw_events: raw.gfw_events,
+  };
 }
 
 export const STATS_REFETCH_INTERVAL = 30_000;

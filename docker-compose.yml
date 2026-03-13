@@ -49,8 +49,9 @@ services:
       redis:
         condition: service_healthy
     environment:
-      AIS_API_KEY: ${AIS_API_KEY}
-      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      AISSTREAM_API_KEY: ${AIS_API_KEY}
+      AIS_SHIP_TYPES: ${AIS_SHIP_TYPES:-}
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
       REDIS_URL: "redis://redis:6379/0"
     volumes:
       - ./shared:/app/shared:ro
@@ -64,7 +65,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
       REDIS_URL: "redis://redis:6379/0"
     volumes:
       - ./shared:/app/shared:ro
@@ -78,14 +79,14 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
       REDIS_URL: "redis://redis:6379/0"
       GFW_API_TOKEN: ${GFW_API_TOKEN}
       OPENSANCTIONS_DATA_PATH: /data/opensanctions
     volumes:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
-      - opensanctions-data:/data/opensanctions
+      - ./data/opensanctions:/data/opensanctions:ro
 
   api-server:
     build: ./services/api-server
@@ -97,10 +98,10 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
-      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
       REDIS_URL: "redis://redis:6379/0"
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/health\")'"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -113,7 +114,10 @@ services:
   # ---------------------------------------------------------------------------
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_CESIUM_ION_TOKEN: ${CESIUM_ION_TOKEN}
     depends_on:
       api-server:
         condition: service_healthy
@@ -125,4 +129,3 @@ services:
 # =============================================================================
 volumes:
   pgdata:
-  opensanctions-data:

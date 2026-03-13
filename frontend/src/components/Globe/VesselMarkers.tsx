@@ -62,6 +62,10 @@ export function filterVessels(
     result.push(vessel);
   }
 
+  // Sort so high-risk vessels render last (on top of green ones)
+  const tierOrder: Record<string, number> = { green: 0, yellow: 1, red: 2 };
+  result.sort((a, b) => (tierOrder[a.riskTier] ?? 0) - (tierOrder[b.riskTier] ?? 0));
+
   return result;
 }
 

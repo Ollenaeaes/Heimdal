@@ -107,7 +107,7 @@ class DraftChangeRule(ScoringRule):
 
 async def _check_near_terminal_db(lat: float, lon: float) -> bool:
     """DB-backed terminal check.  Extracted so tests can patch this function."""
-    from shared.database import get_session
+    from shared.db.connection import get_session
     from .zone_helpers import is_near_russian_terminal
 
     async with get_session() as session:

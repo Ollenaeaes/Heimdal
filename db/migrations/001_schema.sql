@@ -90,23 +90,24 @@ CREATE TABLE IF NOT EXISTS anomaly_events (
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- SAR (Synthetic Aperture Radar) dark vessel detections
+-- SAR (Synthetic Aperture Radar) vessel detections
 CREATE TABLE IF NOT EXISTS sar_detections (
-    id                SERIAL PRIMARY KEY,
-    detection_time    TIMESTAMPTZ NOT NULL,
-    position          GEOGRAPHY(POINT, 4326) NOT NULL,
-    length_m          REAL,
-    width_m           REAL,
-    heading_deg       REAL,
-    confidence        REAL,
-    is_dark           BOOLEAN DEFAULT FALSE,
-    matched_mmsi      INTEGER REFERENCES vessel_profiles(mmsi),
-    match_distance_m  REAL,
-    source            TEXT DEFAULT 'gfw',
-    gfw_detection_id  TEXT UNIQUE,
-    matching_score    REAL,
-    fishing_score     REAL,
-    created_at        TIMESTAMPTZ DEFAULT NOW()
+    id                  SERIAL PRIMARY KEY,
+    detection_time      TIMESTAMPTZ NOT NULL,
+    position            GEOGRAPHY(POINT, 4326) NOT NULL,
+    length_m            REAL,
+    width_m             REAL,
+    heading_deg         REAL,
+    confidence          REAL,
+    is_dark             BOOLEAN DEFAULT FALSE,
+    matched_mmsi        INTEGER REFERENCES vessel_profiles(mmsi),
+    matched_category    TEXT,
+    match_distance_m    REAL,
+    source              TEXT DEFAULT 'gfw',
+    gfw_detection_id    TEXT UNIQUE,
+    matching_score      REAL,
+    fishing_score       REAL,
+    created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Global Fishing Watch event data

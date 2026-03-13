@@ -28,9 +28,20 @@ This file is read at the start of every session. It captures mistakes, patterns,
 
 - (2026-03-12) The api-server Dockerfile installs shared deps inline (not from requirements-base.txt) because `shared/` is a runtime volume mount. If shared deps change, the Dockerfile must be updated separately.
 - (2026-03-12) SAR bbox format is `sw_lat,sw_lon,ne_lat,ne_lon` (same as vessels/anomalies). Old code used `min_lon,min_lat,max_lon,max_lat` — watch for this when writing tests.
-- (2026-03-12) The `DATABASE_URL` env var in docker-compose uses `postgresql://` prefix (sync driver format). The shared config handles converting to asyncpg format internally.
+- (2026-03-12) The `DATABASE_URL` env var in docker-compose must use `postgresql+asyncpg://` prefix — shared config does NOT convert from sync format. Using `postgresql://` causes `ModuleNotFoundError: No module named 'psycopg2'`.
 
 ## Architecture Decisions
 
 - (2026-03-12) CORS is `allow_origins=["*"]` because this is a single-user local workstation (D4). Acceptable for now but should be restricted if deployment changes.
-- (2026-03-12) api-server healthcheck uses `python3 -c "import urllib.request; ..."` instead of `curl` because the slim Python image doesn't include curl.
+- (2026-03-12) api-server healthcheck uses `CMD-SHELL` with `python3 -c '...'` instead of `curl` because the slim Python image doesn't include curl. Using `CMD` form with Python `-c` can cause syntax errors from Docker shell argument splitting.
+- (2026-03-12) The `timescaledb-ha` Docker image runs as user `postgres`, not root. Must `USER root` before `apt-get install` and `USER postgres` after. Also, the `:pg16-latest` tag doesn't exist — use `:pg16`.
+- (2026-03-12) Service Dockerfiles copy code to `/app/` root, but imports in `services/enrichment/` used full paths (`from services.enrichment.xxx`). In-container imports must use flat module names (`from xxx import`), not the host repo path structure.
+- (2026-03-12) When adding new fields to a shared type like `FilterState`, update ALL test files that construct that type — not just the ones that fail first. Use `grep` to find all occurrences before fixing.
+- (2026-03-12) Don't rebuild the frontend Docker image for every change — `npm ci` runs every time and takes minutes. Instead: `npx vite build` locally (6s), then `docker cp dist/... container:/usr/share/nginx/html/` and `nginx -s reload`.
+- (2026-03-12) The frontend `npm run build` runs `tsc -b && vite build`. Skip `tsc` in Docker builds (`npx vite build` directly) — type checking with Cesium types is slow and OOMs in constrained Docker.
+- (2026-03-12) Cesium requires `widgets.css` loaded in HTML (`<link rel="stylesheet" href="/cesium/Widgets/widgets.css" />`). Without it, the viewer renders tiny. Resium's `<Viewer full>` prop depends on these styles.
+- (2026-03-12) `VITE_CESIUM_ION_TOKEN` must be available at build time (not runtime). Pass it via Docker `ARG`/`ENV` or set it in the shell before `vite build`. The `.env` key is `CESIUM_ION_TOKEN` — needs mapping to `VITE_` prefix.
+- (2026-03-12) When using `replace_all` in Edit tool, `from services.enrichment.` → `from` eats the trailing space, producing `fromgfw_client`. Always include the space in the replacement: `from services.enrichment.` → `from `.
+- (2026-03-12) **Never use React.StrictMode with CesiumJS/Resium.** StrictMode double-mounts components in dev; Cesium's `Viewer.destroy()` is irreversible, so the re-mount fails silently (blank page or "Page Unresponsive"). Remove StrictMode or wrap only non-Cesium parts.
+- (2026-03-12) `CESIUM_BASE_URL` should be set via Vite `define` in vite.config.ts (compile-time replacement). Do NOT also set `window.CESIUM_BASE_URL` in main.tsx — it's redundant and the `define` already handles it inside Cesium's own source.
+- (2026-03-12) When stuck on a rendering/integration bug, research online (docs, GitHub issues) after the first failed fix attempt. Don't keep guessing with code changes — one targeted research session beats ten blind attempts.

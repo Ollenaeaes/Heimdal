@@ -12,6 +12,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import json as _json
+
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
@@ -130,6 +132,40 @@ async def list_vessels(
     }
 
 
+@router.get("/vessels/snapshot")
+async def vessel_snapshot():
+    """Return a lightweight snapshot of all vessels for map seeding.
+
+    Returns minimal fields (mmsi, lat, lon, risk_tier, risk_score,
+    ship_type, cog, sog) so the frontend can render the globe without
+    waiting for WebSocket data.
+    """
+    session_factory = get_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            text(
+                "SELECT mmsi, last_lat, last_lon, risk_tier, risk_score, "
+                "ship_type, ship_name "
+                "FROM vessel_profiles "
+                "WHERE last_lat IS NOT NULL AND last_lon IS NOT NULL"
+            )
+        )
+        rows = result.mappings().all()
+
+    return [
+        {
+            "mmsi": r["mmsi"],
+            "lat": r["last_lat"],
+            "lon": r["last_lon"],
+            "risk_tier": r["risk_tier"] or "green",
+            "risk_score": r["risk_score"] or 0,
+            "ship_type": r.get("ship_type"),
+            "name": r.get("ship_name"),
+        }
+        for r in rows
+    ]
+
+
 @router.get("/vessels/{mmsi}")
 async def get_vessel(mmsi: int):
     """Return full vessel profile including last position, anomaly count, latest enrichment, sanctions details."""
@@ -146,15 +182,31 @@ async def get_vessel(mmsi: int):
 
         profile = dict(row)
 
-        # Active anomaly count
+        # Active anomalies (full data for UI breakdown)
         anomaly_result = await session.execute(
             text(
-                "SELECT COUNT(*) FROM anomaly_events "
-                "WHERE mmsi = :mmsi AND resolved = false"
+                "SELECT id, rule_id, severity, points, details, created_at "
+                "FROM anomaly_events "
+                "WHERE mmsi = :mmsi AND resolved = false "
+                "ORDER BY points DESC, created_at DESC "
+                "LIMIT 50"
             ),
             {"mmsi": mmsi},
         )
-        active_anomaly_count = anomaly_result.scalar() or 0
+        anomaly_rows = anomaly_result.mappings().all()
+        anomalies = [
+            {
+                "id": r["id"],
+                "ruleId": r["rule_id"],
+                "severity": r["severity"],
+                "points": float(r["points"]),
+                "details": _json.loads(r["details"]) if isinstance(r["details"], str) else (r["details"] or {}),
+                "timestamp": r["created_at"].isoformat() if r["created_at"] else None,
+                "resolved": False,
+            }
+            for r in anomaly_rows
+        ]
+        active_anomaly_count = len(anomalies)
 
         # Latest manual enrichment
         enrichment_result = await session.execute(
@@ -167,18 +219,34 @@ async def get_vessel(mmsi: int):
         enrichment_row = enrichment_result.mappings().first()
         latest_enrichment = dict(enrichment_row) if enrichment_row else None
 
+        # Latest position (for sog, cog, heading, nav_status, draught)
+        pos_result = await session.execute(
+            text(
+                "SELECT sog, cog, heading, nav_status, draught, timestamp "
+                "FROM vessel_positions "
+                "WHERE mmsi = :mmsi ORDER BY timestamp DESC LIMIT 1"
+            ),
+            {"mmsi": mmsi},
+        )
+        pos_row = pos_result.mappings().first()
+        last_pos = dict(pos_row) if pos_row else {}
+
     return {
         **profile,
         "last_position": {
             "lat": profile.get("last_lat"),
             "lon": profile.get("last_lon"),
-            "sog": None,
-            "cog": None,
+            "sog": last_pos.get("sog"),
+            "cog": last_pos.get("cog"),
+            "heading": last_pos.get("heading"),
+            "nav_status": last_pos.get("nav_status"),
+            "draught": round(float(d), 1) if (d := last_pos.get("draught") or profile.get("draught")) is not None else None,
             "timestamp": profile.get("last_position_time").isoformat()
             if profile.get("last_position_time")
             else None,
         },
         "active_anomaly_count": active_anomaly_count,
+        "anomalies": anomalies,
         "latest_enrichment": latest_enrichment,
     }
 

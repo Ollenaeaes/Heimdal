@@ -107,6 +107,53 @@ gfw:
   # How long to cache vessel identity data (hours).
   vessel_cache_ttl_hours: 168   # 7 days
 
+  # Areas of Interest for SAR detection queries.
+  # STS transfer hotspots are included by default — these are the areas
+  # where dark vessel activity and ship-to-ship transfers are most common.
+  aois:
+    - name: "Kalamata, Greece"
+      coordinates:
+        - [22.01, 36.85]
+        - [22.21, 36.85]
+        - [22.21, 37.05]
+        - [22.01, 37.05]
+        - [22.01, 36.85]
+    - name: "Laconian Gulf, Greece"
+      coordinates:
+        - [22.70, 36.40]
+        - [22.90, 36.40]
+        - [22.90, 36.60]
+        - [22.70, 36.60]
+        - [22.70, 36.40]
+    - name: "Ceuta, Spain"
+      coordinates:
+        - [-5.41, 35.79]
+        - [-5.21, 35.79]
+        - [-5.21, 35.99]
+        - [-5.41, 35.99]
+        - [-5.41, 35.79]
+    - name: "Lome, Togo"
+      coordinates:
+        - [1.18, 6.03]
+        - [1.38, 6.03]
+        - [1.38, 6.23]
+        - [1.18, 6.23]
+        - [1.18, 6.03]
+    - name: "South of Malta"
+      coordinates:
+        - [14.30, 35.40]
+        - [14.50, 35.40]
+        - [14.50, 35.60]
+        - [14.30, 35.60]
+        - [14.30, 35.40]
+    - name: "UAE/Fujairah"
+      coordinates:
+        - [56.23, 25.02]
+        - [56.43, 25.02]
+        - [56.43, 25.22]
+        - [56.23, 25.22]
+        - [56.23, 25.02]
+
 # -- Data Retention -----------------------------------------------------------
 retention:
   # Number of days to keep raw AIS positions before archiving/deleting.

@@ -14,6 +14,7 @@ from shared.constants import MID_TO_FLAG
 from shared.models.anomaly import RuleResult
 
 from .base import ScoringRule
+from .identity_mismatch import _normalize_flag
 
 _WINDOW_MONTHS = 12
 
@@ -101,12 +102,12 @@ class FlagHoppingRule(ScoringRule):
         """
         flags: set[str] = set()
         if current_flag:
-            flags.add(current_flag)
+            flags.add(_normalize_flag(current_flag))
 
-        # Check profile's flag_country
+        # Check profile's flag_country (normalize alpha-3 → alpha-2)
         profile_flag = profile.get("flag_country")
         if profile_flag:
-            flags.add(profile_flag)
+            flags.add(_normalize_flag(profile_flag))
 
         # Check flag_history (list of dicts with 'flag' key)
         flag_history = profile.get("flag_history")
@@ -127,6 +128,6 @@ class FlagHoppingRule(ScoringRule):
                             first_seen = first_seen.replace(tzinfo=timezone.utc)
                         if first_seen < cutoff:
                             continue
-                    flags.add(flag)
+                    flags.add(_normalize_flag(flag))
 
         return flags

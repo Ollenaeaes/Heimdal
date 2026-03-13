@@ -2,6 +2,8 @@ import { RISK_COLORS, type RiskTier } from './riskColors';
 
 /** Size of the generated vessel icon canvas (px). */
 const ICON_SIZE = 32;
+/** Larger canvas for high-risk icons with glow. */
+const ICON_SIZE_GLOW = 48;
 
 /**
  * Marker visual properties per risk tier.
@@ -11,9 +13,9 @@ export const MARKER_STYLE: Record<
   RiskTier,
   { opacity: number; scale: number }
 > = {
-  green: { opacity: 0.4, scale: 0.6 },
-  yellow: { opacity: 0.9, scale: 0.8 },
-  red: { opacity: 1.0, scale: 1.0 },
+  green: { opacity: 0.35, scale: 0.5 },
+  yellow: { opacity: 1.0, scale: 1.0 },
+  red: { opacity: 1.0, scale: 1.2 },
 };
 
 /**
@@ -28,28 +30,42 @@ export function cogToRotation(cogDeg: number | null): number {
 /**
  * Draw a triangular vessel shape on a canvas and return the data URL.
  * The triangle points upward (north) so that billboard rotation aligns
- * naturally with COG.
+ * naturally with COG. High-risk vessels get a glow ring for visibility.
  */
-function drawVesselIcon(color: string): string {
+function drawVesselIcon(color: string, glow: boolean): string {
+  const size = glow ? ICON_SIZE_GLOW : ICON_SIZE;
   const canvas = document.createElement('canvas');
-  canvas.width = ICON_SIZE;
-  canvas.height = ICON_SIZE;
+  canvas.width = size;
+  canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  const cx = ICON_SIZE / 2;
+  const cx = size / 2;
+  // Offset so the triangle is centered in the larger glow canvas
+  const pad = glow ? (ICON_SIZE_GLOW - ICON_SIZE) / 2 : 0;
+
+  if (glow) {
+    // Draw glow ring behind the icon
+    ctx.beginPath();
+    ctx.arc(cx, cx, size / 2 - 2, 0, Math.PI * 2);
+    ctx.fillStyle = color + '30'; // ~19% opacity fill
+    ctx.fill();
+    ctx.strokeStyle = color + '80'; // ~50% opacity ring
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
 
   // Arrow / triangular ship shape pointing up
   ctx.beginPath();
-  ctx.moveTo(cx, 2); // top (bow)
-  ctx.lineTo(ICON_SIZE - 4, ICON_SIZE - 4); // bottom-right
-  ctx.lineTo(cx, ICON_SIZE - 8); // notch
-  ctx.lineTo(4, ICON_SIZE - 4); // bottom-left
+  ctx.moveTo(cx, pad + 2); // top (bow)
+  ctx.lineTo(pad + ICON_SIZE - 4, pad + ICON_SIZE - 4); // bottom-right
+  ctx.lineTo(cx, pad + ICON_SIZE - 8); // notch
+  ctx.lineTo(pad + 4, pad + ICON_SIZE - 4); // bottom-left
   ctx.closePath();
 
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  ctx.lineWidth = glow ? 1.5 : 1;
   ctx.stroke();
 
   return canvas.toDataURL('image/png');
@@ -64,7 +80,8 @@ const iconCache = new Map<RiskTier, string>();
 export function getVesselIcon(tier: RiskTier): string {
   let url = iconCache.get(tier);
   if (!url) {
-    url = drawVesselIcon(RISK_COLORS[tier]);
+    const glow = tier === 'red' || tier === 'yellow';
+    url = drawVesselIcon(RISK_COLORS[tier], glow);
     iconCache.set(tier, url);
   }
   return url;

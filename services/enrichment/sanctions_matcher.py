@@ -97,7 +97,7 @@ class SanctionsIndex:
         # Accept Vessel schema or any entity with maritime identifiers
         if schema == "Vessel":
             return True
-        if props.get("imoNumber") or props.get("mmsiNumber"):
+        if props.get("imoNumber") or props.get("mmsiNumber") or props.get("mmsi"):
             return True
         return False
 
@@ -131,14 +131,16 @@ class SanctionsIndex:
         entry = self._make_entry(entity)
         props = entity.get("properties", {})
 
-        # Index by IMO numbers
+        # Index by IMO numbers — strip "IMO" prefix if present
         for imo in props.get("imoNumber", []):
             imo_str = str(imo).strip()
+            # OpenSanctions often stores as "IMO9321172", normalize to digits
+            imo_str = re.sub(r"^IMO\s*", "", imo_str, flags=re.IGNORECASE)
             if imo_str:
                 self.by_imo.setdefault(imo_str, []).append(entry)
 
-        # Index by MMSI numbers
-        for mmsi in props.get("mmsiNumber", []):
+        # Index by MMSI numbers — OpenSanctions uses "mmsi" key for Vessel schema
+        for mmsi in props.get("mmsiNumber", []) + props.get("mmsi", []):
             mmsi_str = str(mmsi).strip()
             if mmsi_str:
                 self.by_mmsi.setdefault(mmsi_str, []).append(entry)
@@ -201,23 +203,21 @@ def match_vessel(
                         "matched_field": "mmsi",
                     })
 
-    # 3. Fuzzy name match (Levenshtein distance <= 2)
+    # 3. Exact name match only (fuzzy matching produces too many false positives
+    # for short vessel names like "VICI" matching "VANI")
     if name is not None:
         normalized_query = normalize_name(name)
-        if normalized_query:
+        if normalized_query and normalized_query in index.by_name:
             existing_ids = {m["entity_id"] for m in matches}
-            for indexed_name in index.all_names:
-                distance = Levenshtein.distance(normalized_query, indexed_name)
-                if distance <= MAX_NAME_DISTANCE:
-                    for entry in index.by_name[indexed_name]:
-                        if entry["entity_id"] not in existing_ids:
-                            matches.append({
-                                "entity_id": entry["entity_id"],
-                                "program": entry["programs"][0] if entry["programs"] else "unknown",
-                                "confidence": 0.7,
-                                "matched_field": "name",
-                            })
-                            existing_ids.add(entry["entity_id"])
+            for entry in index.by_name[normalized_query]:
+                if entry["entity_id"] not in existing_ids:
+                    matches.append({
+                        "entity_id": entry["entity_id"],
+                        "program": entry["programs"][0] if entry["programs"] else "unknown",
+                        "confidence": 0.8,
+                        "matched_field": "name",
+                    })
+                    existing_ids.add(entry["entity_id"])
 
     if not matches:
         return {}

@@ -1,8 +1,8 @@
-"""Global Fishing Watch API client with auth, rate limiting, pagination, and retries.
+"""Global Fishing Watch API client with rate limiting, pagination, and retries.
 
-Authenticates using GFW_API_TOKEN to obtain a JWT access token,
-auto-refreshes on expiry, enforces configurable rate limits, retries
-on transient errors, and handles paginated responses automatically.
+Uses the GFW API token directly as a Bearer token on every request.
+Enforces configurable rate limits, retries on transient errors, and
+handles paginated responses automatically.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class GFWAPIError(Exception):
 class GFWClient:
     """Async client for the Global Fishing Watch API.
 
-    Handles JWT authentication, automatic token refresh, rate limiting,
+    Uses the API token directly as a Bearer token. Handles rate limiting,
     retry with exponential backoff, and pagination.
 
     Usage::
@@ -54,9 +54,6 @@ class GFWClient:
         async with GFWClient() as client:
             events = await client.get("/events", params={"limit": 10})
     """
-
-    # GFW uses a token exchange endpoint to convert API tokens to JWTs
-    TOKEN_ENDPOINT = "/auth/token"
 
     def __init__(
         self,
@@ -67,10 +64,6 @@ class GFWClient:
         self._api_token = api_token or settings.gfw_api_token
         self._base_url = (base_url or settings.gfw.base_url).rstrip("/")
         self._rate_limit = rate_limit_per_second or settings.gfw.rate_limit_per_second
-
-        # JWT state
-        self._access_token: str | None = None
-        self._token_expires_at: float = 0.0
 
         # Rate limiting via a semaphore + delay
         self._semaphore = asyncio.Semaphore(self._rate_limit)
@@ -92,42 +85,6 @@ class GFWClient:
         if self._http:
             await self._http.aclose()
             self._http = None
-
-    # ------------------------------------------------------------------
-    # Authentication
-    # ------------------------------------------------------------------
-
-    async def _authenticate(self) -> None:
-        """Exchange the API token for a JWT access token."""
-        if not self._http:
-            raise RuntimeError("Client not initialized. Use 'async with GFWClient() as client:'")
-
-        try:
-            response = await self._http.post(
-                self.TOKEN_ENDPOINT,
-                headers={"Authorization": f"Bearer {self._api_token}"},
-            )
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            raise GFWAuthError(
-                f"GFW authentication failed: {e.response.status_code} {e.response.text}"
-            ) from e
-        except httpx.HTTPError as e:
-            raise GFWAuthError(f"GFW authentication request failed: {e}") from e
-
-        data = response.json()
-        self._access_token = data["token"]
-        # Store expiry. GFW returns expiresAt as a Unix timestamp (seconds).
-        # Subtract 60 seconds buffer to refresh before actual expiry.
-        self._token_expires_at = data.get("expiresAt", time.time() + 3600) - 60
-
-        logger.info("GFW JWT acquired, expires at %.0f", self._token_expires_at + 60)
-
-    async def _ensure_token(self) -> str:
-        """Return a valid JWT, refreshing if expired or missing."""
-        if self._access_token is None or time.time() >= self._token_expires_at:
-            await self._authenticate()
-        return self._access_token  # type: ignore[return-value]
 
     # ------------------------------------------------------------------
     # Rate limiting
@@ -161,7 +118,6 @@ class GFWClient:
         backoff = INITIAL_BACKOFF
 
         for attempt in range(MAX_RETRIES + 1):
-            token = await self._ensure_token()
             await self._wait_for_rate_limit()
 
             try:
@@ -170,7 +126,7 @@ class GFWClient:
                     path,
                     params=params,
                     json=json_body,
-                    headers={"Authorization": f"Bearer {token}"},
+                    headers={"Authorization": f"Bearer {self._api_token}"},
                 )
 
                 if response.status_code in RETRYABLE_STATUS_CODES:

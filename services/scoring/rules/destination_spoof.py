@@ -68,16 +68,18 @@ class DestinationSpoofRule(ScoringRule):
         if not destination:
             return None
 
-        # Check placeholder patterns
-        if destination in _PLACEHOLDER_PATTERNS:
-            return RuleResult(
-                fired=True,
-                rule_id=self.rule_id,
-                severity="high",
-                points=40.0,
-                details={"destination": destination, "reason": "placeholder_destination"},
-                source="realtime",
-            )
+        # Check placeholder patterns (substring match — destination may have
+        # port prefix like "EE TLL FOR ORDERS")
+        for pattern in _PLACEHOLDER_PATTERNS:
+            if pattern in destination:
+                return RuleResult(
+                    fired=True,
+                    rule_id=self.rule_id,
+                    severity="high",
+                    points=40.0,
+                    details={"destination": destination, "reason": "placeholder_destination"},
+                    source="realtime",
+                )
 
         # Check sea-area patterns
         for pattern in _SEA_AREA_PATTERNS:

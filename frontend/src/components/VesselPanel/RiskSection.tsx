@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { VesselDetail } from '../../types/api';
 import type { AnomalyEvent } from '../../types/anomaly';
 import { getRuleName } from '../../utils/ruleNames';
@@ -10,11 +11,48 @@ interface RiskSectionProps {
 
 const SCORE_CAP = 200;
 
+/** Human-readable labels for common anomaly detail keys. */
+const DETAIL_LABELS: Record<string, string> = {
+  reason: 'Reason',
+  reported_flag: 'Reported flag',
+  mmsi_derived_flag: 'MMSI-derived flag',
+  mid: 'MID',
+  flags: 'Flags seen',
+  flag_count: 'Flag count',
+  current_flag: 'Current flag',
+  confidence: 'Confidence',
+  matched_field: 'Matched by',
+  match_type: 'Match type',
+  program: 'Program',
+  entity_id: 'Entity ID',
+  destination: 'Destination',
+  avg_speed_knots: 'Avg speed (kn)',
+  duration_hours: 'Duration (hrs)',
+  position_count: 'Positions',
+};
+
+/**
+ * Deduplicate anomalies: keep only the most recent entry per rule_id.
+ * The backend should prevent duplicates going forward, but older data
+ * may still have them.
+ */
+function deduplicateByRule(anomalies: AnomalyEvent[]): AnomalyEvent[] {
+  const seen = new Map<string, AnomalyEvent>();
+  for (const a of anomalies) {
+    const existing = seen.get(a.ruleId);
+    if (!existing || new Date(a.timestamp) > new Date(existing.timestamp)) {
+      seen.set(a.ruleId, a);
+    }
+  }
+  return Array.from(seen.values());
+}
+
 export function RiskSection({ vessel }: RiskSectionProps) {
   const fillPercent = Math.min((vessel.riskScore / SCORE_CAP) * 100, 100);
   const unresolvedAnomalies = (vessel.anomalies ?? []).filter(
     (a) => !a.resolved
   );
+  const deduplicated = deduplicateByRule(unresolvedAnomalies);
 
   return (
     <div className="px-4 py-3 border-b border-gray-700" data-testid="risk-section">
@@ -53,14 +91,14 @@ export function RiskSection({ vessel }: RiskSectionProps) {
         </div>
       </div>
 
-      {/* Anomaly list */}
-      {unresolvedAnomalies.length > 0 && (
+      {/* Anomaly list — deduplicated by rule */}
+      {deduplicated.length > 0 && (
         <div className="space-y-2" data-testid="anomaly-list">
           <span className="text-xs text-gray-400 uppercase tracking-wide">
-            Active Anomalies ({unresolvedAnomalies.length})
+            Score Breakdown ({deduplicated.length})
           </span>
-          {unresolvedAnomalies.map((anomaly) => (
-            <AnomalyCard key={anomaly.id} anomaly={anomaly} />
+          {deduplicated.map((anomaly) => (
+            <AnomalyCard key={anomaly.ruleId} anomaly={anomaly} />
           ))}
         </div>
       )}
@@ -69,36 +107,62 @@ export function RiskSection({ vessel }: RiskSectionProps) {
 }
 
 function AnomalyCard({ anomaly }: { anomaly: AnomalyEvent }) {
+  const [expanded, setExpanded] = useState(false);
   const severityColor = SEVERITY_COLORS[anomaly.severity];
-  const detailsSummary = Object.entries(anomaly.details)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(', ');
+
+  const detailEntries = Object.entries(anomaly.details).filter(
+    ([, v]) => v !== null && v !== undefined && v !== ''
+  );
 
   return (
     <div
-      className="rounded-md border border-gray-700 bg-gray-800 p-2"
+      className="rounded-md border border-gray-700 bg-gray-800 p-2 cursor-pointer select-none"
+      onClick={() => setExpanded(!expanded)}
       data-testid="anomaly-card"
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-medium text-gray-200" data-testid="anomaly-rule-name">
           {getRuleName(anomaly.ruleId)}
         </span>
-        <span
-          className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase text-white"
-          style={{ backgroundColor: severityColor }}
-          data-testid="anomaly-severity-badge"
-        >
-          {anomaly.severity}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold text-gray-300" data-testid="anomaly-points">
+            +{anomaly.points}
+          </span>
+          <span
+            className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase text-white"
+            style={{ backgroundColor: severityColor }}
+            data-testid="anomaly-severity-badge"
+          >
+            {anomaly.severity}
+          </span>
+        </div>
       </div>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
-        <span data-testid="anomaly-points">+{anomaly.points} pts</span>
-        <span data-testid="anomaly-timestamp">{formatTimestamp(anomaly.timestamp)}</span>
-      </div>
-      {detailsSummary && (
-        <p className="mt-1 text-xs text-gray-500 truncate" data-testid="anomaly-details">
-          {detailsSummary}
+
+      {/* Collapsed: one-line summary */}
+      {!expanded && detailEntries.length > 0 && (
+        <p className="text-xs text-gray-500 truncate">
+          {detailEntries
+            .slice(0, 3)
+            .map(([k, v]) => `${DETAIL_LABELS[k] ?? k}: ${v}`)
+            .join(' · ')}
         </p>
+      )}
+
+      {/* Expanded: full detail table */}
+      {expanded && (
+        <div className="mt-2 space-y-1">
+          {detailEntries.map(([key, value]) => (
+            <div key={key} className="flex justify-between text-xs">
+              <span className="text-gray-500">{DETAIL_LABELS[key] ?? key}</span>
+              <span className="text-gray-300 text-right ml-2 break-all">
+                {String(value)}
+              </span>
+            </div>
+          ))}
+          <div className="text-[10px] text-gray-600 pt-1">
+            {formatTimestamp(anomaly.timestamp)}
+          </div>
+        </div>
       )}
     </div>
   );

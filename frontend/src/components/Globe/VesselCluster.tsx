@@ -3,8 +3,6 @@ import { CustomDataSource, Entity, BillboardGraphics } from 'resium';
 import { useCesium } from 'resium';
 import {
   Cartesian3,
-  EntityCluster,
-  Color,
   ConstantProperty,
   CallbackProperty,
   NearFarScalar,
@@ -125,7 +123,7 @@ export function VesselCluster() {
     cluster.minimumClusterSize = CLUSTER_MIN_SIZE;
 
     const removeListener = cluster.clusterEvent.addEventListener(
-      (clusteredEntities: CesiumEntity[], cluster: { billboard: { show: boolean; image: HTMLCanvasElement }; label: { show: boolean }; point: { show: boolean } }) => {
+      (clusteredEntities: CesiumEntity[], cluster: { billboard: { show: boolean; image: string }; label: { show: boolean }; point: { show: boolean } }) => {
         // Determine highest risk tier in cluster
         const tiers: RiskTier[] = [];
         for (const entity of clusteredEntities) {
@@ -137,7 +135,7 @@ export function VesselCluster() {
         cluster.label.show = false;
         cluster.point.show = false;
         cluster.billboard.show = true;
-        cluster.billboard.image = createClusterCanvas(clusteredEntities.length, highestTier);
+        (cluster.billboard as unknown as { image: HTMLCanvasElement }).image = createClusterCanvas(clusteredEntities.length, highestTier);
       },
     );
 

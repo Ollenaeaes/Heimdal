@@ -54,4 +54,32 @@ async def get_gfw_events(
             if r.get("start_time") is not None and r["start_time"] <= end
         ]
 
-    return {"items": rows, "total": len(rows), "page": page, "per_page": per_page}
+    # Transform to frontend-expected camelCase format
+    items = []
+    for r in rows:
+        start_time = r.get("start_time")
+        end_time = r.get("end_time")
+        duration_hours = None
+        if start_time and end_time:
+            try:
+                delta = end_time - start_time
+                duration_hours = round(delta.total_seconds() / 3600, 1)
+            except Exception:
+                pass
+
+        items.append({
+            "id": str(r.get("id", r.get("gfw_event_id", ""))),
+            "type": r.get("event_type"),
+            "startTime": start_time.isoformat() if start_time else None,
+            "endTime": end_time.isoformat() if end_time else None,
+            "lat": r.get("lat"),
+            "lon": r.get("lon"),
+            "vesselMmsi": r.get("mmsi"),
+            "vesselName": None,  # enriched later if needed
+            "encounterPartnerMmsi": r.get("encounter_mmsi"),
+            "encounterPartnerName": None,
+            "portName": r.get("port_name"),
+            "durationHours": duration_hours,
+        })
+
+    return items

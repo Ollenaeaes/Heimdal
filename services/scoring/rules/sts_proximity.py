@@ -113,7 +113,7 @@ class StsProximityRule(ScoringRule):
 
 async def _check_sts_zone_db(positions: list[dict[str, Any]]) -> Optional[str]:
     """DB-backed STS zone check.  Extracted so tests can patch this function."""
-    from shared.database import get_session
+    from shared.db.connection import get_session
     from .zone_helpers import is_in_sts_zone
 
     async with get_session() as session:

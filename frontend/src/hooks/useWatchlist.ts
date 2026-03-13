@@ -90,14 +90,19 @@ async function removeFromWatchlistApi(mmsi: number): Promise<void> {
 export function useWatchlistQuery() {
   const setWatchlist = useWatchlistStore((s) => s.setWatchlist);
 
-  return useQuery<WatchlistResponse>({
+  const query = useQuery<WatchlistResponse>({
     queryKey: ['watchlist'],
     queryFn: fetchWatchlist,
-    select: (data) => {
-      setWatchlist(data.items.map((item) => item.mmsi));
-      return data;
-    },
   });
+
+  // Sync to zustand store in an effect, not in select (which causes infinite re-renders)
+  useEffect(() => {
+    if (query.data) {
+      setWatchlist(query.data.items.map((item) => item.mmsi));
+    }
+  }, [query.data, setWatchlist]);
+
+  return query;
 }
 
 // ── Mutation hooks ─────────────────────────────────────────────────────────

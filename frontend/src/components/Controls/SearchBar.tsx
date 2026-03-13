@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useVesselStore } from '../../hooks/useVesselStore';
+import { getCesiumViewer } from '../Globe/GlobeView';
+import { Cartesian3 } from 'cesium';
 import type { VesselState } from '../../types/vessel';
 
 const RISK_COLORS: Record<string, string> = {
@@ -42,36 +43,54 @@ interface SearchResult {
   lon: number;
 }
 
-async function fetchSearchResults(term: string): Promise<SearchResult[]> {
-  if (!term.trim()) return [];
-  const res = await fetch(`/api/vessels?search=${encodeURIComponent(term)}&per_page=10`);
-  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-  const data = await res.json();
-  // API returns { data: VesselState[] } or VesselState[]
-  const vessels: VesselState[] = Array.isArray(data) ? data : data.data ?? [];
-  return vessels.map((v) => ({
-    mmsi: v.mmsi,
-    name: v.name,
-    riskTier: v.riskTier,
-    lat: v.lat,
-    lon: v.lon,
-  }));
-}
+const MAX_RESULTS = 10;
 
 export function SearchBar() {
   const [term, setTerm] = useState('');
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const selectVessel = useVesselStore((s) => s.selectVessel);
+  const vessels = useVesselStore((s) => s.vessels);
 
-  const debouncedTerm = useDebounce(term, 300);
+  const debouncedTerm = useDebounce(term, 200);
 
-  const { data: results = [] } = useQuery({
-    queryKey: ['vesselSearch', debouncedTerm],
-    queryFn: () => fetchSearchResults(debouncedTerm),
-    enabled: debouncedTerm.trim().length > 0,
-    staleTime: 10_000,
-  });
+  // Search the local vessel store
+  const results: SearchResult[] = useMemo(() => {
+    const q = debouncedTerm.trim().toLowerCase();
+    if (!q) return [];
+
+    const searchType = detectSearchType(debouncedTerm);
+    const matches: SearchResult[] = [];
+
+    // Direct MMSI lookup
+    if (searchType === 'mmsi') {
+      const mmsi = parseInt(q, 10);
+      const v = vessels.get(mmsi);
+      if (v) {
+        matches.push({ mmsi: v.mmsi, name: v.name, riskTier: v.riskTier, lat: v.lat, lon: v.lon });
+      }
+      return matches;
+    }
+
+    for (const v of vessels.values()) {
+      if (matches.length >= MAX_RESULTS) break;
+
+      if (searchType === 'imo') {
+        // IMO search — check if MMSI contains the term (rough heuristic)
+        if (String(v.mmsi).includes(q)) {
+          matches.push({ mmsi: v.mmsi, name: v.name, riskTier: v.riskTier, lat: v.lat, lon: v.lon });
+        }
+      } else {
+        // Name search
+        const name = v.name?.toLowerCase() ?? '';
+        const mmsiStr = String(v.mmsi);
+        if (name.includes(q) || mmsiStr.includes(q)) {
+          matches.push({ mmsi: v.mmsi, name: v.name, riskTier: v.riskTier, lat: v.lat, lon: v.lon });
+        }
+      }
+    }
+    return matches;
+  }, [debouncedTerm, vessels]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -84,11 +103,37 @@ export function SearchBar() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const handleSelect = (result: SearchResult) => {
-    selectVessel(result.mmsi);
-    setTerm('');
-    setOpen(false);
-  };
+  const handleSelect = useCallback(
+    (result: SearchResult) => {
+      selectVessel(result.mmsi);
+      setTerm('');
+      setOpen(false);
+
+      // Pan the map to the vessel
+      const viewer = getCesiumViewer();
+      if (viewer) {
+        viewer.camera.flyTo({
+          destination: Cartesian3.fromDegrees(result.lon, result.lat, 50_000),
+          duration: 1.5,
+        });
+      }
+    },
+    [selectVessel],
+  );
+
+  // Allow Enter to select the first (or only) result
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && results.length > 0) {
+        e.preventDefault();
+        handleSelect(results[0]);
+      }
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    },
+    [results, handleSelect],
+  );
 
   const searchType = detectSearchType(term);
   const placeholder = 'Search vessels (name, MMSI, IMO)...';
@@ -103,6 +148,7 @@ export function SearchBar() {
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className="w-full px-3 py-2 rounded-lg bg-gray-800/80 text-white text-sm
                    placeholder-gray-400 border border-gray-700 focus:border-blue-500

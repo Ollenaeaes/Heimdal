@@ -181,13 +181,13 @@ async def enrich_batch(
         Dict with 'gfw_events_count' and 'sar_detections_count'.
     """
     if _events_fn is None:
-        from services.enrichment.events_fetcher import fetch_and_store_events
+        from events_fetcher import fetch_and_store_events
         _events_fn = fetch_and_store_events
     if _sar_fn is None:
-        from services.enrichment.sar_fetcher import fetch_and_store_sar_detections
+        from sar_fetcher import fetch_and_store_sar_detections
         _sar_fn = fetch_and_store_sar_detections
     if _vessel_fn is None:
-        from services.enrichment.vessel_fetcher import fetch_and_update_vessel_profile
+        from vessel_fetcher import fetch_and_update_vessel_profile
         _vessel_fn = fetch_and_update_vessel_profile
 
     gfw_events_count = 0
@@ -195,7 +195,7 @@ async def enrich_batch(
 
     # Step 1: GFW Events
     try:
-        count = await _events_fn(gfw_client, session, mmsis)
+        count = await _events_fn(gfw_client, session, mmsis, redis_client=redis_client)
         gfw_events_count = count
         logger.info("GFW Events: fetched %d events for %d vessels", count, len(mmsis))
     except Exception:
@@ -219,10 +219,13 @@ async def enrich_batch(
         except Exception:
             logger.warning("GFW Vessel Identity failed for MMSI %d", mmsi, exc_info=True)
 
+    # Track vessels that failed critical enrichment — don't mark as enriched
+    failed_mmsis: set[int] = set()
+
     # Step 4: OpenSanctions
     if sanctions_index is not None:
-        from services.enrichment.sanctions_matcher import match_vessel
-        from shared.db.repositories import get_vessel_profile_by_mmsi, upsert_vessel_profile
+        from sanctions_matcher import match_vessel
+        from shared.db.repositories import get_vessel_profile_by_mmsi, update_vessel_sanctions
 
         for mmsi in mmsis:
             try:
@@ -235,22 +238,20 @@ async def enrich_batch(
                         name=profile.get("ship_name"),
                     )
                     if result.get("matches"):
-                        await upsert_vessel_profile(session, {
-                            **{k: None for k in [
-                                "imo", "ship_name", "ship_type", "ship_type_text",
-                                "flag_country", "call_sign", "length", "width",
-                                "draught", "destination", "eta", "last_position_time",
-                                "last_lat", "last_lon", "risk_score", "risk_tier",
-                                "pi_tier", "pi_details", "owner", "operator",
-                                "insurer", "class_society", "build_year", "dwt",
-                                "gross_tonnage", "group_owner", "registered_owner",
-                                "technical_manager",
-                            ]},
-                            "mmsi": mmsi,
-                            "sanctions_status": json.dumps(result),
-                        })
+                        await update_vessel_sanctions(
+                            session, mmsi, json.dumps(result)
+                        )
             except Exception:
                 logger.warning("Sanctions check failed for MMSI %d", mmsi, exc_info=True)
+                failed_mmsis.add(mmsi)
+    else:
+        # Sanctions index not loaded — this is a system config issue, not per-vessel.
+        # Log loudly so operators fix it, but don't block enrichment for all vessels.
+        logger.error(
+            "Sanctions index not loaded — %d vessels NOT screened against sanctions. "
+            "Check OPENSANCTIONS_DATA_PATH and run download-opensanctions.sh",
+            len(mmsis),
+        )
 
     # Step 5: GISIS (optional — failures don't block)
     if gisis_client is not None:
@@ -263,7 +264,7 @@ async def enrich_batch(
                 if imo:
                     gisis_data = await gisis_client.lookup_vessel(imo)
                     if gisis_data:
-                        from services.enrichment.gisis_mars import merge_gisis_data
+                        from gisis_mars import merge_gisis_data
 
                         merge_gisis_data(profile or {}, gisis_data)
                         logger.debug("GISIS data merged for MMSI %d", mmsi)
@@ -276,7 +277,7 @@ async def enrich_batch(
             try:
                 mars_data = await mars_client.lookup_vessel(mmsi)
                 if mars_data:
-                    from services.enrichment.gisis_mars import merge_mars_data
+                    from gisis_mars import merge_mars_data
 
                     logger.debug("MARS data merged for MMSI %d", mmsi)
             except Exception:
@@ -285,6 +286,7 @@ async def enrich_batch(
     return {
         "gfw_events_count": gfw_events_count,
         "sar_detections_count": sar_detections_count,
+        "failed_mmsis": failed_mmsis,
     }
 
 
@@ -352,9 +354,24 @@ async def run_cycle(
             )
             total_events += result["gfw_events_count"]
             total_sar += result["sar_detections_count"]
-            all_enriched.extend(batch)
+            # Only mark vessels as enriched if critical steps succeeded
+            failed = result.get("failed_mmsis", set())
+            succeeded = [m for m in batch if m not in failed]
+            all_enriched.extend(succeeded)
+            if failed:
+                logger.warning(
+                    "%d vessels had critical enrichment failures, will retry: %s",
+                    len(failed),
+                    list(failed)[:10],
+                )
+            # Commit after each batch so data is visible immediately
+            await session.commit()
         except Exception:
             logger.exception("Batch %d failed", i // batch_size + 1)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
 
     # Mark all enriched vessels
     if all_enriched:

@@ -67,8 +67,13 @@ async def main() -> None:
                 continue
 
             mmsis = payload.get("mmsis", [])
+            # Position channel sends single mmsi, enrichment sends mmsis list
+            if not mmsis and "mmsi" in payload:
+                mmsis = [payload["mmsi"]]
             if not mmsis:
                 continue
+
+            logger.info("Received %d MMSIs on %s", len(mmsis), channel)
 
             if channel == POSITIONS_CHANNEL:
                 for mmsi in mmsis:
@@ -81,11 +86,22 @@ async def main() -> None:
 
             elif channel == ENRICHMENT_CHANNEL:
                 for mmsi in mmsis:
+                    logger.info("Scoring MMSI %d (enrichment)", mmsi)
                     try:
-                        await engine.evaluate_gfw(mmsi)
+                        gfw_results = await engine.evaluate_gfw(mmsi)
+                        fired = [r for r in gfw_results if r.fired]
+                        logger.info("GFW eval for %d: %d rules fired", mmsi, len(fired))
                     except Exception:
                         logger.exception(
                             "GFW evaluation failed for MMSI %d", mmsi
+                        )
+                    try:
+                        rt_results = await engine.evaluate_realtime(mmsi)
+                        fired = [r for r in rt_results if r.fired]
+                        logger.info("Realtime eval for %d: %d rules fired", mmsi, len(fired))
+                    except Exception:
+                        logger.exception(
+                            "Realtime evaluation (post-enrichment) failed for MMSI %d", mmsi
                         )
 
     except asyncio.CancelledError:

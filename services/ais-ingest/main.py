@@ -46,19 +46,26 @@ async def main():
         redis_client=redis,
         batch_size=settings.ingest.batch_size,
         flush_interval=settings.ingest.flush_interval,
+        metrics=metrics,
     )
     await writer.start()
 
+    msg_count = {"total": 0, "parsed": 0, "written": 0}
+
     async def handle_message(raw: dict):
+        msg_count["total"] += 1
+        if msg_count["total"] % 1000 == 0:
+            logger.info(
+                "Messages: total=%d parsed=%d written=%d",
+                msg_count["total"], msg_count["parsed"], msg_count["written"],
+            )
+
         result = parse_message(raw)
         if result is None:
             return
+        msg_count["parsed"] += 1
 
-        if isinstance(result, PositionReport):
-            if await dedup.is_duplicate(result.mmsi, result.timestamp):
-                return
-            await writer.add_position(result)
-        elif isinstance(result, ShipStaticData):
+        if isinstance(result, ShipStaticData):
             extras = parse_vessel_extras(raw)
             extras["mmsi"] = result.mmsi
             if result.imo:
@@ -68,6 +75,13 @@ async def main():
             if result.ship_type is not None:
                 extras["ship_type"] = result.ship_type
             await writer.add_vessel_update(result.mmsi, extras)
+            msg_count["written"] += 1
+
+        elif isinstance(result, PositionReport):
+            if await dedup.is_duplicate(result.mmsi, result.timestamp):
+                return
+            await writer.add_position(result)
+            msg_count["written"] += 1
 
     ws = AISWebSocket(on_message=handle_message)
 

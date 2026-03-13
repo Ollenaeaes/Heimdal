@@ -1,14 +1,10 @@
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-
-// Set Cesium base URL before any Cesium imports
-window.CESIUM_BASE_URL = '/cesium';
-
 import App from './App';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+// NOTE: StrictMode intentionally omitted — Cesium's Viewer.destroy() is
+// irreversible, so the double-mount/unmount cycle in StrictMode kills the
+// WebGL context and the globe never renders.
+// CESIUM_BASE_URL is set via Vite `define` in vite.config.ts (compile-time).
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<App />);

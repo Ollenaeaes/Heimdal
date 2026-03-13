@@ -18,3 +18,5 @@ dist/
 # Docker volumes (if mounted locally)
 pgdata/
 opensanctions-data/
+data/opensanctions/
+data/gfw-sar/

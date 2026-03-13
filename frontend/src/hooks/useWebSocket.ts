@@ -29,10 +29,13 @@ const INITIAL_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 60000;
 const RECONNECT_MULTIPLIER = 2;
 
+/** How often (ms) to flush buffered vessel updates into the store */
+const FLUSH_INTERVAL_MS = 2000;
+
 /**
  * Manages a WebSocket connection to the vessel positions endpoint.
- * Automatically subscribes with current filters, handles reconnection
- * with exponential backoff, and updates the vessel store on messages.
+ * Buffers incoming positions and flushes to the store every FLUSH_INTERVAL_MS
+ * to avoid overwhelming React with per-message re-renders.
  */
 export function useWebSocket(): ConnectionStatus {
   const statusRef = useRef<ConnectionStatus>('disconnected');
@@ -41,6 +44,10 @@ export function useWebSocket(): ConnectionStatus {
   const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+
+  // Buffer for incoming vessel updates — flushed periodically
+  const bufferRef = useRef<Map<number, VesselState>>(new Map());
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const setStatus = useCallback((next: ConnectionStatus) => {
     if (statusRef.current !== next) {
@@ -64,6 +71,22 @@ export function useWebSocket(): ConnectionStatus {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(buildSubscriptionMessage(filters)));
     }
+  }, []);
+
+  // Start periodic flush
+  useEffect(() => {
+    flushTimerRef.current = setInterval(() => {
+      const buf = bufferRef.current;
+      if (buf.size === 0) return;
+      const batch = Array.from(buf.values());
+      buf.clear();
+      const { updatePositions } = useVesselStore.getState();
+      updatePositions(batch);
+    }, FLUSH_INTERVAL_MS);
+
+    return () => {
+      if (flushTimerRef.current) clearInterval(flushTimerRef.current);
+    };
   }, []);
 
   const connect = useCallback(() => {
@@ -98,11 +121,30 @@ export function useWebSocket(): ConnectionStatus {
 
     ws.onmessage = (event: MessageEvent) => {
       try {
-        const data: unknown = JSON.parse(event.data as string);
-        const vessels: VesselState[] = Array.isArray(data) ? data : [data];
-        const { updatePosition } = useVesselStore.getState();
-        for (const vessel of vessels) {
-          updatePosition(vessel);
+        const raw = JSON.parse(event.data as string);
+        const items = Array.isArray(raw) ? raw : [raw];
+        const store = useVesselStore.getState();
+        for (const d of items) {
+          if (!d.mmsi || d.lat == null || d.lon == null) continue;
+          // Merge: update position fields from stream, preserve
+          // risk/identity fields from the snapshot/store
+          const existing = bufferRef.current.get(d.mmsi) ?? store.vessels.get(d.mmsi);
+          bufferRef.current.set(d.mmsi, {
+            ...existing,
+            mmsi: d.mmsi,
+            lat: d.lat,
+            lon: d.lon,
+            sog: d.sog ?? null,
+            cog: d.cog ?? null,
+            heading: d.heading ?? null,
+            navStatus: d.nav_status ?? existing?.navStatus ?? null,
+            timestamp: d.timestamp ?? new Date().toISOString(),
+            // Preserve fields the stream doesn't provide
+            riskTier: existing?.riskTier ?? 'green',
+            riskScore: existing?.riskScore ?? 0,
+            name: existing?.name,
+            shipType: existing?.shipType,
+          });
         }
       } catch {
         // Ignore malformed messages

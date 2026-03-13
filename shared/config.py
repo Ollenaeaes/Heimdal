@@ -21,7 +21,7 @@ from pydantic_settings import BaseSettings
 
 class ScoringConfig(BaseSettings):
     yellow_threshold: float = 30.0
-    red_threshold: float = 100.0
+    red_threshold: float = 80.0
 
 
 class IngestConfig(BaseSettings):

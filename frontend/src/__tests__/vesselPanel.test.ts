@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useVesselStore } from '../hooks/useVesselStore';
 import { getShipTypeLabel } from '../utils/shipTypes';
 import { countryCodeToFlagEmoji } from '../utils/flagEmoji';
@@ -17,6 +17,8 @@ describe('VesselPanel store interactions', () => {
         shipTypes: [],
         bbox: null,
         activeSince: null,
+        darkShipsOnly: false,
+        showGfwEventTypes: [],
       },
     });
   });
@@ -477,7 +479,7 @@ describe('SanctionsSection data rendering logic', () => {
   });
 
   it('handles undefined matches as no-match state', () => {
-    const noMatches: { source: string; confidence: number; matchedField: string }[] | undefined = undefined;
+    const noMatches = undefined as { source: string; confidence: number; matchedField: string }[] | undefined;
     expect(!noMatches || noMatches.length === 0).toBe(true);
   });
 });
@@ -534,8 +536,8 @@ describe('OwnershipSection data rendering logic', () => {
   });
 
   it('shows prompt when no data at all', () => {
-    const ownershipData: Record<string, string | undefined> | undefined = undefined;
-    const manualEnrichment: Record<string, string | undefined> | undefined = undefined;
+    const ownershipData = undefined as Record<string, string | undefined> | undefined;
+    const manualEnrichment: Record<string, string | undefined> | undefined = undefined as Record<string, string | undefined> | undefined;
     const hasOwnership = ownershipData && (
       ownershipData.registeredOwner ||
       ownershipData.commercialManager ||

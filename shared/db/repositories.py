@@ -78,6 +78,20 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
     )
 
 
+async def update_vessel_sanctions(
+    session: AsyncSession, mmsi: int, sanctions_status: str
+) -> None:
+    """Update only the sanctions_status column for a vessel profile."""
+    await session.execute(
+        text(
+            "UPDATE vessel_profiles "
+            "SET sanctions_status = :sanctions_status, updated_at = NOW() "
+            "WHERE mmsi = :mmsi"
+        ),
+        {"mmsi": mmsi, "sanctions_status": sanctions_status},
+    )
+
+
 async def get_vessel_profile_by_mmsi(
     session: AsyncSession, mmsi: int
 ) -> dict[str, Any] | None:
@@ -380,13 +394,15 @@ async def bulk_upsert_sar_detections(
             text("""
                 INSERT INTO sar_detections (
                     detection_time, position, length_m, width_m, heading_deg,
-                    confidence, is_dark, matched_mmsi, match_distance_m,
+                    confidence, is_dark, matched_mmsi, matched_category,
+                    match_distance_m,
                     source, gfw_detection_id, matching_score, fishing_score
                 ) VALUES (
                     :detection_time,
                     ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
                     :length_m, :width_m, :heading_deg,
-                    :confidence, :is_dark, :matched_mmsi, :match_distance_m,
+                    :confidence, :is_dark, :matched_mmsi, :matched_category,
+                    :match_distance_m,
                     :source, :gfw_detection_id, :matching_score, :fishing_score
                 )
                 ON CONFLICT (gfw_detection_id) DO UPDATE SET
@@ -398,6 +414,7 @@ async def bulk_upsert_sar_detections(
                     confidence = EXCLUDED.confidence,
                     is_dark = EXCLUDED.is_dark,
                     matched_mmsi = EXCLUDED.matched_mmsi,
+                    matched_category = EXCLUDED.matched_category,
                     match_distance_m = EXCLUDED.match_distance_m,
                     matching_score = EXCLUDED.matching_score,
                     fishing_score = EXCLUDED.fishing_score
@@ -432,7 +449,8 @@ async def list_sar_detections(
             f"SELECT id, detection_time, "
             f"ST_Y(position::geometry) AS lat, ST_X(position::geometry) AS lon, "
             f"length_m, width_m, heading_deg, confidence, is_dark, "
-            f"matched_mmsi, match_distance_m, source, gfw_detection_id, "
+            f"matched_mmsi, matched_category, match_distance_m, source, "
+            f"gfw_detection_id, "
             f"matching_score, fishing_score, created_at "
             f"FROM sar_detections {where} "
             f"ORDER BY detection_time DESC LIMIT :limit OFFSET :offset"

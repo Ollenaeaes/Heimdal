@@ -219,6 +219,72 @@ async def _set_cached(
         logger.debug("Failed to cache vessel data for key %s", key)
 
 
+async def resolve_gfw_vessel_id(
+    client: Any,
+    mmsi: int,
+    *,
+    redis_client: Any = None,
+) -> str | None:
+    """Resolve an MMSI to a GFW internal vessel ID.
+
+    The GFW Events API requires their internal vessel IDs (UUIDs),
+    not raw MMSIs.  This function searches the GFW Vessel API by MMSI
+    and returns the ``id`` field from ``combinedSourcesInfo``.
+
+    Results are cached in Redis under ``heimdal:gfw_vessel_id:<mmsi>``.
+
+    Returns:
+        The GFW vessel ID string, or None if not found.
+    """
+    cache_key = f"heimdal:gfw_vessel_id:{mmsi}"
+
+    # Check cache
+    if redis_client is not None:
+        try:
+            cached = await redis_client.get(cache_key)
+            if cached:
+                return cached.decode() if isinstance(cached, bytes) else cached
+        except Exception:
+            pass
+
+    # Search GFW
+    try:
+        data = await client.get(
+            VESSEL_SEARCH_ENDPOINT,
+            params={
+                "query": str(mmsi),
+                "datasets[0]": VESSEL_DATASET,
+                "limit": 1,
+            },
+        )
+    except Exception:
+        logger.debug("Failed to resolve GFW vessel ID for MMSI %d", mmsi)
+        return None
+
+    entries = data.get("entries", [])
+    if not entries:
+        return None
+
+    # Extract GFW vessel ID from combinedSourcesInfo
+    combined = entries[0].get("combinedSourcesInfo", [])
+    vessel_id = None
+    if combined and isinstance(combined, list):
+        vessel_id = combined[0].get("vesselId")
+
+    # Fallback: try the top-level id field
+    if not vessel_id:
+        vessel_id = entries[0].get("id")
+
+    if vessel_id and redis_client is not None:
+        try:
+            ttl = settings.gfw.vessel_cache_ttl_hours * 3600
+            await redis_client.set(cache_key, vessel_id, ex=ttl)
+        except Exception:
+            pass
+
+    return vessel_id
+
+
 async def fetch_vessel_by_mmsi(
     client: Any,
     mmsi: int,

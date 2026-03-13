@@ -62,6 +62,10 @@ export interface VesselDetail {
   width?: number;
   draught?: number;
   destination?: string;
+  sog?: number | null;
+  cog?: number | null;
+  heading?: number | null;
+  navStatus?: number | null;
   riskScore: number;
   riskTier: 'green' | 'yellow' | 'red';
   owner?: string;

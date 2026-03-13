@@ -204,6 +204,8 @@ describe('vessel name lookup', () => {
         shipTypes: [],
         bbox: null,
         activeSince: null,
+        darkShipsOnly: false,
+        showGfwEventTypes: [],
       },
     });
   });

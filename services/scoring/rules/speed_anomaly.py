@@ -18,8 +18,16 @@ from shared.models.anomaly import RuleResult
 from .base import ScoringRule
 
 _SLOW_STEAM_THRESHOLD_KNOTS = 5.0
+_SLOW_STEAM_MIN_SPEED_KNOTS = 0.5  # below this = stationary, not slow steaming
 _SLOW_STEAM_MIN_HOURS = 2.0
 _ABRUPT_DELTA_KNOTS = 10.0
+
+# AIS nav status codes that indicate the vessel is not underway
+_STATIONARY_NAV_STATUSES = frozenset({
+    "Moored", "At anchor", "Aground", "Not under command",
+    # Numeric AIS codes
+    1, 5, 6,  # at anchor, moored, aground
+})
 
 
 class SpeedAnomalyRule(ScoringRule):
@@ -43,6 +51,12 @@ class SpeedAnomalyRule(ScoringRule):
     ) -> Optional[RuleResult]:
         if len(recent_positions) < 2:
             return None
+
+        # Skip if vessel is moored/anchored — sitting still isn't an anomaly
+        latest = max(recent_positions, key=lambda p: p.get("timestamp", ""))
+        nav_status = latest.get("nav_status") or latest.get("navigational_status")
+        if nav_status in _STATIONARY_NAV_STATUSES:
+            return RuleResult(fired=False, rule_id=self.rule_id)
 
         sorted_pos = sorted(recent_positions, key=lambda p: p.get("timestamp", ""))
 
@@ -105,7 +119,7 @@ class SpeedAnomalyRule(ScoringRule):
             if not ts.tzinfo:
                 ts = ts.replace(tzinfo=timezone.utc)
 
-            if sog < _SLOW_STEAM_THRESHOLD_KNOTS:
+            if _SLOW_STEAM_MIN_SPEED_KNOTS <= sog < _SLOW_STEAM_THRESHOLD_KNOTS:
                 if slow_start is None:
                     slow_start = ts
                 slow_positions.append(pos)
@@ -114,6 +128,11 @@ class SpeedAnomalyRule(ScoringRule):
                     avg_speed = sum(
                         p.get("sog", 0) for p in slow_positions
                     ) / len(slow_positions)
+                    if avg_speed < _SLOW_STEAM_MIN_SPEED_KNOTS:
+                        # Effectively stationary, not slow steaming
+                        slow_start = None
+                        slow_positions = []
+                        continue
                     return RuleResult(
                         fired=True,
                         rule_id=self.rule_id,

@@ -29,6 +29,8 @@ describe('Position history in useVesselStore', () => {
         shipTypes: [],
         bbox: null,
         activeSince: null,
+        darkShipsOnly: false,
+        showGfwEventTypes: [],
       },
     });
   });

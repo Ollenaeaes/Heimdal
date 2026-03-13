@@ -5,6 +5,7 @@ export interface VesselState {
   sog: number | null;
   cog: number | null;
   heading: number | null;
+  navStatus?: number | null;
   riskTier: 'green' | 'yellow' | 'red';
   riskScore: number;
   name?: string;

@@ -16,6 +16,37 @@ from .base import ScoringRule
 
 _DIMENSION_MISMATCH_PCT = 0.20  # 20 %
 
+# ISO 3166-1 alpha-3 → alpha-2 mapping for common maritime flags.
+# AIS sometimes reports alpha-3 codes while MMSI MID maps to alpha-2.
+_ALPHA3_TO_ALPHA2: dict[str, str] = {
+    "CYP": "CY", "GBR": "GB", "GRC": "GR", "MLT": "MT", "PAN": "PA",
+    "LBR": "LR", "MHL": "MH", "NOR": "NO", "SWE": "SE", "DNK": "DK",
+    "DEU": "DE", "NLD": "NL", "FRA": "FR", "ESP": "ES", "ITA": "IT",
+    "PRT": "PT", "FIN": "FI", "IRL": "IE", "BEL": "BE", "HRV": "HR",
+    "ROU": "RO", "BGR": "BG", "POL": "PL", "EST": "EE", "LVA": "LV",
+    "LTU": "LT", "SVN": "SI", "TUR": "TR", "RUS": "RU", "UKR": "UA",
+    "USA": "US", "CAN": "CA", "BHS": "BS", "BMU": "BM", "BRB": "BB",
+    "BLZ": "BZ", "CHN": "CN", "TWN": "TW", "JPN": "JP", "KOR": "KR",
+    "SGP": "SG", "HKG": "HK", "IND": "IN", "IDN": "ID", "MYS": "MY",
+    "PHL": "PH", "THA": "TH", "VNM": "VN", "AUS": "AU", "NZL": "NZ",
+    "BRA": "BR", "ARG": "AR", "CHL": "CL", "COL": "CO", "MEX": "MX",
+    "ARE": "AE", "SAU": "SA", "IRN": "IR", "ISR": "IL", "EGY": "EG",
+    "ZAF": "ZA", "NGA": "NG", "KEN": "KE", "TZA": "TZ", "GHA": "GH",
+    "COM": "KM", "CMR": "CM", "GAB": "GA", "TGO": "TG", "SEN": "SN",
+    "ATG": "AG", "VCT": "VC", "KNA": "KN", "DMA": "DM", "GRD": "GD",
+    "TTO": "TT", "CRI": "CR", "CUB": "CU", "DOM": "DO", "GTM": "GT",
+    "HND": "HN", "NIC": "NI", "SLV": "SV", "JAM": "JM", "GIB": "GI",
+    "ISL": "IS", "FRO": "FO", "MCO": "MC", "LUX": "LU", "AND": "AD",
+    "MNE": "ME", "ALB": "AL", "GEO": "GE", "PLW": "PW", "TUV": "TV",
+    "VUT": "VU", "TON": "TO", "FJI": "FJ", "WSM": "WS", "KIR": "KI",
+}
+
+
+def _normalize_flag(flag: str) -> str:
+    """Normalize a flag code to ISO alpha-2 uppercase."""
+    flag = flag.strip().upper()
+    return _ALPHA3_TO_ALPHA2.get(flag, flag)
+
 
 class IdentityMismatchRule(ScoringRule):
     """Fire when AIS identity fields contradict registry data."""
@@ -110,7 +141,8 @@ class IdentityMismatchRule(ScoringRule):
         if not mmsi_flag or not reported_flag:
             return None
 
-        if mmsi_flag != reported_flag:
+        # Normalize both to alpha-2 before comparing (e.g. CYP → CY)
+        if _normalize_flag(mmsi_flag) != _normalize_flag(reported_flag):
             return RuleResult(
                 fired=True,
                 rule_id=self.rule_id,

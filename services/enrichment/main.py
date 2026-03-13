@@ -24,14 +24,38 @@ logging.basicConfig(
 logger = logging.getLogger("enrichment.main")
 
 
+def _load_aois() -> list[dict]:
+    """Load AOIs from config.yaml's gfw.aois section.
+
+    Falls back to an empty list if the section is missing.
+    """
+    yaml_path = Path("/app/config.yaml")
+    if not yaml_path.is_file():
+        # Try local development path
+        yaml_path = Path(__file__).resolve().parent.parent.parent / "config.yaml"
+    if not yaml_path.is_file():
+        logger.warning("config.yaml not found — no AOIs loaded")
+        return []
+
+    import yaml
+
+    with open(yaml_path) as f:
+        data = yaml.safe_load(f) or {}
+
+    aois = data.get("gfw", {}).get("aois", [])
+    if not aois:
+        logger.warning("No AOIs configured in config.yaml gfw.aois section")
+    return aois
+
+
 async def main() -> None:
     """Initialize all clients and start the enrichment loop."""
     import redis.asyncio as aioredis
 
-    from services.enrichment.gfw_client import GFWClient
-    from services.enrichment.gisis_mars import GISISClient, MARSClient
-    from services.enrichment.runner import DEFAULT_BATCH_SIZE, DEFAULT_INTERVAL_SECONDS, run_loop
-    from services.enrichment.sanctions_matcher import SanctionsIndex
+    from gfw_client import GFWClient
+    from gisis_mars import GISISClient, MARSClient
+    from runner import DEFAULT_BATCH_SIZE, DEFAULT_INTERVAL_SECONDS, run_loop
+    from sanctions_matcher import SanctionsIndex
     from shared.db.connection import get_session
 
     # Configuration
@@ -64,6 +88,10 @@ async def main() -> None:
     # Session factory
     session_factory = get_session()
 
+    # Load AOIs from config.yaml (gfw.aois section)
+    aois = _load_aois()
+    logger.info("Loaded %d AOIs for SAR detection queries", len(aois))
+
     # GFW client
     async with GFWClient() as gfw_client:
         await run_loop(
@@ -73,7 +101,7 @@ async def main() -> None:
             sanctions_index=sanctions_index,
             gisis_client=gisis_client,
             mars_client=mars_client,
-            aois=[],  # TODO: load AOIs from config
+            aois=aois,
             batch_size=batch_size,
             interval_seconds=interval,
         )

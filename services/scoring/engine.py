@@ -128,6 +128,9 @@ class ScoringEngine:
         session_factory = get_session()
         async with session_factory() as session:
             profile = await get_vessel_profile_by_mmsi(session, mmsi)
+            if not profile:
+                logger.debug("No vessel_profile for MMSI %d, skipping realtime eval", mmsi)
+                return []
             now = datetime.now(timezone.utc)
             recent_positions = await get_vessel_track(
                 session, mmsi, now - timedelta(hours=48), now
@@ -148,9 +151,20 @@ class ScoringEngine:
                 if result is not None:
                     results.append(result)
 
-            # Persist fired anomalies and publish anomaly events
+            # Persist fired anomalies — skip if an unresolved anomaly for the
+            # same rule_id already exists (prevents duplicate rows on every
+            # position update for static rules like identity_mismatch).
+            existing_rule_ids = {
+                a["rule_id"]
+                for a in existing_anomalies
+                if not a.get("resolved", False)
+            }
             fired_results = [r for r in results if r.fired]
+            new_results: list[RuleResult] = []
             for result in fired_results:
+                if result.rule_id in existing_rule_ids:
+                    continue  # already have an active anomaly for this rule
+                new_results.append(result)
                 await self._create_anomaly(session, mmsi, result)
                 if self.redis_client is not None:
                     await publish_anomaly(
@@ -164,12 +178,12 @@ class ScoringEngine:
 
             await session.commit()
 
-            # Recalculate score and update tier
-            if fired_results:
-                trigger_rule = fired_results[0].rule_id
-                await self._update_score_and_tier(
-                    session, mmsi, profile, trigger_rule
-                )
+            # Always recalculate score — enrichment may have added data that
+            # changes existing anomaly evaluation even without new firings
+            trigger_rule = new_results[0].rule_id if new_results else "realtime_rescore"
+            await self._update_score_and_tier(
+                session, mmsi, profile, trigger_rule
+            )
 
         return results
 
@@ -184,6 +198,9 @@ class ScoringEngine:
         session_factory = get_session()
         async with session_factory() as session:
             profile = await get_vessel_profile_by_mmsi(session, mmsi)
+            if not profile:
+                logger.debug("No vessel_profile for MMSI %d, skipping GFW eval", mmsi)
+                return []
             gfw_events = await list_gfw_events_by_mmsi(session, mmsi)
             existing_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
 
@@ -202,8 +219,17 @@ class ScoringEngine:
                     results.append(result)
 
             # Persist fired anomalies, run dedup, publish anomaly events
+            # Skip if an unresolved anomaly for the same rule already exists
+            existing_rule_ids = {
+                a["rule_id"]
+                for a in existing_anomalies
+                if not a.get("resolved", False)
+            }
             fired_results = [r for r in results if r.fired]
             for result in fired_results:
+                if result.rule_id in existing_rule_ids:
+                    continue
+
                 await self._create_anomaly(session, mmsi, result)
 
                 # Dedup: suppress real-time anomalies that overlap
@@ -228,12 +254,11 @@ class ScoringEngine:
 
             await session.commit()
 
-            # Recalculate score and update tier
-            if fired_results:
-                trigger_rule = fired_results[0].rule_id
-                await self._update_score_and_tier(
-                    session, mmsi, profile, trigger_rule
-                )
+            # Always recalculate score after GFW evaluation
+            trigger_rule = fired_results[0].rule_id if fired_results else "gfw_rescore"
+            await self._update_score_and_tier(
+                session, mmsi, profile, trigger_rule
+            )
 
         return results
 

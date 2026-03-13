@@ -29,11 +29,13 @@ class BatchWriter:
         redis_client,
         batch_size: int = 500,
         flush_interval: float = 2.0,
+        metrics=None,
     ):
         self.dsn = dsn  # raw postgresql:// DSN (not async SQLAlchemy URL)
         self.redis = redis_client
         self.batch_size = batch_size
         self.flush_interval = flush_interval
+        self.metrics = metrics
         self._position_buffer: list[tuple] = []
         self._vessel_updates: dict[int, dict] = {}  # mmsi -> profile data
         self._pool: asyncpg.Pool | None = None
@@ -71,7 +73,10 @@ class BatchWriter:
             None,  # draught (not in position report)
         ))
         if len(self._position_buffer) >= self.batch_size:
-            await self._flush()
+            try:
+                await self._flush()
+            except Exception:
+                logger.exception("Batch-size flush failed")
 
     async def add_vessel_update(self, mmsi: int, static_data: dict):
         """Queue a vessel profile update."""
@@ -82,7 +87,10 @@ class BatchWriter:
         while True:
             await asyncio.sleep(self.flush_interval)
             if self._position_buffer:
-                await self._flush()
+                try:
+                    await self._flush()
+                except Exception:
+                    logger.exception("Periodic flush failed, will retry next cycle")
 
     async def _flush(self):
         """Flush position buffer and vessel updates to database."""
@@ -96,59 +104,84 @@ class BatchWriter:
 
         mmsis = list(set(t[1] for t in positions))
 
-        async with self._pool.acquire() as conn:
-            # Insert positions using executemany (COPY not practical with PostGIS)
-            if positions:
-                await conn.executemany(
-                    """INSERT INTO vessel_positions
-                       (timestamp, mmsi, position, sog, cog, heading,
-                        nav_status, rot, draught)
-                       VALUES ($1, $2,
-                               ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
-                               $5, $6, $7, $8, $9, $10)""",
-                    positions,
-                )
-
-                # Update last_position_at for each vessel
-                for pos_tuple in positions:
-                    await conn.execute(
-                        """UPDATE vessel_profiles
-                           SET last_position_time = $1,
-                               last_lat = $2,
-                               last_lon = $3,
-                               updated_at = NOW()
-                           WHERE mmsi = $4""",
-                        pos_tuple[0],  # timestamp
-                        pos_tuple[3],  # latitude (y)
-                        pos_tuple[2],  # longitude (x)
-                        pos_tuple[1],  # mmsi
+        # Write to database — if this fails, data is lost from the buffer
+        # but the service stays alive to process new messages
+        try:
+            async with self._pool.acquire() as conn:
+                if positions:
+                    await conn.executemany(
+                        """INSERT INTO vessel_positions
+                           (timestamp, mmsi, position, sog, cog, heading,
+                            nav_status, rot, draught)
+                           VALUES ($1, $2,
+                                   ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+                                   $5, $6, $7, $8, $9, $10)""",
+                        positions,
                     )
 
-            # Upsert vessel profiles
-            for mmsi, data in vessels.items():
-                data["mmsi"] = mmsi
-                cols = list(data.keys())
-                vals = [data[c] for c in cols]
-                placeholders = [f"${i + 1}" for i in range(len(cols))]
-                updates = [
-                    f"{c} = COALESCE(EXCLUDED.{c}, vessel_profiles.{c})"
-                    for c in cols
-                    if c != "mmsi"
-                ]
-                updates.append("updated_at = NOW()")
+                    for pos_tuple in positions:
+                        await conn.execute(
+                            """UPDATE vessel_profiles
+                               SET last_position_time = $1,
+                                   last_lat = $2,
+                                   last_lon = $3,
+                                   updated_at = NOW()
+                               WHERE mmsi = $4""",
+                            pos_tuple[0],  # timestamp
+                            pos_tuple[3],  # latitude (y)
+                            pos_tuple[2],  # longitude (x)
+                            pos_tuple[1],  # mmsi
+                        )
 
-                sql = (
-                    f"INSERT INTO vessel_profiles ({', '.join(cols)})"
-                    f" VALUES ({', '.join(placeholders)})"
-                    f" ON CONFLICT (mmsi) DO UPDATE SET {', '.join(updates)}"
-                )
-                await conn.execute(sql, *vals)
+                for mmsi, data in vessels.items():
+                    data["mmsi"] = mmsi
+                    cols = list(data.keys())
+                    vals = [data[c] for c in cols]
+                    placeholders = [f"${i + 1}" for i in range(len(cols))]
+                    updates = [
+                        f"{c} = COALESCE(EXCLUDED.{c}, vessel_profiles.{c})"
+                        for c in cols
+                        if c != "mmsi"
+                    ]
+                    updates.append("updated_at = NOW()")
 
-        # Publish to Redis
+                    sql = (
+                        f"INSERT INTO vessel_profiles ({', '.join(cols)})"
+                        f" VALUES ({', '.join(placeholders)})"
+                        f" ON CONFLICT (mmsi) DO UPDATE SET {', '.join(updates)}"
+                    )
+                    await conn.execute(sql, *vals)
+        except Exception:
+            logger.exception("Database flush failed (%d positions, %d vessels)", len(positions), len(vessels))
+            return  # skip Redis publish — nothing was persisted
+
+        # Publish positions to Redis for WebSocket clients
         if positions:
-            event = json.dumps({
-                "mmsis": mmsis,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "count": len(positions),
-            })
-            await self.redis.publish("heimdal:positions", event)
+            latest: dict[int, tuple] = {}
+            for p in positions:
+                latest[p[1]] = p  # p[1] = mmsi
+
+            for p in latest.values():
+                pos_event = json.dumps({
+                    "mmsi": p[1],
+                    "lat": p[3],      # latitude (y)
+                    "lon": p[2],      # longitude (x)
+                    "sog": p[4],
+                    "cog": p[5],
+                    "heading": p[6],
+                    "nav_status": p[7],
+                    "timestamp": p[0].isoformat() if hasattr(p[0], 'isoformat') else str(p[0]),
+                    "risk_tier": "green",
+                    "risk_score": 0,
+                })
+                try:
+                    await self.redis.publish("heimdal:positions", pos_event)
+                except Exception:
+                    logger.warning("Redis publish failed for MMSI %d", p[1])
+                    break  # don't spam logs if Redis is down
+
+            if self.metrics:
+                try:
+                    await self.metrics.record_batch(len(positions), mmsis)
+                except Exception:
+                    logger.warning("Metrics recording failed")

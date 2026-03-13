@@ -4,7 +4,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+ARG VITE_CESIUM_ION_TOKEN
+ENV VITE_CESIUM_ION_TOKEN=$VITE_CESIUM_ION_TOKEN
+RUN npx vite build
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine

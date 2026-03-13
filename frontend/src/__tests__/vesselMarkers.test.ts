@@ -98,6 +98,8 @@ describe('filterVessels', () => {
     riskTiers: new Set<string>(),
     shipTypes: [] as number[],
     activeSince: null as string | null,
+    darkShipsOnly: false,
+    showGfwEventTypes: [] as string[],
   };
 
   it('returns all vessels when no filters are active', () => {
@@ -201,6 +203,8 @@ describe('selectVessel integration', () => {
         shipTypes: [],
         bbox: null,
         activeSince: null,
+        darkShipsOnly: false,
+        showGfwEventTypes: [],
       },
     });
   });

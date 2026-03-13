@@ -12,6 +12,7 @@ export const RULE_NAMES: Record<string, string> = {
   gfw_encounter: 'Vessel Encounter (GFW)',
   gfw_loitering: 'Loitering (GFW)',
   gfw_port_visit: 'Port Visit (GFW)',
+  flag_of_convenience: 'Flag of Convenience',
   gfw_dark_sar: 'Dark Vessel SAR (GFW)',
 } as const;
 

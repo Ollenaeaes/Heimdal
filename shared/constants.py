@@ -18,25 +18,26 @@ SEVERITY_POINTS: dict[str, int] = {
 # 5 GFW-sourced + 9 real-time = 14 rules
 # ---------------------------------------------------------------------------
 MAX_PER_RULE: dict[str, int] = {
-    # GFW-sourced rules
-    "gfw_ais_disabling": 50,
-    "gfw_encounter": 30,
-    "gfw_loitering": 25,
-    "gfw_port_visit": 20,
+    # GFW-sourced rules — cap at max single firing
+    "gfw_ais_disabling": 100,
+    "gfw_encounter": 100,
+    "gfw_loitering": 40,
+    "gfw_port_visit": 40,
     "gfw_dark_sar": 40,
-    # Real-time rules
-    "ais_gap": 30,
-    "sts_proximity": 25,
-    "destination_spoof": 20,
-    "draft_change": 15,
-    "flag_hopping": 25,
-    "sanctions_match": 50,
-    "vessel_age": 15,
+    # Real-time rules — cap at max single firing
+    "ais_gap": 40,
+    "sts_proximity": 40,
+    "destination_spoof": 40,
+    "draft_change": 40,
+    "flag_hopping": 40,
+    "sanctions_match": 100,
+    "vessel_age": 40,
     "speed_anomaly": 15,
-    "identity_mismatch": 50,
+    "identity_mismatch": 100,
+    "flag_of_convenience": 40,
 }
 
-# All 14 rule IDs as a frozenset for validation
+# All rule IDs as a frozenset for validation
 ALL_RULE_IDS: frozenset[str] = frozenset(MAX_PER_RULE.keys())
 
 # ---------------------------------------------------------------------------
@@ -363,6 +364,7 @@ REALTIME_RULE_IDS: list[str] = [
     "vessel_age",
     "speed_anomaly",
     "identity_mismatch",
+    "flag_of_convenience",
 ]
 
 # ---------------------------------------------------------------------------

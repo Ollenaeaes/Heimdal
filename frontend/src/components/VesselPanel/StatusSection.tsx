@@ -19,12 +19,12 @@ export function StatusSection({ vessel, mmsi }: StatusSectionProps) {
   // Prefer live WebSocket data, fall back to API data
   const lat = live?.lat ?? (vessel as any).lat;
   const lon = live?.lon ?? (vessel as any).lon;
-  const sog = live?.sog ?? (vessel as any).sog ?? null;
-  const cog = live?.cog ?? (vessel as any).cog ?? null;
-  const heading = live?.heading ?? (vessel as any).heading ?? null;
+  const sog = live?.sog ?? vessel.sog ?? null;
+  const cog = live?.cog ?? vessel.cog ?? null;
+  const heading = live?.heading ?? vessel.heading ?? null;
   const destination = live?.destination ?? vessel.destination;
   const timestamp = live?.timestamp ?? (vessel as any).timestamp;
-  const navStatus = (live as any)?.navStatus ?? (vessel as any).navStatus;
+  const navStatus = live?.navStatus ?? vessel.navStatus;
 
   const positionStr =
     lat !== undefined && lat !== null && lon !== undefined && lon !== null

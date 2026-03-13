@@ -25,6 +25,7 @@ export interface VesselStore {
   selectedMmsi: number | null;
   filters: FilterState;
   updatePosition: (update: VesselState) => void;
+  updatePositions: (updates: VesselState[]) => void;
   clearOldPositions: (maxAgeMs: number) => void;
   selectVessel: (mmsi: number | null) => void;
   setFilter: (filter: Partial<FilterState>) => void;
@@ -46,23 +47,15 @@ export const useVesselStore = create<VesselStore>((set) => ({
     set((state) => {
       const newVessels = new Map(state.vessels);
       newVessels.set(update.mmsi, update);
-
-      const newHistory = new Map(state.positionHistory);
-      const existing = newHistory.get(update.mmsi) ?? [];
-      const entry: PositionHistoryEntry = {
-        lat: update.lat,
-        lon: update.lon,
-        timestamp: update.timestamp,
-      };
-      // Append and cap at MAX_HISTORY_PER_VESSEL (drop oldest entries)
-      const updated = [...existing, entry];
-      if (updated.length > MAX_HISTORY_PER_VESSEL) {
-        newHistory.set(update.mmsi, updated.slice(updated.length - MAX_HISTORY_PER_VESSEL));
-      } else {
-        newHistory.set(update.mmsi, updated);
+      return { vessels: newVessels };
+    }),
+  updatePositions: (updates) =>
+    set((state) => {
+      const newVessels = new Map(state.vessels);
+      for (const update of updates) {
+        newVessels.set(update.mmsi, update);
       }
-
-      return { vessels: newVessels, positionHistory: newHistory };
+      return { vessels: newVessels };
     }),
   clearOldPositions: (maxAgeMs) =>
     set((state) => {

@@ -26,28 +26,40 @@ export const AIS_STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
 export type HealthLevel = 'green' | 'yellow' | 'red';
 
 export function computeHealthLevel(data: HealthResponse): { level: HealthLevel; message: string } {
+  const services = data.services ?? {};
+
   // Check if any service is unhealthy
-  for (const [name, svc] of Object.entries(data.services)) {
+  for (const [name, svc] of Object.entries(services)) {
     if (svc.status === 'unhealthy') {
       return { level: 'red', message: `${name} is unhealthy` };
     }
   }
 
   // Check if any service is degraded
-  for (const [name, svc] of Object.entries(data.services)) {
+  for (const [name, svc] of Object.entries(services)) {
     if (svc.status === 'degraded') {
       return { level: 'yellow', message: `${name} is degraded` };
     }
   }
 
-  // Check AIS stale
-  const ais = data.services.ais_stream;
+  // Fallback: check top-level status field (legacy API shape)
+  if (data.status === 'unhealthy') {
+    return { level: 'red', message: 'System unhealthy' };
+  }
+  if (data.status === 'degraded') {
+    return { level: 'yellow', message: 'System degraded' };
+  }
+
+  // Check AIS stale via services or top-level flag
+  const ais = services.ais_stream;
   if (ais?.last_message_at) {
     const lastMsg = parseISO(ais.last_message_at).getTime();
     const age = Date.now() - lastMsg;
     if (age > AIS_STALE_THRESHOLD_MS) {
       return { level: 'yellow', message: 'AIS stream stale' };
     }
+  } else if ('ais_connected' in data && !(data as Record<string, unknown>).ais_connected) {
+    return { level: 'yellow', message: 'AIS stream disconnected' };
   }
 
   return { level: 'green', message: 'All systems operational' };

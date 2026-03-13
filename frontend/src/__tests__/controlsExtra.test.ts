@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { subHours, subDays } from 'date-fns';
 import { useVesselStore } from '../hooks/useVesselStore';
 import { TIME_PRESETS } from '../components/Controls/TimeRangeFilter';
@@ -21,6 +21,8 @@ describe('TimeRangeFilter', () => {
         shipTypes: [],
         bbox: null,
         activeSince: null,
+        darkShipsOnly: false,
+        showGfwEventTypes: [],
       },
     });
   });

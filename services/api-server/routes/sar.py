@@ -68,4 +68,23 @@ async def get_sar_detections(
             )
         ]
 
-    return {"items": rows, "total": len(rows), "page": page, "per_page": per_page}
+    # Transform to frontend-expected camelCase format
+    items = []
+    for r in rows:
+        items.append({
+            "id": str(r.get("id", r.get("gfw_detection_id", ""))),
+            "detectedAt": r["detection_time"].isoformat() if r.get("detection_time") else None,
+            "lat": r.get("lat"),
+            "lon": r.get("lon"),
+            "estimatedLength": r.get("length_m"),
+            "isDark": r.get("is_dark", False),
+            "matchingScore": r.get("matching_score"),
+            "fishingScore": r.get("fishing_score"),
+            "matchedMmsi": r.get("matched_mmsi"),
+            "matchedCategory": r.get("matched_category"),
+            "matchedVesselName": None,
+            "satellite": r.get("source"),
+            "imageUrl": None,
+        })
+
+    return items

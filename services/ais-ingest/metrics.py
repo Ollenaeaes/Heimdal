@@ -50,8 +50,8 @@ class MetricsPublisher:
             elapsed = 1
         rate = total / elapsed
 
-        # Publish to Redis
-        await self.redis.set(self.RATE_KEY, f"{rate:.1f}")
+        # Publish to Redis — rate key expires if no batches arrive
+        await self.redis.set(self.RATE_KEY, f"{rate:.1f}", ex=self.WINDOW_SECONDS * 2)
         await self.redis.set(
             self.LAST_MESSAGE_KEY,
             datetime.now(timezone.utc).isoformat(),

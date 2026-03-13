@@ -46,6 +46,20 @@ GFW_EVENT_TYPE_MAP = {
 }
 
 
+def _parse_iso(value: str | None) -> datetime | None:
+    """Parse an ISO 8601 timestamp string to a timezone-aware datetime."""
+    if not value:
+        return None
+    try:
+        # Python 3.11+ handles 'Z' suffix in fromisoformat
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
 def _build_date_range(lookback_days: int | None = None) -> tuple[str, str]:
     """Build ISO date strings for the lookback window."""
     days = lookback_days if lookback_days is not None else settings.gfw.events_lookback_days
@@ -153,12 +167,16 @@ def parse_event(raw: dict[str, Any]) -> dict[str, Any] | None:
     elif event_type == "PORT_VISIT":
         port_name = _extract_port_name(raw)
 
+    # Parse ISO timestamps to datetime objects for asyncpg
+    start_time = _parse_iso(raw.get("start"))
+    end_time = _parse_iso(raw.get("end"))
+
     return {
         "gfw_event_id": str(gfw_event_id),
         "event_type": event_type,
         "mmsi": int(mmsi),
-        "start_time": raw.get("start"),
-        "end_time": raw.get("end"),
+        "start_time": start_time,
+        "end_time": end_time,
         "lat": lat,
         "lon": lon,
         "details": details,
@@ -172,21 +190,34 @@ async def fetch_events_for_mmsi(
     mmsi: int,
     *,
     lookback_days: int | None = None,
+    redis_client: Any = None,
 ) -> list[dict[str, Any]]:
     """Fetch all GFW events for a single MMSI.
+
+    Resolves the MMSI to a GFW vessel ID first, since the Events API
+    requires GFW internal IDs rather than raw MMSIs.
 
     Args:
         client: An initialized GFWClient instance.
         mmsi: The vessel MMSI to query.
         lookback_days: Override for settings.gfw.events_lookback_days.
+        redis_client: Optional Redis client for caching vessel ID lookups.
 
     Returns:
         List of parsed event dicts ready for bulk_upsert_gfw_events.
     """
+    from vessel_fetcher import resolve_gfw_vessel_id
+
+    # Resolve MMSI to GFW vessel ID
+    gfw_id = await resolve_gfw_vessel_id(client, mmsi, redis_client=redis_client)
+    if not gfw_id:
+        logger.debug("No GFW vessel ID found for MMSI %d, skipping events", mmsi)
+        return []
+
     start_date, end_date = _build_date_range(lookback_days)
 
     params = {
-        "vessels[0]": str(mmsi),
+        "vessels[0]": gfw_id,
         "start-date": start_date,
         "end-date": end_date,
     }
@@ -195,7 +226,7 @@ async def fetch_events_for_mmsi(
     for i, dataset in enumerate(EVENT_DATASETS):
         params[f"datasets[{i}]"] = dataset
 
-    logger.debug("Fetching events for MMSI %d from %s to %s", mmsi, start_date, end_date)
+    logger.debug("Fetching events for MMSI %d (GFW ID %s) from %s to %s", mmsi, gfw_id, start_date, end_date)
 
     try:
         raw_events = await client.get_all_pages(
@@ -211,7 +242,7 @@ async def fetch_events_for_mmsi(
     for raw in raw_events:
         event = parse_event(raw)
         if event is not None:
-            # Override MMSI from our query in case the response has a different format
+            # Ensure MMSI is set from our query
             if not event.get("mmsi"):
                 event["mmsi"] = mmsi
             parsed.append(event)
@@ -225,6 +256,7 @@ async def fetch_events_for_mmsis(
     mmsis: list[int],
     *,
     lookback_days: int | None = None,
+    redis_client: Any = None,
 ) -> list[dict[str, Any]]:
     """Fetch GFW events for multiple MMSIs.
 
@@ -232,6 +264,7 @@ async def fetch_events_for_mmsis(
         client: An initialized GFWClient instance.
         mmsis: List of MMSIs to query.
         lookback_days: Override for settings.gfw.events_lookback_days.
+        redis_client: Optional Redis client for caching vessel ID lookups.
 
     Returns:
         Combined list of parsed events for all MMSIs.
@@ -245,7 +278,9 @@ async def fetch_events_for_mmsis(
     )
 
     for mmsi in mmsis:
-        events = await fetch_events_for_mmsi(client, mmsi, lookback_days=lookback_days)
+        events = await fetch_events_for_mmsi(
+            client, mmsi, lookback_days=lookback_days, redis_client=redis_client,
+        )
         all_events.extend(events)
 
     logger.info("Total GFW events fetched: %d for %d vessels", len(all_events), len(mmsis))
@@ -258,6 +293,7 @@ async def fetch_and_store_events(
     mmsis: list[int],
     *,
     lookback_days: int | None = None,
+    redis_client: Any = None,
     _upsert_fn: Any = None,
 ) -> int:
     """Fetch GFW events and upsert them into the database.
@@ -276,7 +312,9 @@ async def fetch_and_store_events(
         from shared.db.repositories import bulk_upsert_gfw_events
         _upsert_fn = bulk_upsert_gfw_events
 
-    events = await fetch_events_for_mmsis(client, mmsis, lookback_days=lookback_days)
+    events = await fetch_events_for_mmsis(
+        client, mmsis, lookback_days=lookback_days, redis_client=redis_client,
+    )
     if not events:
         return 0
 
