@@ -7,6 +7,7 @@ changes are a strong indicator of sanctions evasion.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
 
@@ -123,6 +124,8 @@ class FlagHoppingRule(ScoringRule):
                     date_str = entry.get("date_of_effect")
                     if date_str:
                         try:
+                            # Strip "since " / "during " prefix from equasis parser output
+                            date_str = re.sub(r"^(?:since|during)\s+", "", date_str)
                             parts = date_str.split("/")
                             if len(parts) == 3:
                                 flag_date = datetime(

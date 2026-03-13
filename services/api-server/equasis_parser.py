@@ -97,7 +97,11 @@ def _parse_ship_particulars(text: str) -> dict:
     sp["imo"] = int(m.group(1)) if m else None
 
     m = re.search(r"Name of ship\s*:\s*(.+)", text)
-    sp["name"] = m.group(1).strip() if m else None
+    name = m.group(1).strip() if m else None
+    if name:
+        # Strip trailing "(since ..." artefact from multi-line PDF extraction
+        name = re.sub(r"\s*\(since$", "", name)
+    sp["name"] = name
 
     m = re.search(r"Call sign\s*:\s*(\S+)", text)
     sp["call_sign"] = m.group(1) if m else None

@@ -42,10 +42,52 @@ _ALPHA3_TO_ALPHA2: dict[str, str] = {
 }
 
 
+_NAME_TO_ALPHA2: dict[str, str] = {
+    "ANTIGUA AND BARBUDA": "AG", "AUSTRALIA": "AU", "BAHAMAS": "BS",
+    "BARBADOS": "BB", "BELGIUM": "BE", "BELIZE": "BZ", "BERMUDA": "BM",
+    "BRAZIL": "BR", "BULGARIA": "BG", "CAMEROON": "CM", "CANADA": "CA",
+    "CHILE": "CL", "CHINA": "CN", "COLOMBIA": "CO", "COMOROS": "KM",
+    "COOK ISLANDS": "CK", "COSTA RICA": "CR", "CROATIA": "HR", "CUBA": "CU",
+    "CYPRUS": "CY", "DENMARK": "DK", "DOMINICA": "DM",
+    "DOMINICAN REPUBLIC": "DO", "ECUADOR": "EC", "EGYPT": "EG",
+    "ESTONIA": "EE", "FAROE ISLANDS": "FO", "FIJI": "FJ", "FINLAND": "FI",
+    "FRANCE": "FR", "GABON": "GA", "GEORGIA": "GE", "GERMANY": "DE",
+    "GHANA": "GH", "GIBRALTAR": "GI", "GREECE": "GR", "GRENADA": "GD",
+    "GUATEMALA": "GT", "HONDURAS": "HN", "HONG KONG": "HK", "ICELAND": "IS",
+    "INDIA": "IN", "INDONESIA": "ID", "IRAN": "IR", "IRELAND": "IE",
+    "ISLE OF MAN": "IM", "ISRAEL": "IL", "ITALY": "IT", "JAMAICA": "JM",
+    "JAPAN": "JP", "KENYA": "KE", "KIRIBATI": "KI", "KOREA": "KR",
+    "SOUTH KOREA": "KR", "KUWAIT": "KW", "LATVIA": "LV", "LEBANON": "LB",
+    "LIBERIA": "LR", "LITHUANIA": "LT", "LUXEMBOURG": "LU", "MALAYSIA": "MY",
+    "MALDIVES": "MV", "MALTA": "MT", "MARSHALL ISLANDS": "MH",
+    "MAURITIUS": "MU", "MEXICO": "MX", "MONACO": "MC", "MONTENEGRO": "ME",
+    "MOROCCO": "MA", "MOZAMBIQUE": "MZ", "MYANMAR": "MM",
+    "NETHERLANDS": "NL", "NEW ZEALAND": "NZ", "NICARAGUA": "NI",
+    "NIGERIA": "NG", "NORWAY": "NO", "PALAU": "PW", "PANAMA": "PA",
+    "PAPUA NEW GUINEA": "PG", "PERU": "PE", "PHILIPPINES": "PH",
+    "POLAND": "PL", "PORTUGAL": "PT", "QATAR": "QA", "ROMANIA": "RO",
+    "RUSSIA": "RU", "RUSSIAN FEDERATION": "RU", "SAINT KITTS AND NEVIS": "KN",
+    "SAINT VINCENT AND THE GRENADINES": "VC", "SAINT VINCENT": "VC",
+    "SAMOA": "WS", "SAUDI ARABIA": "SA", "SENEGAL": "SN", "SIERRA LEONE": "SL",
+    "SINGAPORE": "SG", "SLOVENIA": "SI", "SOUTH AFRICA": "ZA", "SPAIN": "ES",
+    "SRI LANKA": "LK", "SWEDEN": "SE", "SWITZERLAND": "CH", "TAIWAN": "TW",
+    "TANZANIA": "TZ", "THAILAND": "TH", "TOGO": "TG", "TONGA": "TO",
+    "TRINIDAD AND TOBAGO": "TT", "TUNISIA": "TN", "TURKEY": "TR",
+    "TUVALU": "TV", "UKRAINE": "UA", "UNITED ARAB EMIRATES": "AE",
+    "UNITED KINGDOM": "GB", "UNITED STATES": "US", "URUGUAY": "UY",
+    "VANUATU": "VU", "VENEZUELA": "VE", "VIETNAM": "VN",
+    "CAYMAN ISLANDS": "KY",
+}
+
+
 def _normalize_flag(flag: str) -> str:
-    """Normalize a flag code to ISO alpha-2 uppercase."""
+    """Normalize a flag code or country name to ISO alpha-2 uppercase."""
     flag = flag.strip().upper()
-    return _ALPHA3_TO_ALPHA2.get(flag, flag)
+    if flag in _ALPHA3_TO_ALPHA2:
+        return _ALPHA3_TO_ALPHA2[flag]
+    if flag in _NAME_TO_ALPHA2:
+        return _NAME_TO_ALPHA2[flag]
+    return flag
 
 
 class IdentityMismatchRule(ScoringRule):
