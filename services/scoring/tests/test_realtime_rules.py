@@ -210,12 +210,13 @@ class TestDestinationSpoof:
         return DestinationSpoofRule()
 
     @pytest.mark.asyncio
-    async def test_for_orders_fires_high(self, rule):
+    async def test_for_orders_fires_low(self, rule):
+        """FOR ORDERS is standard maritime practice, low severity."""
         profile = {"destination": "FOR ORDERS"}
         result = await rule.evaluate(123456789, profile, [], [], [])
         assert result.fired is True
-        assert result.severity == "high"
-        assert result.points == 40.0
+        assert result.severity == "low"
+        assert result.points == 5.0
 
     @pytest.mark.asyncio
     async def test_tbn_fires_high(self, rule):
@@ -226,20 +227,20 @@ class TestDestinationSpoof:
         assert result.points == 40.0
 
     @pytest.mark.asyncio
-    async def test_mediterranean_fires_high(self, rule):
+    async def test_mediterranean_fires_moderate(self, rule):
         profile = {"destination": "MEDITERRANEAN"}
         result = await rule.evaluate(123456789, profile, [], [], [])
         assert result.fired is True
-        assert result.severity == "high"
-        assert result.points == 40.0
+        assert result.severity == "moderate"
+        assert result.points == 15.0
 
     @pytest.mark.asyncio
-    async def test_caribbean_sea_fires_high(self, rule):
+    async def test_caribbean_sea_fires_moderate(self, rule):
         profile = {"destination": "Caribbean Sea"}
         result = await rule.evaluate(123456789, profile, [], [], [])
         assert result.fired is True
-        assert result.severity == "high"
-        assert result.points == 40.0
+        assert result.severity == "moderate"
+        assert result.points == 15.0
 
     @pytest.mark.asyncio
     async def test_normal_port_does_not_fire(self, rule):

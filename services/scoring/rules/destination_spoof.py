@@ -15,12 +15,16 @@ from shared.models.anomaly import RuleResult
 
 from .base import ScoringRule
 
-# Exact-match placeholders (case-insensitive)
+# Truly evasive placeholders (case-insensitive)
 _PLACEHOLDER_PATTERNS: set[str] = {
-    "FOR ORDERS",
-    "FOR ORDER",
     "TBN",
     "TBA",
+}
+
+# Common maritime vague destinations — low severity, not evasive
+_VAGUE_PATTERNS: set[str] = {
+    "FOR ORDERS",
+    "FOR ORDER",
 }
 
 # Sea-area names (case-insensitive substring match)
@@ -68,8 +72,7 @@ class DestinationSpoofRule(ScoringRule):
         if not destination:
             return None
 
-        # Check placeholder patterns (substring match — destination may have
-        # port prefix like "EE TLL FOR ORDERS")
+        # Check truly evasive placeholders (TBN, TBA)
         for pattern in _PLACEHOLDER_PATTERNS:
             if pattern in destination:
                 return RuleResult(
@@ -87,9 +90,22 @@ class DestinationSpoofRule(ScoringRule):
                 return RuleResult(
                     fired=True,
                     rule_id=self.rule_id,
-                    severity="high",
-                    points=40.0,
+                    severity="moderate",
+                    points=15.0,
                     details={"destination": destination, "reason": "sea_area_destination"},
+                    source="realtime",
+                )
+
+        # Check vague but common maritime destinations (FOR ORDERS etc.)
+        # These are standard practice, not inherently suspicious
+        for pattern in _VAGUE_PATTERNS:
+            if pattern in destination:
+                return RuleResult(
+                    fired=True,
+                    rule_id=self.rule_id,
+                    severity="low",
+                    points=5.0,
+                    details={"destination": destination, "reason": "vague_destination"},
                     source="realtime",
                 )
 
@@ -125,8 +141,8 @@ class DestinationSpoofRule(ScoringRule):
         if not destination:
             return False
 
-        # Check if the current destination is still a placeholder
-        for pattern in _PLACEHOLDER_PATTERNS:
+        # Check if the current destination is still a placeholder or vague
+        for pattern in _PLACEHOLDER_PATTERNS | _VAGUE_PATTERNS:
             if pattern in destination:
                 return False  # still a placeholder
 
