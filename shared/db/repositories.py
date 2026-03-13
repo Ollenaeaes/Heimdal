@@ -33,7 +33,7 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
                 owner, operator, insurer, class_society, build_year,
                 dwt, gross_tonnage, group_owner, registered_owner,
                 technical_manager,
-                classification_data, insurance_data, enrichment_status, enriched_at,
+                ownership_data, classification_data, insurance_data, enrichment_status, enriched_at,
                 updated_at
             ) VALUES (
                 :mmsi, :imo, :ship_name, :ship_type, :ship_type_text,
@@ -43,7 +43,7 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
                 :owner, :operator, :insurer, :class_society, :build_year,
                 :dwt, :gross_tonnage, :group_owner, :registered_owner,
                 :technical_manager,
-                :classification_data, :insurance_data, :enrichment_status, :enriched_at,
+                :ownership_data, :classification_data, :insurance_data, :enrichment_status, :enriched_at,
                 NOW()
             )
             ON CONFLICT (mmsi) DO UPDATE SET
@@ -76,6 +76,7 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
                 group_owner = COALESCE(EXCLUDED.group_owner, vessel_profiles.group_owner),
                 registered_owner = COALESCE(EXCLUDED.registered_owner, vessel_profiles.registered_owner),
                 technical_manager = COALESCE(EXCLUDED.technical_manager, vessel_profiles.technical_manager),
+                ownership_data = COALESCE(EXCLUDED.ownership_data, vessel_profiles.ownership_data),
                 classification_data = COALESCE(EXCLUDED.classification_data, vessel_profiles.classification_data),
                 insurance_data = COALESCE(EXCLUDED.insurance_data, vessel_profiles.insurance_data),
                 enrichment_status = COALESCE(EXCLUDED.enrichment_status, vessel_profiles.enrichment_status),

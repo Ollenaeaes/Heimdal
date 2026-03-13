@@ -160,6 +160,158 @@ def build_insurance_data(
     }
 
 
+def build_ownership_data(
+    raw_identity: dict[str, Any],
+    existing_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Extract detailed ownership chain from a GFW vessel identity response.
+
+    Parses registryOwners, registryOperators, and fallback fields (registryInfo,
+    combinedSourcesInfo, top-level owner/operator) into a structured ownership_data
+    JSONB dict.
+
+    If ownership has changed compared to existing_profile, a history entry is
+    appended. Multiple enrichment cycles accumulate history without overwriting.
+
+    Returns an ownership_data dict (never None — returns unknown status if no data).
+    """
+    owners: list[dict[str, Any]] = []
+
+    # 1. Try registryOwners (structured list from GFW)
+    registry_owners = raw_identity.get("registryOwners")
+    if isinstance(registry_owners, list):
+        for entry in registry_owners:
+            if isinstance(entry, dict) and entry.get("name"):
+                owners.append({
+                    "name": entry["name"],
+                    "country": entry.get("country") or entry.get("flag"),
+                    "role": "owner",
+                    "fleet_size": None,
+                    "incorporated_date": entry.get("incorporatedDate"),
+                })
+
+    # 2. Try registryOperators
+    registry_operators = raw_identity.get("registryOperators")
+    if isinstance(registry_operators, list):
+        for entry in registry_operators:
+            if isinstance(entry, dict) and entry.get("name"):
+                owners.append({
+                    "name": entry["name"],
+                    "country": entry.get("country") or entry.get("flag"),
+                    "role": "operator",
+                    "fleet_size": None,
+                    "incorporated_date": entry.get("incorporatedDate"),
+                })
+
+    # 3. Fallback: extract owner/operator from registryInfo / combinedSourcesInfo / top-level
+    if not owners:
+        registry_info = _get_first_entry(raw_identity, "registryInfo")
+        combined_info = _get_first_entry(raw_identity, "combinedSourcesInfo")
+
+        owner_name = (
+            registry_info.get("owner")
+            or combined_info.get("owner")
+            or raw_identity.get("owner")
+        )
+        operator_name = (
+            registry_info.get("operator")
+            or combined_info.get("operator")
+            or raw_identity.get("operator")
+        )
+
+        if owner_name:
+            owners.append({
+                "name": owner_name,
+                "country": None,
+                "role": "owner",
+                "fleet_size": None,
+                "incorporated_date": None,
+            })
+        if operator_name and operator_name != owner_name:
+            owners.append({
+                "name": operator_name,
+                "country": None,
+                "role": "operator",
+                "fleet_size": None,
+                "incorporated_date": None,
+            })
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Determine ownership status
+    if not owners:
+        return {
+            "owners": [],
+            "single_vessel_company": False,
+            "ownership_status": "unknown",
+            "last_updated": now_iso,
+            "history": _get_existing_history(existing_profile),
+        }
+
+    # Check single_vessel_company: any owner with fleet_size == 1
+    single_vessel = any(
+        o.get("fleet_size") == 1 for o in owners
+    )
+
+    # Build result
+    result: dict[str, Any] = {
+        "owners": owners,
+        "single_vessel_company": single_vessel,
+        "ownership_status": "verified",
+        "last_updated": now_iso,
+        "history": [],
+    }
+
+    # Detect ownership changes and accumulate history
+    if existing_profile:
+        existing_ownership = _parse_existing_ownership(existing_profile)
+        existing_history = existing_ownership.get("history", []) if existing_ownership else []
+        result["history"] = list(existing_history)
+
+        if existing_ownership:
+            old_owner_names = _extract_owner_names(existing_ownership.get("owners", []))
+            new_owner_names = _extract_owner_names(owners)
+
+            if old_owner_names and old_owner_names != new_owner_names:
+                result["history"].append({
+                    "date": now_iso,
+                    "change": "owner_changed",
+                    "from": ", ".join(sorted(old_owner_names)),
+                    "to": ", ".join(sorted(new_owner_names)),
+                })
+    return result
+
+
+def _get_existing_history(existing_profile: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Extract existing history from an existing profile's ownership_data."""
+    if not existing_profile:
+        return []
+    existing_ownership = _parse_existing_ownership(existing_profile)
+    if existing_ownership:
+        return list(existing_ownership.get("history", []))
+    return []
+
+
+def _parse_existing_ownership(existing_profile: dict[str, Any]) -> dict[str, Any] | None:
+    """Parse ownership_data from an existing profile (may be dict or JSON string)."""
+    existing_data = existing_profile.get("ownership_data")
+    if not existing_data:
+        return None
+    if isinstance(existing_data, str):
+        try:
+            return json.loads(existing_data)
+        except (ValueError, TypeError):
+            return None
+    if isinstance(existing_data, dict):
+        return existing_data
+    return None
+
+
+def _extract_owner_names(owners: list[dict[str, Any]]) -> set[str]:
+    """Extract a set of owner/operator names from an owners list."""
+    return {o["name"] for o in owners if o.get("name")}
+
+
 def _get_first_entry(raw: dict[str, Any], key: str) -> dict[str, Any]:
     """Get the first entry from a list-or-dict field in GFW response."""
     value = raw.get(key)
@@ -659,11 +811,12 @@ async def fetch_and_update_vessel_profile(
     # We need the original GFW response entry, not parsed identity
     raw_entry = _raw_entry or {}
 
-    # Build classification and insurance data
+    # Build classification, insurance, and ownership data
     classification_data = build_classification_data(raw_entry, existing_profile)
     insurance_data = build_insurance_data(
         raw_entry, existing_profile, manual_enrichments
     )
+    ownership_data = build_ownership_data(raw_entry, existing_profile)
 
     # Build the upsert data — fill missing fields with None for COALESCE
     profile_data = {
@@ -697,6 +850,7 @@ async def fetch_and_update_vessel_profile(
         "group_owner": None,
         "registered_owner": identity.get("registered_owner"),
         "technical_manager": None,
+        "ownership_data": json.dumps(ownership_data) if ownership_data else None,
         "classification_data": json.dumps(classification_data) if classification_data else None,
         "insurance_data": json.dumps(insurance_data) if insurance_data else None,
         "enrichment_status": None,

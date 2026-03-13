@@ -4,6 +4,7 @@
 
 ALTER TABLE vessel_profiles ADD COLUMN IF NOT EXISTS classification_data JSONB;
 ALTER TABLE vessel_profiles ADD COLUMN IF NOT EXISTS insurance_data JSONB;
+ALTER TABLE vessel_profiles ADD COLUMN IF NOT EXISTS ownership_data JSONB;
 ALTER TABLE vessel_profiles ADD COLUMN IF NOT EXISTS enrichment_status JSONB;
 ALTER TABLE vessel_profiles ADD COLUMN IF NOT EXISTS enriched_at TIMESTAMPTZ;
 
