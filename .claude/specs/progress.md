@@ -5,8 +5,8 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 ## Current Feature
 
 **Spec:** Wave Plan — 21 specs across 9 waves (GFW Integration)
-**Branch:** feature/wave-8-scoring-observability
-**Status:** Wave 8 in progress
+**Branch:** feature/wave-9-enrichment-performance
+**Status:** Wave 9 in progress
 
 ## Stories Completed
 
@@ -189,9 +189,17 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 56 new tests
 - Commits: `1b59be3`, `5041c60`, `79338ae`, `a10177a`, `253d916`
 
+### 21-performance-optimization Story 1: CPU Profiling and Bottleneck Identification
+- Profiling scripts: scripts/profile_scoring.py (aggregation + rule discovery), scripts/profile_ingest.py (parsing + JSON)
+- Performance documentation: docs/PERFORMANCE.md with 6 prioritized bottlenecks, memory targets, next steps
+- Tests: 10 new tests in tests/test_profiling_scripts.py (import checks, function existence, PERFORMANCE.md content)
+- Key finding confirmed by profiling: json.loads inside aggregate_score consumes ~46% of scoring CPU time (5M calls for 10K iterations)
+- Rule discovery overhead is minimal (~0.6s for 100 iterations, 19 rules discovered)
+
 ## Current Story
 
-Wave 8 complete. All 3 specs (17, 18, 19) implemented.
+Wave 9 in progress. Spec 20 (yellow-enrichment-path) + Spec 21 (performance-optimization).
+Spec 21 Story 1 complete. Stories 2+ pending.
 
 ## Known Issues
 
