@@ -622,3 +622,122 @@ async def list_sar_detections(
         params,
     )
     return [dict(r) for r in result.mappings().all()]
+
+
+# ===================================================================
+# Equasis Data
+# ===================================================================
+
+
+async def insert_equasis_data(
+    session: AsyncSession, data: dict[str, Any]
+) -> int:
+    """Insert a row into equasis_data. Returns the new id."""
+    result = await session.execute(
+        text("""
+            INSERT INTO equasis_data (
+                mmsi, imo, upload_timestamp, edition_date,
+                ship_particulars, management, classification_status,
+                classification_surveys, safety_certificates, psc_inspections,
+                name_history, flag_history, company_history, raw_extracted
+            ) VALUES (
+                :mmsi, :imo, :upload_timestamp, :edition_date,
+                :ship_particulars, :management, :classification_status,
+                :classification_surveys, :safety_certificates, :psc_inspections,
+                :name_history, :flag_history, :company_history, :raw_extracted
+            )
+            RETURNING id
+        """),
+        data,
+    )
+    row = result.first()
+    return row[0] if row else 0
+
+
+async def get_latest_equasis_data(
+    session: AsyncSession, mmsi: int
+) -> dict[str, Any] | None:
+    """Get the most recent equasis_data row for a vessel."""
+    result = await session.execute(
+        text("""
+            SELECT * FROM equasis_data
+            WHERE mmsi = :mmsi
+            ORDER BY upload_timestamp DESC
+            LIMIT 1
+        """),
+        {"mmsi": mmsi},
+    )
+    row = result.mappings().first()
+    return dict(row) if row else None
+
+
+async def list_equasis_uploads(
+    session: AsyncSession, mmsi: int
+) -> list[dict[str, Any]]:
+    """List all equasis uploads for a vessel (summary data only)."""
+    result = await session.execute(
+        text("""
+            SELECT id, upload_timestamp, edition_date
+            FROM equasis_data
+            WHERE mmsi = :mmsi
+            ORDER BY upload_timestamp DESC
+        """),
+        {"mmsi": mmsi},
+    )
+    return [dict(r) for r in result.mappings().all()]
+
+
+async def get_equasis_upload_by_id(
+    session: AsyncSession, upload_id: int
+) -> dict[str, Any] | None:
+    """Get a specific equasis upload by id."""
+    result = await session.execute(
+        text("SELECT * FROM equasis_data WHERE id = :upload_id"),
+        {"upload_id": upload_id},
+    )
+    row = result.mappings().first()
+    return dict(row) if row else None
+
+
+async def update_vessel_profile_from_equasis(
+    session: AsyncSession, mmsi: int, equasis_data: dict[str, Any]
+) -> None:
+    """Update vessel_profiles fields from equasis data.
+
+    Only updates fields that have non-None values in equasis_data.
+    """
+    field_map = {
+        "registered_owner": "registered_owner",
+        "technical_manager": "technical_manager",
+        "operator": "operator",
+        "class_society": "class_society",
+        "build_year": "build_year",
+        "dwt": "dwt",
+        "gross_tonnage": "gross_tonnage",
+        "flag_country": "flag_country",
+        "ship_name": "ship_name",
+        "call_sign": "call_sign",
+        "ship_type_text": "ship_type_text",
+        "length": "length",
+        "width": "width",
+    }
+
+    set_clauses = []
+    params: dict[str, Any] = {"mmsi": mmsi}
+
+    for field_name, col_name in field_map.items():
+        value = equasis_data.get(field_name)
+        if value is not None:
+            set_clauses.append(f"{col_name} = :{field_name}")
+            params[field_name] = value
+
+    if not set_clauses:
+        return
+
+    set_clauses.append("updated_at = NOW()")
+    set_sql = ", ".join(set_clauses)
+
+    await session.execute(
+        text(f"UPDATE vessel_profiles SET {set_sql} WHERE mmsi = :mmsi"),
+        params,
+    )
