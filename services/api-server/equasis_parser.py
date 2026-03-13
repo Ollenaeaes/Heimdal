@@ -96,8 +96,8 @@ def _parse_ship_particulars(text: str) -> dict:
     m = re.search(r"IMO number\s*:\s*(\d+)", text)
     sp["imo"] = int(m.group(1)) if m else None
 
-    m = re.search(r"Name of ship\s*:\s*(\S+)", text)
-    sp["name"] = m.group(1) if m else None
+    m = re.search(r"Name of ship\s*:\s*(.+)", text)
+    sp["name"] = m.group(1).strip() if m else None
 
     m = re.search(r"Call sign\s*:\s*(\S+)", text)
     sp["call_sign"] = m.group(1) if m else None
