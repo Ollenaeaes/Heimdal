@@ -32,7 +32,9 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
                 risk_score, risk_tier, sanctions_status, pi_tier, pi_details,
                 owner, operator, insurer, class_society, build_year,
                 dwt, gross_tonnage, group_owner, registered_owner,
-                technical_manager, updated_at
+                technical_manager,
+                classification_data, insurance_data, enrichment_status, enriched_at,
+                updated_at
             ) VALUES (
                 :mmsi, :imo, :ship_name, :ship_type, :ship_type_text,
                 :flag_country, :call_sign, :length, :width, :draught,
@@ -40,7 +42,9 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
                 :risk_score, :risk_tier, :sanctions_status, :pi_tier, :pi_details,
                 :owner, :operator, :insurer, :class_society, :build_year,
                 :dwt, :gross_tonnage, :group_owner, :registered_owner,
-                :technical_manager, NOW()
+                :technical_manager,
+                :classification_data, :insurance_data, :enrichment_status, :enriched_at,
+                NOW()
             )
             ON CONFLICT (mmsi) DO UPDATE SET
                 imo = COALESCE(EXCLUDED.imo, vessel_profiles.imo),
@@ -72,6 +76,10 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
                 group_owner = COALESCE(EXCLUDED.group_owner, vessel_profiles.group_owner),
                 registered_owner = COALESCE(EXCLUDED.registered_owner, vessel_profiles.registered_owner),
                 technical_manager = COALESCE(EXCLUDED.technical_manager, vessel_profiles.technical_manager),
+                classification_data = COALESCE(EXCLUDED.classification_data, vessel_profiles.classification_data),
+                insurance_data = COALESCE(EXCLUDED.insurance_data, vessel_profiles.insurance_data),
+                enrichment_status = COALESCE(EXCLUDED.enrichment_status, vessel_profiles.enrichment_status),
+                enriched_at = COALESCE(EXCLUDED.enriched_at, vessel_profiles.enriched_at),
                 updated_at = NOW()
         """),
         data,
