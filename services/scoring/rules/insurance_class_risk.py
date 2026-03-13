@@ -195,6 +195,143 @@ class InsuranceClassRiskRule(ScoringRule):
             total_points += 8
             max_severity = _escalate(max_severity, "moderate")
 
+        # --- NEW: Equasis PSC data ---
+        equasis_data = profile.get("equasis_data")
+        if equasis_data:
+            psc_inspections = equasis_data.get("psc_inspections", [])
+            if isinstance(psc_inspections, list):
+                from datetime import datetime, timezone, timedelta
+
+                three_years_ago = datetime.now(timezone.utc) - timedelta(
+                    days=3 * 365
+                )
+
+                recent_detentions = 0
+                recent_deficiencies = 0
+                for insp in psc_inspections:
+                    # Parse date
+                    date_str = insp.get("date")
+                    if not date_str:
+                        continue
+                    try:
+                        parts = date_str.split("/")
+                        insp_date = datetime(
+                            int(parts[2]),
+                            int(parts[1]),
+                            int(parts[0]),
+                            tzinfo=timezone.utc,
+                        )
+                    except (ValueError, IndexError):
+                        continue
+                    if insp_date < three_years_ago:
+                        continue
+
+                    # Count detentions
+                    if insp.get("detention") is True or str(
+                        insp.get("detention", "")
+                    ).upper() == "Y":
+                        recent_detentions += 1
+
+                    # Count deficiencies
+                    deficiency_count = insp.get("deficiencies")
+                    if deficiency_count is not None:
+                        try:
+                            recent_deficiencies += int(deficiency_count)
+                        except (ValueError, TypeError):
+                            pass
+
+                # Detention findings (capped at 2 detentions = 30 pts)
+                if recent_detentions > 0:
+                    det_count = min(recent_detentions, 2)
+                    det_points = det_count * 15
+                    findings.append(
+                        {
+                            "check": "psc_detention",
+                            "severity": "high",
+                            "points": det_points,
+                            "detention_count": recent_detentions,
+                            "reason": f"{recent_detentions} PSC detention(s) in last 3 years",
+                        }
+                    )
+                    total_points += det_points
+                    max_severity = _escalate(max_severity, "high")
+
+                # Deficiency findings
+                if recent_deficiencies > 25:
+                    findings.append(
+                        {
+                            "check": "psc_high_deficiencies",
+                            "severity": "high",
+                            "points": 15,
+                            "deficiency_count": recent_deficiencies,
+                            "reason": f"{recent_deficiencies} PSC deficiencies in last 3 years (>25)",
+                        }
+                    )
+                    total_points += 15
+                    max_severity = _escalate(max_severity, "high")
+                elif recent_deficiencies > 10:
+                    findings.append(
+                        {
+                            "check": "psc_moderate_deficiencies",
+                            "severity": "moderate",
+                            "points": 8,
+                            "deficiency_count": recent_deficiencies,
+                            "reason": f"{recent_deficiencies} PSC deficiencies in last 3 years (>10)",
+                        }
+                    )
+                    total_points += 8
+                    max_severity = _escalate(max_severity, "moderate")
+
+            # Classification withdrawn by society
+            classification_status = equasis_data.get("classification_status", [])
+            if isinstance(classification_status, list):
+                for entry in classification_status:
+                    status = str(entry.get("status", "")).lower()
+                    reason = str(entry.get("reason", "")).lower()
+                    society = str(entry.get("society", ""))
+
+                    if "withdrawn" in status and "by society" in reason:
+                        findings.append(
+                            {
+                                "check": "classification_withdrawn_by_society",
+                                "severity": "critical",
+                                "points": 25,
+                                "society": society,
+                                "reason": f"Classification withdrawn by {society}: {entry.get('reason', '')}",
+                            }
+                        )
+                        total_points += 25
+                        max_severity = "critical"
+                        break  # One finding is enough
+
+                # Russian Register + IACS withdrawn combo
+                has_russian = any(
+                    "russian" in str(e.get("society", "")).lower()
+                    for e in classification_status
+                    if str(e.get("status", "")).lower() == "delivered"
+                )
+                has_iacs_withdrawn = any(
+                    "withdrawn" in str(e.get("status", "")).lower()
+                    and "iacs" in str(e.get("society", "")).lower()
+                    for e in classification_status
+                )
+                if has_russian and has_iacs_withdrawn:
+                    # Don't double-count if we already found "withdrawn by society"
+                    if not any(
+                        f["check"] == "classification_withdrawn_by_society"
+                        for f in findings
+                    ):
+                        findings.append(
+                            {
+                                "check": "russian_register_iacs_withdrawn",
+                                "severity": "high",
+                                "points": 20,
+                                "reason": "Russian Maritime Register with IACS society classification withdrawn",
+                            }
+                        )
+                        total_points += 20
+                        max_severity = _escalate(max_severity, "high")
+
         # --- No findings → rule does not fire ---
         if not findings:
             return RuleResult(fired=False, rule_id=self.rule_id)

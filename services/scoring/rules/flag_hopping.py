@@ -109,6 +109,34 @@ class FlagHoppingRule(ScoringRule):
         if profile_flag:
             flags.add(_normalize_flag(profile_flag))
 
+        # Check equasis flag_history (has actual dated flag changes)
+        equasis_data = profile.get("equasis_data")
+        if equasis_data and isinstance(equasis_data.get("flag_history"), list):
+            now = _utcnow()
+            cutoff = now - timedelta(days=365)
+            for entry in equasis_data["flag_history"]:
+                if isinstance(entry, dict):
+                    flag = entry.get("flag")
+                    if not flag:
+                        continue
+                    # Use date_of_effect for accurate windowing
+                    date_str = entry.get("date_of_effect")
+                    if date_str:
+                        try:
+                            parts = date_str.split("/")
+                            if len(parts) == 3:
+                                flag_date = datetime(
+                                    int(parts[2]),
+                                    int(parts[1]),
+                                    int(parts[0]),
+                                    tzinfo=timezone.utc,
+                                )
+                                if flag_date < cutoff:
+                                    continue
+                        except (ValueError, IndexError):
+                            pass
+                    flags.add(_normalize_flag(flag))
+
         # Check flag_history (list of dicts with 'flag' key)
         flag_history = profile.get("flag_history")
         if isinstance(flag_history, list):

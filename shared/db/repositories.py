@@ -699,6 +699,26 @@ async def get_equasis_upload_by_id(
     return dict(row) if row else None
 
 
+async def get_equasis_scoring_data(session: AsyncSession, mmsi: int) -> dict[str, Any] | None:
+    """Get the latest equasis data for scoring purposes.
+
+    Returns a dict with psc_inspections, classification_status, flag_history
+    from the most recent equasis upload, or None if no equasis data exists.
+    """
+    result = await session.execute(
+        text(
+            "SELECT psc_inspections, classification_status, flag_history "
+            "FROM equasis_data WHERE mmsi = :mmsi "
+            "ORDER BY upload_timestamp DESC LIMIT 1"
+        ),
+        {"mmsi": mmsi},
+    )
+    row = result.mappings().first()
+    if not row:
+        return None
+    return dict(row)
+
+
 async def update_vessel_profile_from_equasis(
     session: AsyncSession, mmsi: int, equasis_data: dict[str, Any]
 ) -> None:
