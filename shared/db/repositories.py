@@ -731,6 +731,7 @@ async def update_vessel_profile_from_equasis(
         "technical_manager": "technical_manager",
         "operator": "operator",
         "class_society": "class_society",
+        "insurer": "insurer",
         "build_year": "build_year",
         "dwt": "dwt",
         "gross_tonnage": "gross_tonnage",
