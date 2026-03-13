@@ -1,10 +1,10 @@
 # Heimdal Build Wave Plan
 
 **Created:** 2026-03-11
-**Updated:** 2026-03-12 (GFW Integration — Update 001)
+**Updated:** 2026-03-13 (Scoring Overhaul + Observability — Update 002)
 **Status:** draft
-**Total Specs:** 16
-**Total Waves:** 7
+**Total Specs:** 21
+**Total Waves:** 9
 
 ---
 
@@ -14,6 +14,8 @@ Specs within the same wave can be implemented in parallel (by separate sessions/
 Waves must run sequentially — each wave depends on the previous completing.
 
 > **Update 001:** Replaced custom SAR processor (Copernicus + CFAR pipeline) with Global Fishing Watch API integration. SAR detections, AIS-disabling events, encounter/loitering detection, and vessel identity now consumed via GFW APIs through the enrichment service. This removes 1 container, 1 spec, and ~2-3 weeks from the build.
+
+> **Update 002:** Added Wave 8 (Scoring Overhaul + Observability) and Wave 9 (Enrichment Escalation + Performance). Wave 8 fixes critical scoring issues: event lifecycle model (anomalies with start/end), port awareness to eliminate false positives, repeat-event escalation, and 4 new detection rules based on CREA/Windward/Kpler/S&P Global shadow fleet intelligence (AIS spoofing, ownership risk, insurance/classification risk, voyage patterns). Also adds structured JSON logging and service health monitoring. Wave 9 adds tier-triggered enrichment (yellow vessels get immediate ownership/classification deep-dive) and performance optimization (profiling, scoring debounce, bundle splitting).
 
 ### Wave 1 — Foundation Infrastructure (3 specs, parallel)
 No dependencies. Start here.
@@ -64,7 +66,7 @@ Depends on: Wave 5
 | 12 | `manual-enrichment` | Enrichment form in detail panel, POST integration, re-scoring trigger |
 | 13 | `watchlist-notifications` | Watchlist CRUD, browser desktop notifications, alert WebSocket |
 
-### Wave 7 — Polish (3 specs, parallel)
+### Wave 7 — Polish (3 specs, parallel) [COMPLETED]
 Depends on: Wave 6
 
 | Spec | Slug | Scope |
@@ -73,34 +75,59 @@ Depends on: Wave 6
 | 15 | `stats-and-replay` | Stats dashboard, health indicators, track replay animation |
 | 16 | `testing-and-docs` | Unit tests (incl. GFW client/rules), integration tests, performance benchmarks, README |
 
+### Wave 8 — Scoring Overhaul & Observability (3 specs, parallel)
+Depends on: Wave 7
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 17 | `event-scoring-model` | Event lifecycle (start/end) for anomalies, port awareness, repeat-event escalation, GFW multi-event handling, scoring debounce |
+| 18 | `enhanced-detection-rules` | 4 new rules (AIS spoofing, ownership risk, insurance/classification, voyage patterns), extended STS hotspots, rule weight rebalancing |
+| 19 | `logging-observability` | Structured JSON logging, API call duration tracking, service heartbeats, scoring pipeline performance metrics, DB query monitoring |
+
+### Wave 9 — Enrichment Escalation & Performance (2 specs, parallel)
+Depends on: Wave 8
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 20 | `yellow-enrichment-path` | Tier-change triggered enrichment, enhanced ownership/classification lookup, adaptive enrichment frequency, enrichment status tracking |
+| 21 | `performance-optimization` | CPU profiling, scoring engine debounce+batching, DB query optimization, AIS ingest pipeline optimization, frontend bundle splitting |
+
 ---
 
 ## Build Order Diagram
 
 ```
-Wave 1:  [01-infrastructure] [02-database] [03-shared-library]
+Wave 1:  [01-infrastructure] [02-database] [03-shared-library]           ← COMPLETED
               │                    │              │
               └────────────────────┴──────────────┘
                                    │
-Wave 2:              [04-ais-ingest] [05-frontend-shell]
+Wave 2:              [04-ais-ingest] [05-frontend-shell]                  ← COMPLETED
                           │              │
                           └──────────────┘
                                    │
-Wave 3:                    [06-api-server]
+Wave 3:                    [06-api-server]                                ← COMPLETED
                                    │
-Wave 4:      [07-scoring-engine] [08-enrichment+GFW]
+Wave 4:      [07-scoring-engine] [08-enrichment+GFW]                     ← COMPLETED
                        │                    │
                        └────────────────────┘
                                    │
-Wave 5:  [09-globe-rendering] [10-vessel-detail] [11-controls-filtering]
+Wave 5:  [09-globe-rendering] [10-vessel-detail] [11-controls-filtering] ← COMPLETED
               │                    │                    │
               └────────────────────┴────────────────────┘
                                    │
-Wave 6:       [12-manual-enrichment] [13-watchlist]
+Wave 6:       [12-manual-enrichment] [13-watchlist]                      ← COMPLETED
                        │                    │
                        └────────────────────┘
                                    │
-Wave 7:  [14-sar-frontend] [15-stats-replay] [16-testing-docs]
+Wave 7:  [14-sar-frontend] [15-stats-replay] [16-testing-docs]           ← COMPLETED
+                       │                    │
+                       └────────────────────┘
+                                   │
+Wave 8:  [17-event-scoring] [18-detection-rules] [19-logging-observability]
+                       │              │                    │
+                       └──────────────┴────────────────────┘
+                                   │
+Wave 9:       [20-yellow-enrichment] [21-performance-optimization]
 ```
 
 ---
@@ -111,7 +138,7 @@ Wave 7:  [14-sar-frontend] [15-stats-replay] [16-testing-docs]
 | Channel | Publisher | Subscriber | Payload |
 |---------|-----------|------------|---------|
 | `heimdal:positions` | ais-ingest | scoring, api-server | `{mmsis: [int], timestamp: str, count: int}` |
-| `heimdal:risk_changes` | scoring | api-server | `{mmsi, old_tier, new_tier, score, trigger_rule, timestamp}` |
+| `heimdal:risk_changes` | scoring | api-server, enrichment (Wave 8+) | `{mmsi, old_tier, new_tier, score, trigger_rule, timestamp}` |
 | `heimdal:anomalies` | scoring | api-server | `{mmsi, rule_id, severity, points, details, timestamp}` |
 | `heimdal:enrichment_complete` | enrichment | scoring | `{mmsis: [int], gfw_events_count: int, sar_detections_count: int}` |
 
@@ -122,6 +149,9 @@ Wave 7:  [14-sar-frontend] [15-stats-replay] [16-testing-docs]
 | `heimdal:last_seen` | scoring | HASH (mmsi → ts) |
 | `heimdal:sts_entry:{mmsi}` | scoring | HASH |
 | `heimdal:metrics:*` | ais-ingest | STRING |
+| `heimdal:heartbeat:{service}` | all services (Wave 8+) | STRING (TTL 120s) |
+| `heimdal:enrichment_triggered` | enrichment (Wave 9+) | HASH (mmsi → ts) |
+| `heimdal:scoring_debounce:{mmsi}` | scoring (Wave 9+) | STRING (TTL configurable) |
 
 ### Database Table Ownership
 | Table | Primary Writer | Readers |
@@ -134,6 +164,7 @@ Wave 7:  [14-sar-frontend] [15-stats-replay] [16-testing-docs]
 | manual_enrichment | api-server | scoring, api-server |
 | watchlist | api-server | api-server |
 | zones | seed data (init.sh) | scoring, api-server |
+| ports | seed data (Wave 8+) | scoring |
 
 ### External API Dependencies
 | API | Consumer | Auth | Rate Limits |
