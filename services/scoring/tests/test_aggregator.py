@@ -427,10 +427,12 @@ class TestEngineTierChangePublish:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],  # first call: existing anomalies for rule evaluation
                 anomalies_after,  # second call: after persist, for score calc
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)
@@ -469,10 +471,12 @@ class TestEngineTierChangePublish:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)
@@ -498,10 +502,12 @@ class TestEngineTierChangePublish:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)
@@ -567,6 +573,7 @@ class TestEngineGfwDedup:
                 existing_anomalies,
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=2),
         ):
             results = await engine.evaluate_gfw(123456789)
@@ -595,10 +602,12 @@ class TestEngineGfwDedup:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             results = await engine.evaluate_realtime(123456789)
@@ -639,10 +648,12 @@ class TestEngineDbUpdate:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)

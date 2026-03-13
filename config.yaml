@@ -19,6 +19,12 @@ scoring:
     low: 20         # score >= 20 → Low
     # score < 20 → None
 
+  # Escalation settings for repeat events
+  escalation:
+    multipliers: [1.0, 1.5, 2.0]
+    decay_days: 30
+    cap_multiplier: true
+
   # Per-rule configuration. Weights control how much each rule contributes
   # to the aggregate score. Enable/disable individual rules here.
   rules:

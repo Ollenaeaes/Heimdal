@@ -233,6 +233,23 @@ async def list_active_anomalies_by_mmsi(
     return [dict(r) for r in result.mappings().all()]
 
 
+async def count_ended_events(
+    session: AsyncSession, mmsi: int, rule_id: str, decay_days: int = 30
+) -> int:
+    """Count ended anomaly events for a given vessel and rule within the decay window."""
+    result = await session.execute(
+        text("""
+            SELECT COUNT(*) FROM anomaly_events
+            WHERE mmsi = :mmsi AND rule_id = :rule_id
+              AND event_state = 'ended'
+              AND event_end >= NOW() - INTERVAL '1 day' * :decay_days
+        """),
+        {"mmsi": mmsi, "rule_id": rule_id, "decay_days": decay_days},
+    )
+    row = result.first()
+    return row[0] if row else 0
+
+
 async def list_anomaly_events_by_mmsi(
     session: AsyncSession, mmsi: int, *, limit: int = 50
 ) -> list[dict[str, Any]]:
