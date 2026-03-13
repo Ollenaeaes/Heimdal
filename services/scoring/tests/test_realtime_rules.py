@@ -443,12 +443,13 @@ class TestSanctionsMatch:
 
     @pytest.mark.asyncio
     async def test_direct_match_fires_critical(self, rule):
+        """Sanctions list + IMO match → critical (100 pts)."""
         profile = {
             "sanctions_status": {
                 "matches": [
                     {
                         "entity_id": "SDN-12345",
-                        "program": "OFAC",
+                        "program": "sanctions",
                         "confidence": 0.95,
                         "matched_field": "imo",
                     }
@@ -459,16 +460,17 @@ class TestSanctionsMatch:
         assert result.fired is True
         assert result.severity == "critical"
         assert result.points == 100.0
-        assert result.details["match_type"] == "direct"
+        assert result.details["match_type"] == "direct_sanctions"
 
     @pytest.mark.asyncio
-    async def test_fuzzy_match_fires_high(self, rule):
+    async def test_fuzzy_match_fires_moderate(self, rule):
+        """Name-only match → moderate (15 pts), regardless of program."""
         profile = {
             "sanctions_status": {
                 "matches": [
                     {
                         "entity_id": "EU-9876",
-                        "program": "EU",
+                        "program": "eu_sanctions_map",
                         "confidence": 0.55,
                         "matched_field": "ship_name",
                     }
@@ -477,9 +479,9 @@ class TestSanctionsMatch:
         }
         result = await rule.evaluate(123456789, profile, [], [], [])
         assert result.fired is True
-        assert result.severity == "high"
-        assert result.points == 40.0
-        assert result.details["match_type"] == "fuzzy"
+        assert result.severity == "moderate"
+        assert result.points == 15.0
+        assert result.details["match_type"] == "name_only"
 
     @pytest.mark.asyncio
     async def test_no_sanctions_does_not_fire(self, rule):
@@ -514,12 +516,12 @@ class TestVesselAge:
 
     @pytest.mark.asyncio
     async def test_25yo_tanker_fires_high(self, rule):
-        """25-year-old tanker (2026 - 2001 = 25) -> high."""
+        """25-year-old tanker (2026 - 2001 = 25) -> high, 25 pts."""
         profile = {"ship_type": 80, "build_year": 2001}
         result = await rule.evaluate(123456789, profile, [], [], [])
         assert result.fired is True
         assert result.severity == "high"
-        assert result.points == 40.0
+        assert result.points == 25.0
 
     @pytest.mark.asyncio
     async def test_17yo_tanker_fires_low(self, rule):

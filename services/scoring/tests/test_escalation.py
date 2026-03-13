@@ -313,20 +313,20 @@ class TestAggregateScoreEscalation:
 
     def test_cap_adjusts_with_escalation_multiplier(self):
         """MAX_PER_RULE cap should be multiplied by escalation multiplier."""
-        # speed_anomaly MAX_PER_RULE = 15
-        # With 2.0x escalation, cap should be 30
+        # speed_anomaly MAX_PER_RULE = 10
+        # With 2.0x escalation, cap should be 20
         anomalies = [
             {
                 "rule_id": "speed_anomaly",
-                "points": 30.0,  # escalated from 15 * 2.0
+                "points": 20.0,  # escalated from 10 * 2.0
                 "resolved": False,
                 "event_state": "active",
                 "details": json.dumps({"escalation_multiplier": 2.0, "occurrence_number": 3}),
             },
         ]
         score = aggregate_score(anomalies)
-        # cap = 15 * 2.0 = 30, points = 30, min(30, 30) = 30
-        assert score == 30.0
+        # cap = 10 * 2.0 = 20, points = 20, min(20, 20) = 20
+        assert score == 20.0
 
     def test_cap_without_escalation_still_works(self):
         """Without escalation multiplier, original cap applies."""
@@ -340,37 +340,38 @@ class TestAggregateScoreEscalation:
             },
         ]
         score = aggregate_score(anomalies)
-        assert score == 15.0
+        # speed_anomaly cap = 10, so 15 is capped to 10
+        assert score == 10.0
 
     def test_escalated_points_capped_at_adjusted_cap(self):
         """Even with escalation, points exceeding the adjusted cap should be capped."""
-        # speed_anomaly MAX_PER_RULE = 15, with 1.5x escalation, cap = 22.5
+        # speed_anomaly MAX_PER_RULE = 10, with 1.5x escalation, cap = 15
         anomalies = [
             {
                 "rule_id": "speed_anomaly",
-                "points": 22.5,  # 15 * 1.5
+                "points": 15.0,  # 10 * 1.5
                 "resolved": False,
                 "event_state": "active",
                 "details": json.dumps({"escalation_multiplier": 1.5, "occurrence_number": 2}),
             },
             {
                 "rule_id": "speed_anomaly",
-                "points": 22.5,  # another escalated anomaly
+                "points": 15.0,  # another escalated anomaly
                 "resolved": False,
                 "event_state": "active",
                 "details": json.dumps({"escalation_multiplier": 1.5, "occurrence_number": 2}),
             },
         ]
         score = aggregate_score(anomalies)
-        # raw total = 45, adjusted cap = 15 * 1.5 = 22.5
-        assert score == 22.5
+        # raw total = 30, adjusted cap = 10 * 1.5 = 15
+        assert score == 15.0
 
     def test_aggregate_correctly_sums_escalated_with_cap(self):
         """Multiple rules with different escalation levels sum correctly."""
         anomalies = [
             {
                 "rule_id": "speed_anomaly",
-                "points": 30.0,  # 15 * 2.0
+                "points": 20.0,  # 10 * 2.0
                 "resolved": False,
                 "event_state": "active",
                 "details": json.dumps({"escalation_multiplier": 2.0}),
@@ -384,24 +385,24 @@ class TestAggregateScoreEscalation:
             },
         ]
         score = aggregate_score(anomalies)
-        # speed_anomaly: min(30, 15*2.0) = 30
+        # speed_anomaly: min(20, 10*2.0) = 20
         # ais_gap: min(40, 40*1.0) = 40
-        assert score == 70.0
+        assert score == 60.0
 
     def test_details_as_dict_works(self):
         """Details passed as dict (not JSON string) should work for escalation."""
         anomalies = [
             {
                 "rule_id": "speed_anomaly",
-                "points": 22.5,
+                "points": 15.0,
                 "resolved": False,
                 "event_state": "active",
                 "details": {"escalation_multiplier": 1.5},
             },
         ]
         score = aggregate_score(anomalies)
-        # cap = 15 * 1.5 = 22.5, points = 22.5
-        assert score == 22.5
+        # cap = 10 * 1.5 = 15, points = 15
+        assert score == 15.0
 
     def test_highest_escalation_multiplier_used_for_cap(self):
         """When multiple anomalies for same rule have different multipliers,
@@ -409,19 +410,19 @@ class TestAggregateScoreEscalation:
         anomalies = [
             {
                 "rule_id": "speed_anomaly",
-                "points": 15.0,
+                "points": 10.0,
                 "resolved": False,
                 "event_state": "active",
                 "details": json.dumps({}),  # 1.0x
             },
             {
                 "rule_id": "speed_anomaly",
-                "points": 22.5,  # 1.5x
+                "points": 15.0,  # 1.5x
                 "resolved": False,
                 "event_state": "active",
                 "details": json.dumps({"escalation_multiplier": 1.5}),
             },
         ]
         score = aggregate_score(anomalies)
-        # raw total = 37.5, cap = 15 * 1.5 = 22.5
-        assert score == 22.5
+        # raw total = 25, cap = 10 * 1.5 = 15
+        assert score == 15.0

@@ -12,20 +12,10 @@ from __future__ import annotations
 
 from typing import Any, Optional, Sequence
 
-from shared.constants import MID_TO_FLAG, SHADOW_FLEET_FLAGS
+from shared.constants import FRAUDULENT_REGISTRY_FLAGS, MID_TO_FLAG, SHADOW_FLEET_FLAGS
 from shared.models.anomaly import RuleResult
 
 from .base import ScoringRule
-
-# Higher-risk FoC states most associated with shadow fleet operations
-_HIGH_RISK_FLAGS: frozenset[str] = frozenset({
-    "KM",  # Comoros
-    "CM",  # Cameroon
-    "PW",  # Palau
-    "GA",  # Gabon
-    "TZ",  # Tanzania
-    "TG",  # Togo
-})
 
 
 class FlagOfConvenienceRule(ScoringRule):
@@ -59,31 +49,33 @@ class FlagOfConvenienceRule(ScoringRule):
         if not flag:
             return None
 
-        if flag in _HIGH_RISK_FLAGS:
+        # Fraudulent registries = high risk (20 points)
+        if flag in FRAUDULENT_REGISTRY_FLAGS:
             return RuleResult(
                 fired=True,
                 rule_id=self.rule_id,
                 severity="high",
-                points=40.0,
+                points=20.0,
                 details={
                     "flag": flag,
                     "mmsi_mid": mmsi // 1000000,
                     "risk_level": "high",
-                    "reason": "high_risk_shadow_fleet_flag",
+                    "reason": "fraudulent_registry",
                 },
                 source="realtime",
             )
 
+        # Standard FoC = low risk (5 points)
         if flag in SHADOW_FLEET_FLAGS:
             return RuleResult(
                 fired=True,
                 rule_id=self.rule_id,
-                severity="moderate",
-                points=15.0,
+                severity="low",
+                points=5.0,
                 details={
                     "flag": flag,
                     "mmsi_mid": mmsi // 1000000,
-                    "risk_level": "moderate",
+                    "risk_level": "low",
                     "reason": "shadow_fleet_associated_flag",
                 },
                 source="realtime",
