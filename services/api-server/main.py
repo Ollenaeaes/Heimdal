@@ -8,14 +8,17 @@ via ``python main.py``.
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from shared.config import settings
 from shared.db.connection import get_engine, dispose_engine
+from shared.logging import setup_logging
 
 logger = logging.getLogger("api-server")
 
@@ -23,10 +26,7 @@ logger = logging.getLogger("api-server")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage startup and shutdown of database and Redis connections."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    setup_logging("api-server")
 
     # Startup: initialise the async engine (validates connectivity)
     engine = get_engine()
@@ -48,6 +48,25 @@ async def lifespan(app: FastAPI):
     logger.info("Database engine disposed")
 
 
+class RequestDurationMiddleware(BaseHTTPMiddleware):
+    """Log the duration of every HTTP request."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        start = time.monotonic()
+        response = await call_next(request)
+        duration_ms = (time.monotonic() - start) * 1000
+        logger.info(
+            "request_complete",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": round(duration_ms, 2),
+            },
+        )
+        return response
+
+
 def create_app() -> FastAPI:
     """Application factory."""
     app = FastAPI(
@@ -64,6 +83,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Request duration logging
+    app.add_middleware(RequestDurationMiddleware)
 
     # ------------------------------------------------------------------
     # Routes
