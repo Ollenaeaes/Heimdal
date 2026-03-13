@@ -20,6 +20,9 @@ class AnomalyEvent(BaseModel):
     details: dict = Field(default_factory=dict)
     resolved: bool = False
     created_at: Optional[datetime] = None
+    event_start: Optional[datetime] = None
+    event_end: Optional[datetime] = None
+    event_state: Literal["active", "ended", "superseded"] = "active"
 
 
 @dataclass

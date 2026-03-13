@@ -204,6 +204,35 @@ async def create_anomaly_event(
     return row[0] if row else 0
 
 
+async def end_anomaly_event(
+    session: AsyncSession, anomaly_id: int
+) -> None:
+    """End an active anomaly event: set event_end, event_state='ended', resolved=true."""
+    await session.execute(
+        text(
+            "UPDATE anomaly_events "
+            "SET event_end = NOW(), event_state = 'ended', resolved = true "
+            "WHERE id = :anomaly_id"
+        ),
+        {"anomaly_id": anomaly_id},
+    )
+
+
+async def list_active_anomalies_by_mmsi(
+    session: AsyncSession, mmsi: int
+) -> list[dict[str, Any]]:
+    """List only active (non-ended) anomaly events for a given vessel."""
+    result = await session.execute(
+        text("""
+            SELECT * FROM anomaly_events
+            WHERE mmsi = :mmsi AND event_state = 'active'
+            ORDER BY created_at DESC
+        """),
+        {"mmsi": mmsi},
+    )
+    return [dict(r) for r in result.mappings().all()]
+
+
 async def list_anomaly_events_by_mmsi(
     session: AsyncSession, mmsi: int, *, limit: int = 50
 ) -> list[dict[str, Any]]:
