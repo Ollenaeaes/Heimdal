@@ -7,9 +7,19 @@ with PostGIS ST_MakePoint. Publishes flush events to Redis.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import datetime, timezone
+
+try:
+    import orjson
+
+    def _json_dumps(obj):
+        return orjson.dumps(obj).decode("utf-8")
+
+except ImportError:
+    import json
+
+    _json_dumps = json.dumps
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -162,7 +172,7 @@ class BatchWriter:
                 latest[p[1]] = p  # p[1] = mmsi
 
             for p in latest.values():
-                pos_event = json.dumps({
+                pos_event = _json_dumps({
                     "mmsi": p[1],
                     "lat": p[3],      # latitude (y)
                     "lon": p[2],      # longitude (x)

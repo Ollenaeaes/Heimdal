@@ -7,9 +7,23 @@ connections (no messages received within the configured timeout).
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
+
+try:
+    import orjson
+
+    def _json_loads(data):
+        return orjson.loads(data)
+
+    def _json_dumps(obj):
+        return orjson.dumps(obj).decode("utf-8")
+
+except ImportError:
+    import json
+
+    _json_loads = json.loads
+    _json_dumps = json.dumps
 
 import websockets
 
@@ -46,7 +60,7 @@ class AISWebSocket:
                     self._current_delay = self._initial_delay  # reset backoff
 
                     # Send subscription
-                    await ws.send(json.dumps(self._subscription_message()))
+                    await ws.send(_json_dumps(self._subscription_message()))
 
                     # Receive loop with stale detection
                     while self._running:
@@ -64,7 +78,7 @@ class AISWebSocket:
 
                         self._last_message_time = time.time()
                         try:
-                            msg = json.loads(raw)
+                            msg = _json_loads(raw)
                             await self.on_message(msg)
                         except Exception:
                             # Don't let message processing errors kill the
