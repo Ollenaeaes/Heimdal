@@ -231,6 +231,32 @@ async def get_vessel(mmsi: int):
         pos_row = pos_result.mappings().first()
         last_pos = dict(pos_row) if pos_row else {}
 
+        # Equasis data
+        equasis_latest_result = await session.execute(
+            text(
+                "SELECT * FROM equasis_data "
+                "WHERE mmsi = :mmsi ORDER BY upload_timestamp DESC LIMIT 1"
+            ),
+            {"mmsi": mmsi},
+        )
+        equasis_latest_row = equasis_latest_result.mappings().first()
+
+        equasis_count_result = await session.execute(
+            text("SELECT COUNT(*) FROM equasis_data WHERE mmsi = :mmsi"),
+            {"mmsi": mmsi},
+        )
+        equasis_count = equasis_count_result.scalar() or 0
+
+        equasis_uploads_result = await session.execute(
+            text(
+                "SELECT id, upload_timestamp, edition_date "
+                "FROM equasis_data WHERE mmsi = :mmsi "
+                "ORDER BY upload_timestamp DESC"
+            ),
+            {"mmsi": mmsi},
+        )
+        equasis_uploads = [dict(r) for r in equasis_uploads_result.mappings().all()]
+
     return {
         **profile,
         "last_position": {
@@ -248,6 +274,11 @@ async def get_vessel(mmsi: int):
         "active_anomaly_count": active_anomaly_count,
         "anomalies": anomalies,
         "latest_enrichment": latest_enrichment,
+        "equasis": {
+            "latest": dict(equasis_latest_row) if equasis_latest_row else None,
+            "upload_count": equasis_count,
+            "uploads": equasis_uploads,
+        } if equasis_latest_row else None,
     }
 
 
