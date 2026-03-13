@@ -8,7 +8,7 @@ import {
   PolylineDashMaterialProperty,
   Entity,
 } from 'cesium';
-import { getCesiumViewer } from '../components/Globe/GlobeView';
+import { getCesiumViewer } from '../components/Globe/cesiumViewer';
 import type { OverlayToggleState } from '../components/Globe/Overlays';
 import stsZonesData from '../data/stsZones.json';
 import terminalsData from '../data/terminals.json';

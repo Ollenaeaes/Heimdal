@@ -13,7 +13,7 @@ import { OwnershipSection } from './OwnershipSection';
 import { EnrichmentForm } from './EnrichmentForm';
 import { EnrichmentHistory } from './EnrichmentHistory';
 
-export function VesselPanel() {
+function VesselPanel() {
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
   const selectVessel = useVesselStore((s) => s.selectVessel);
   const { data: vessel, isLoading } = useVesselDetail(selectedMmsi);
@@ -90,3 +90,6 @@ export function VesselPanel() {
     </div>
   );
 }
+
+export { VesselPanel };
+export default VesselPanel;

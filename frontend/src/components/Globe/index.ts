@@ -1,4 +1,5 @@
-export { GlobeView, INITIAL_LON, INITIAL_LAT, INITIAL_ALT } from './GlobeView';
+export { GlobeView } from './GlobeView';
+export { INITIAL_LON, INITIAL_LAT, INITIAL_ALT, getCesiumViewer } from './cesiumViewer';
 export { Overlays, OverlayToggles } from './Overlays';
 export type { OverlayProps, OverlayToggleState, OverlayTogglesProps } from './Overlays';
 export { VesselCluster, CLUSTER_PIXEL_RANGE, getHighestRiskTier } from './VesselCluster';

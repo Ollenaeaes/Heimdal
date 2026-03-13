@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useVesselStore } from '../../hooks/useVesselStore';
-import { getCesiumViewer } from '../Globe/GlobeView';
+import { getCesiumViewer } from '../Globe/cesiumViewer';
 import { Cartesian3 } from 'cesium';
 import type { VesselState } from '../../types/vessel';
 

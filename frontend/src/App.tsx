@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, StatsBar, HealthIndicator, WatchlistPanel } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useOverlays } from './hooks/useOverlays';
 import { useVesselStore } from './hooks/useVesselStore';
-import { GlobeView } from './components/Globe/GlobeView';
 import { OverlayToggles } from './components/Globe/Overlays';
 import type { OverlayToggleState } from './components/Globe/Overlays';
-import { VesselPanel } from './components/VesselPanel/VesselPanel';
 import type { VesselState } from './types/vessel';
+
+const GlobeView = lazy(() => import('./components/Globe/GlobeView'));
+const VesselPanel = lazy(() => import('./components/VesselPanel/VesselPanel'));
 
 const queryClient = new QueryClient();
 
@@ -72,7 +73,9 @@ function AppInner() {
       </header>
 
       <div style={{ flex: 1, position: 'relative' }}>
-        <GlobeView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} />
+        <Suspense fallback={<div className="w-full h-full bg-gray-900 flex items-center justify-center text-gray-500">Loading globe...</div>}>
+          <GlobeView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} />
+        </Suspense>
 
         {/* Controls overlay — top-left */}
         <div className="absolute top-3 left-3 z-40 flex flex-col gap-2">
@@ -89,7 +92,9 @@ function AppInner() {
           <OverlayToggles state={overlays} onChange={setOverlays} />
         </div>
 
-        <VesselPanel />
+        <Suspense fallback={null}>
+          <VesselPanel />
+        </Suspense>
       </div>
     </div>
   );

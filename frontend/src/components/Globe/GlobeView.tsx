@@ -5,35 +5,30 @@ import { VesselMarkers } from './VesselMarkers';
 import { TrackTrail } from './TrackTrail';
 import { GfwEventMarkers } from './GfwEventMarkers';
 import { SarMarkers } from './SarMarkers';
+import { INITIAL_LON, INITIAL_LAT, INITIAL_ALT, setCesiumViewer } from './cesiumViewer';
 
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
 if (ionToken) {
   Ion.defaultAccessToken = ionToken as string;
 }
 
-export const INITIAL_LON = 15;
-export const INITIAL_LAT = 68;
-export const INITIAL_ALT = 5_000_000;
-
-/** Module-level viewer reference so other hooks can access the Cesium viewer */
-let _globalViewer: Viewer | null = null;
-export function getCesiumViewer(): Viewer | null {
-  return _globalViewer;
-}
+// Re-export constants and getCesiumViewer for backward compatibility
+export { INITIAL_LON, INITIAL_LAT, INITIAL_ALT } from './cesiumViewer';
+export { getCesiumViewer } from './cesiumViewer';
 
 export interface GlobeViewProps {
   showGfwEvents?: boolean;
   showSarDetections?: boolean;
 }
 
-export function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeViewProps = {}) {
+function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeViewProps = {}) {
   const viewerRef = useRef<{ cesiumElement?: Viewer }>(null);
 
   useEffect(() => {
     const check = setInterval(() => {
       const viewer = viewerRef.current?.cesiumElement;
       if (viewer && !viewer.isDestroyed()) {
-        _globalViewer = viewer;
+        setCesiumViewer(viewer);
         viewer.camera.flyTo({
           destination: Cartesian3.fromDegrees(INITIAL_LON, INITIAL_LAT, INITIAL_ALT),
           duration: 0,
@@ -44,7 +39,7 @@ export function GlobeView({ showGfwEvents = false, showSarDetections = false }: 
 
     return () => {
       clearInterval(check);
-      _globalViewer = null;
+      setCesiumViewer(null);
     };
   }, []);
 
@@ -71,3 +66,6 @@ export function GlobeView({ showGfwEvents = false, showSarDetections = false }: 
     </ResiumViewer>
   );
 }
+
+export { GlobeView };
+export default GlobeView;
