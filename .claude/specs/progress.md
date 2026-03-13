@@ -4,9 +4,9 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 
 ## Current Feature
 
-**Spec:** Wave Plan — 16 specs across 7 waves (GFW Integration)
-**Branch:** feature/wave-6-advanced-features
-**Status:** Wave 6 complete, ready for Wave 7
+**Spec:** Wave Plan — 21 specs across 9 waves (GFW Integration)
+**Branch:** feature/wave-8-scoring-observability
+**Status:** Wave 8 in progress
 
 ## Stories Completed
 
@@ -160,9 +160,38 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 52 new (15 stats + 20 replay + 17 export)
 - Commit: `3356dbe`
 
+### 17-event-scoring-model (all 6 stories)
+- Story 1: Event lifecycle — migration 006 adds event_start/event_end/event_state to anomaly_events, Pydantic model updated
+- Story 2: Port awareness — migration 007 creates ports table with 51 global tanker ports, is_near_port() via PostGIS ST_DWithin
+- Story 3: Event boundaries — check_event_ended() for 5 realtime rules (speed_anomaly, sts_proximity, draft_change, destination_spoof, ais_gap)
+- Story 4: Repeat event escalation — multipliers [1.0, 1.5, 2.0] with 30-day decay window in engine._create_anomaly()
+- Story 5: GFW multi-event handling — evaluate_all() override for all 5 GFW rules, shared gfw_helpers.py with temporal dedup
+- Story 6: Engine lifecycle loop — _check_and_end_active_events() at start of evaluate_realtime, aggregate_score filters by event_state
+- Tests: 105 new tests
+- Commits: `7e00ada`, `f0677d8`, `b76160d`, `a14f609`
+
+### 18-enhanced-detection-rules (all 6 stories)
+- Story 1: AIS spoofing rule — 4 patterns (position_jump, circle_spoofing, anchor_spoofing, slow_roll), all severity=critical, 30pts
+- Story 2: Ownership risk rule — single-vessel company, recent incorporation, high-risk jurisdiction, frequent changes, opaque ownership
+- Story 3: Insurance/classification risk — no IG P&I, non-IACS class, unclassed, Russian Maritime Register, recent class change, IACS fuzzy matching
+- Story 4: Voyage pattern analysis — full_evasion_route (25pts), russian_port_to_sts (15pts), sts_to_destination (8pts), suspicious_ballast (8pts)
+- Story 5: Extended STS hotspots — migration 008 adds 6 new zones (South China Sea, Gulf of Oman, Singapore Strait, Alboran Sea, Baltic/Primorsk, South of Crete)
+- Story 6: Weight rebalancing — speed_anomaly 15→10, vessel_age/flag progressive scoring, new rule caps, fixed all pre-existing test failures
+- Tests: 82 new tests
+- Commits: `d1e4344`, `8fbaace`, `65b4f30`
+
+### 19-logging-observability (all 5 stories)
+- Story 1: Structured JSON logging — shared/logging.py with JsonFormatter, setup_logging() replaces basicConfig in all services, LOG_FORMAT/LOG_LEVEL env vars
+- Story 2: API call duration tracking — GFW client timing with threshold-based WARNING/ERROR, call stats (count/duration/retries), enrichment cycle summary
+- Story 3: Service heartbeats — shared/heartbeat.py HeartbeatPublisher class, Redis keys with TTL 120s, health endpoint reports healthy/degraded/down per service
+- Story 4: Scoring pipeline performance — per-rule timing with slow_rule WARNING (>100ms), per-vessel summary, aggregate_score query timing, exception context
+- Story 5: Database query performance — SQLAlchemy event listeners for query timing (WARNING >500ms, ERROR >5s), pool exhaustion logging, API request duration middleware
+- Tests: 56 new tests
+- Commits: `1b59be3`, `5041c60`, `79338ae`, `a10177a`, `253d916`
+
 ## Current Story
 
-Wave 7 complete. All 16 specs across 7 waves implemented.
+Wave 8 complete. All 3 specs (17, 18, 19) implemented.
 
 ## Known Issues
 
@@ -188,14 +217,13 @@ Wave 7 complete. All 16 specs across 7 waves implemented.
 - D13: Enrichment tracking uses Redis hash `heimdal:enriched` instead of DB column (avoids migration).
 - D14: Flag history stored in vessel profile ownership_data JSONB (no schema migration needed).
 - D15: GISIS/MARS implemented as stubs with proper interfaces — ready for real scraping later.
+- D16: Structured logging uses custom JsonFormatter (no python-json-logger dependency).
 
 ## Notes for Next Session
 
-- ALL 16 SPECS COMPLETE across 7 waves on branch `feature/wave-7-polish`
-- Backend tests: 691 total (323 tests/ + 148 scoring + 192 enrichment + 28 integration)
-- Frontend tests: 354 total (275 pre-Wave-7 + 27 SAR/GFW + 52 stats/replay/export)
-- Total test count: 1045 (691 backend + 354 frontend)
-- Integration tests in tests/integration/ auto-skip when Docker not running
-- Performance benchmarks: python scripts/benchmark.py (--quick for fast mode)
-- README.md documents the full platform
-- Ready for merge to main
+- WAVE 8 COMPLETE (specs 17, 18, 19) on branch `feature/wave-8-scoring-observability`
+- Scoring tests: 404 (previous 333 + 71 new from Wave 8)
+- Backend tests: 691 + 71 = 762 scoring tests total
+- Frontend tests: 354 (unchanged)
+- Wave 9 (specs 20, 21) is next: yellow-enrichment-path + performance-optimization
+- Ready for merge to main or continue to Wave 9

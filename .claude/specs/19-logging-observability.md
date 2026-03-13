@@ -2,7 +2,7 @@
 
 **Slug:** `logging-observability`
 **Created:** 2026-03-13
-**Status:** draft
+**Status:** completed
 **Priority:** high
 
 ---
