@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, StatsBar, HealthIndicator, WatchlistPanel } from './components/Controls';
+import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, StatsBar, HealthIndicator, WatchlistPanel, EquasisImport } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useOverlays } from './hooks/useOverlays';
@@ -66,6 +66,7 @@ function AppInner() {
       <header className="h-12 shrink-0 flex items-center px-4 bg-gray-900 border-b border-gray-800 gap-4">
         <h1 className="text-white text-sm font-semibold tracking-wide">HEIMDAL</h1>
         <WatchlistPanel />
+        <EquasisImport />
         <StatsBar />
         <div className="ml-auto">
           <HealthIndicator />
