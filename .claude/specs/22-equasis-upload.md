@@ -2,7 +2,7 @@
 
 **Slug:** `equasis-upload`
 **Created:** 2026-03-13
-**Status:** approved
+**Status:** completed
 **Priority:** high
 **Wave:** 10 (Equasis Integration)
 
