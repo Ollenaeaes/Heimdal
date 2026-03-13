@@ -17,7 +17,7 @@ class TestConfigDefaults:
         from shared.config import Settings
 
         s = Settings()
-        assert s.scoring.yellow_threshold == 30.0
+        assert s.scoring.yellow_threshold == 50.0
         assert s.scoring.red_threshold == 100.0
         assert s.ingest.batch_size == 500
         assert s.ingest.flush_interval == 2.0

@@ -27,8 +27,8 @@ class ScoringDebounceConfig(BaseSettings):
 
 
 class ScoringConfig(BaseSettings):
-    yellow_threshold: float = 30.0
-    red_threshold: float = 80.0
+    yellow_threshold: float = 50.0
+    red_threshold: float = 100.0
     debounce: ScoringDebounceConfig = Field(default_factory=ScoringDebounceConfig)
 
 
