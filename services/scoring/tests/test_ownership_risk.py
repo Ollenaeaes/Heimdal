@@ -125,10 +125,32 @@ class TestOwnershipRisk:
         assert result.details["factor"] == "frequent_ownership_changes"
 
     @pytest.mark.asyncio
-    async def test_no_ownership_data_fires_moderate_opaque(self, rule):
-        """No ownership data available → moderate (opaque_ownership)."""
+    async def test_no_ownership_data_not_enriched_does_not_fire(self, rule):
+        """No ownership data and no enrichment yet → don't penalise."""
         profile = {
             "ownership_data": None,
+        }
+        with patch("rules.ownership_risk._utcnow", return_value=_NOW):
+            result = await rule.evaluate(123456789, profile, [], [], [])
+        assert result.fired is False
+
+    @pytest.mark.asyncio
+    async def test_no_ownership_data_with_basic_owner_does_not_fire(self, rule):
+        """No enrichment data but registered_owner exists → don't fire."""
+        profile = {
+            "ownership_data": None,
+            "registered_owner": "ARCTIC ORANGE LNG C/O: OSK SHIPPING LTD",
+        }
+        with patch("rules.ownership_risk._utcnow", return_value=_NOW):
+            result = await rule.evaluate(123456789, profile, [], [], [])
+        assert result.fired is False
+
+    @pytest.mark.asyncio
+    async def test_no_ownership_data_enriched_fires_opaque(self, rule):
+        """No ownership data after enrichment attempted → opaque_ownership."""
+        profile = {
+            "ownership_data": None,
+            "enriched_at": "2026-03-12T10:00:00+00:00",
         }
         with patch("rules.ownership_risk._utcnow", return_value=_NOW):
             result = await rule.evaluate(123456789, profile, [], [], [])
@@ -248,7 +270,7 @@ class TestOwnershipRisk:
     @pytest.mark.asyncio
     async def test_source_is_realtime(self, rule):
         """Fired result should have source='realtime'."""
-        profile = {"ownership_data": None}
+        profile = {"ownership_data": None, "enriched_at": "2026-03-12T10:00:00+00:00"}
         with patch("rules.ownership_risk._utcnow", return_value=_NOW):
             result = await rule.evaluate(123456789, profile, [], [], [])
         assert result.fired is True

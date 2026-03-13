@@ -106,6 +106,29 @@ export function RiskSection({ vessel }: RiskSectionProps) {
   );
 }
 
+/** Format a detail value for display. Primitives render as-is; arrays
+ *  of objects (like findings) get flattened to their key fields. */
+function formatDetailValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+    return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'object' && item !== null) {
+          // For findings: show reason or check + severity
+          const r = (item as Record<string, unknown>).reason ?? (item as Record<string, unknown>).check;
+          const s = (item as Record<string, unknown>).severity;
+          return r ? `${r}${s ? ` (${s})` : ''}` : JSON.stringify(item);
+        }
+        return String(item);
+      })
+      .join(', ');
+  }
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
 function AnomalyCard({ anomaly }: { anomaly: AnomalyEvent }) {
   const [expanded, setExpanded] = useState(false);
   const severityColor = SEVERITY_COLORS[anomaly.severity];
@@ -143,7 +166,7 @@ function AnomalyCard({ anomaly }: { anomaly: AnomalyEvent }) {
         <p className="text-xs text-gray-500 truncate">
           {detailEntries
             .slice(0, 3)
-            .map(([k, v]) => `${DETAIL_LABELS[k] ?? k}: ${v}`)
+            .map(([k, v]) => `${DETAIL_LABELS[k] ?? k}: ${formatDetailValue(v)}`)
             .join(' · ')}
         </p>
       )}
@@ -155,7 +178,7 @@ function AnomalyCard({ anomaly }: { anomaly: AnomalyEvent }) {
             <div key={key} className="flex justify-between text-xs">
               <span className="text-gray-500">{DETAIL_LABELS[key] ?? key}</span>
               <span className="text-gray-300 text-right ml-2 break-all">
-                {String(value)}
+                {formatDetailValue(value)}
               </span>
             </div>
           ))}

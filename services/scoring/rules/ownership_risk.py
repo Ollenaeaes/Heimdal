@@ -89,15 +89,30 @@ class OwnershipRiskRule(ScoringRule):
         factors: list[dict[str, Any]] = []
 
         if ownership_data is None:
-            # No ownership data at all → opaque ownership
-            factors.append({
-                "factor": "opaque_ownership",
-                "severity": "moderate",
-                "points": 8,
-                "reason": "No ownership data available",
-            })
-            # With no data we can only report this single factor
-            return self._build_result(factors)
+            # No enrichment data — check if basic ownership fields exist.
+            # If registered_owner or operator is populated, ownership is
+            # known (just not from the enrichment pipeline).  Only flag
+            # opaque ownership when enrichment has been attempted
+            # (enriched_at is set) and still found nothing.
+            has_basic_owner = bool(
+                profile.get("registered_owner")
+                or profile.get("operator")
+                or profile.get("owner")
+            )
+            enrichment_attempted = profile.get("enriched_at") is not None
+
+            if not has_basic_owner and enrichment_attempted:
+                factors.append({
+                    "factor": "opaque_ownership",
+                    "severity": "moderate",
+                    "points": 8,
+                    "reason": "No ownership data found after enrichment",
+                })
+                return self._build_result(factors)
+
+            # Either we have a basic owner or enrichment hasn't run yet —
+            # don't penalise for missing data we haven't tried to collect.
+            return RuleResult(fired=False, rule_id=self.rule_id)
 
         owners = ownership_data.get("owners") or []
         history = ownership_data.get("history") or []
