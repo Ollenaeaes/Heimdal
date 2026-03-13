@@ -263,11 +263,18 @@ Wave 9 complete. All stories for specs 20 and 21 implemented.
 - D15: GISIS/MARS implemented as stubs with proper interfaces — ready for real scraping later.
 - D16: Structured logging uses custom JsonFormatter (no python-json-logger dependency).
 
+### 22-equasis-upload (Story 2)
+- Story 2: PDF Parser — pdfplumber-based parser for Equasis Ship Folder PDFs
+  - Extracts all 11 data sections: ship particulars, management, classification status/surveys, safety certificates, PSC inspections, human element deficiencies, name/flag/company history, edition date
+  - Handles multi-line column-interleaved text from PDF extraction
+  - Validates Equasis PDF format, raises ValueError for non-Equasis or corrupted PDFs
+  - Tests: 13 tests covering all sections + error cases against actual ShipFop.pdf fixture
+
 ## Notes for Next Session
 
 - WAVE 9 COMPLETE (specs 20, 21) on branch `feature/wave-9-enrichment-performance`
+- Wave 10 (spec 22 — equasis-upload) Story 2 complete on main
+- Stories 1, 3-6 of spec 22 remaining
 - New tests: 81 enrichment + 11 scoring debounce + 18 ingest optimization + 30 DB optimization + 18 profiling/memory = 158 new
 - Backend tests passing: 964+ (excluding pre-existing failures)
 - Frontend tests: 315 passing (8 pre-existing failures, unchanged)
-- Wave 10 (spec 22 — equasis-upload) is next
-- Ready for merge to main
