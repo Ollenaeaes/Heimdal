@@ -226,4 +226,5 @@ Wave 8 complete. All 3 specs (17, 18, 19) implemented.
 - Backend tests: 691 + 71 = 762 scoring tests total
 - Frontend tests: 354 (unchanged)
 - Wave 9 (specs 20, 21) is next: yellow-enrichment-path + performance-optimization
+- New approved spec: equasis-upload (spec 22, Wave 10) — Equasis Ship Folder PDF parsing, upload UI, expanded vessel info, scoring enhancements
 - Ready for merge to main or continue to Wave 9

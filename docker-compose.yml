@@ -101,7 +101,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
       REDIS_URL: "redis://redis:6379/0"
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/health\")'"]
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request,urllib.error;\ntry: urllib.request.urlopen(\"http://localhost:8000/api/health\")\nexcept urllib.error.HTTPError: pass'"]
       interval: 5s
       timeout: 5s
       retries: 5

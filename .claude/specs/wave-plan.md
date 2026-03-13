@@ -1,10 +1,10 @@
 # Heimdal Build Wave Plan
 
 **Created:** 2026-03-11
-**Updated:** 2026-03-13 (Scoring Overhaul + Observability — Update 002)
+**Updated:** 2026-03-13 (Equasis Upload — Update 003)
 **Status:** draft
-**Total Specs:** 21
-**Total Waves:** 9
+**Total Specs:** 22
+**Total Waves:** 10
 
 ---
 
@@ -16,6 +16,8 @@ Waves must run sequentially — each wave depends on the previous completing.
 > **Update 001:** Replaced custom SAR processor (Copernicus + CFAR pipeline) with Global Fishing Watch API integration. SAR detections, AIS-disabling events, encounter/loitering detection, and vessel identity now consumed via GFW APIs through the enrichment service. This removes 1 container, 1 spec, and ~2-3 weeks from the build.
 
 > **Update 002:** Added Wave 8 (Scoring Overhaul + Observability) and Wave 9 (Enrichment Escalation + Performance). Wave 8 fixes critical scoring issues: event lifecycle model (anomalies with start/end), port awareness to eliminate false positives, repeat-event escalation, and 4 new detection rules based on CREA/Windward/Kpler/S&P Global shadow fleet intelligence (AIS spoofing, ownership risk, insurance/classification risk, voyage patterns). Also adds structured JSON logging and service health monitoring. Wave 9 adds tier-triggered enrichment (yellow vessels get immediate ownership/classification deep-dive) and performance optimization (profiling, scoring debounce, bundle splitting).
+
+> **Update 003:** Added Wave 10 (Equasis PDF Upload). Operators can upload Equasis Ship Folder PDFs to enrich vessels with comprehensive registry data: management chain, classification status/surveys, PSC inspection history, flag history, name history, company history, and safety certificates. Server-side PDF parsing with pdfplumber, two upload entry points (vessel panel + standalone toolbar button), expandable vessel information display, and scoring rule enhancements for PSC detentions and classification withdrawals.
 
 ### Wave 1 — Foundation Infrastructure (3 specs, parallel)
 No dependencies. Start here.
@@ -92,6 +94,13 @@ Depends on: Wave 8
 | 20 | `yellow-enrichment-path` | Tier-change triggered enrichment, enhanced ownership/classification lookup, adaptive enrichment frequency, enrichment status tracking |
 | 21 | `performance-optimization` | CPU profiling, scoring engine debounce+batching, DB query optimization, AIS ingest pipeline optimization, frontend bundle splitting |
 
+### Wave 10 — Equasis PDF Upload (1 spec)
+Depends on: Wave 6 (manual-enrichment), Wave 8 (enhanced-detection-rules)
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 22 | `equasis-upload` | Equasis Ship Folder PDF parsing, upload API, vessel panel + standalone upload UI, expanded vessel information display, scoring enhancements for PSC/classification/flag history |
+
 ---
 
 ## Build Order Diagram
@@ -128,6 +137,10 @@ Wave 8:  [17-event-scoring] [18-detection-rules] [19-logging-observability]
                        └──────────────┴────────────────────┘
                                    │
 Wave 9:       [20-yellow-enrichment] [21-performance-optimization]
+                       │                    │
+                       └────────────────────┘
+                                   │
+Wave 10:                  [22-equasis-upload]
 ```
 
 ---
@@ -165,6 +178,7 @@ Wave 9:       [20-yellow-enrichment] [21-performance-optimization]
 | watchlist | api-server | api-server |
 | zones | seed data (init.sh) | scoring, api-server |
 | ports | seed data (Wave 8+) | scoring |
+| equasis_data | api-server (Wave 10+) | api-server, scoring |
 
 ### External API Dependencies
 | API | Consumer | Auth | Rate Limits |
