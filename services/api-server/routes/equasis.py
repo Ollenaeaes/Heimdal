@@ -159,7 +159,11 @@ async def upload_equasis_pdf_endpoint(
             "mmsi": resolved_mmsi,
             "imo": pdf_imo,
             "upload_timestamp": datetime.now(timezone.utc),
-            "edition_date": parsed.get("edition_date"),
+            "edition_date": (
+            datetime.strptime(parsed["edition_date"], "%d/%m/%Y").date()
+            if parsed.get("edition_date")
+            else None
+        ),
             "ship_particulars": json.dumps(ship_particulars),
             "management": json.dumps(management),
             "classification_status": json.dumps(classification_status),
