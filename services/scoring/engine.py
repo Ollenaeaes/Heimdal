@@ -20,6 +20,7 @@ import inspect
 import json
 import logging
 import pkgutil
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
 
@@ -27,9 +28,12 @@ from sqlalchemy import text
 
 from shared.db.connection import get_session
 from shared.db.repositories import (
+    count_ended_events,
     create_anomaly_event,
+    end_anomaly_event,
     get_vessel_profile_by_mmsi,
     get_vessel_track,
+    list_active_anomalies_by_mmsi,
     list_anomaly_events_by_mmsi,
     list_gfw_events_by_mmsi,
 )
@@ -117,6 +121,43 @@ class ScoringEngine:
 
     # -- Core evaluation --
 
+    async def _check_and_end_active_events(
+        self, session: Any, mmsi: int, profile: dict, recent_positions: list
+    ) -> list[int]:
+        """Check all active anomalies for this MMSI and end those whose conditions have ceased.
+        Returns list of ended anomaly IDs."""
+        active_anomalies = await list_active_anomalies_by_mmsi(session, mmsi)
+        ended_ids: list[int] = []
+
+        # Build a lookup of rules by rule_id
+        rule_lookup = {r.rule_id: r for r in self.rules}
+
+        for anomaly in active_anomalies:
+            rule_id = anomaly.get("rule_id", "")
+            rule = rule_lookup.get(rule_id)
+            if rule is None:
+                continue
+
+            try:
+                should_end = await rule.check_event_ended(
+                    mmsi, profile, recent_positions, anomaly
+                )
+            except Exception:
+                logger.exception("check_event_ended failed for rule %s, MMSI %d", rule_id, mmsi)
+                continue
+
+            if should_end:
+                anomaly_id = anomaly.get("id")
+                if anomaly_id is not None:
+                    await end_anomaly_event(session, anomaly_id)
+                    ended_ids.append(anomaly_id)
+                    logger.info(
+                        "Ended anomaly %d (rule=%s, mmsi=%d)",
+                        anomaly_id, rule_id, mmsi,
+                    )
+
+        return ended_ids
+
     async def evaluate_realtime(self, mmsi: int) -> list[RuleResult]:
         """Evaluate all real-time rules for *mmsi*.
 
@@ -125,6 +166,7 @@ class ScoringEngine:
         recalculates the aggregate score, updates the vessel profile, and
         publishes events to Redis.
         """
+        eval_start = time.monotonic()
         session_factory = get_session()
         async with session_factory() as session:
             profile = await get_vessel_profile_by_mmsi(session, mmsi)
@@ -135,21 +177,50 @@ class ScoringEngine:
             recent_positions = await get_vessel_track(
                 session, mmsi, now - timedelta(hours=48), now
             )
+
+            # Check and end active anomalies whose conditions have ceased
+            ended_ids = await self._check_and_end_active_events(
+                session, mmsi, profile, recent_positions
+            )
+
             existing_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
 
             results: list[RuleResult] = []
+            rules_fired = 0
             for rule in self.realtime_rules:
+                rule_start = time.monotonic()
                 try:
                     result = await rule.evaluate(
                         mmsi, profile, recent_positions, existing_anomalies, []
                     )
                 except Exception:
+                    rule_ms = (time.monotonic() - rule_start) * 1000
                     logger.exception(
-                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi
+                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi,
+                        extra={"rule_id": rule.rule_id, "mmsi": mmsi, "duration_ms": round(rule_ms, 2)},
                     )
                     continue
+                rule_ms = (time.monotonic() - rule_start) * 1000
+                if rule_ms > 100:
+                    logger.warning(
+                        "Slow rule evaluation",
+                        extra={"slow_rule": True, "rule_id": rule.rule_id, "duration_ms": round(rule_ms, 2), "mmsi": mmsi},
+                    )
                 if result is not None:
                     results.append(result)
+                    if result.fired:
+                        rules_fired += 1
+
+            total_ms = (time.monotonic() - eval_start) * 1000
+            logger.info(
+                "Vessel evaluation complete",
+                extra={
+                    "mmsi": mmsi,
+                    "total_evaluation_ms": round(total_ms, 2),
+                    "rules_evaluated": len(self.realtime_rules),
+                    "rules_fired": rules_fired,
+                },
+            )
 
             # Persist fired anomalies — skip if an unresolved anomaly for the
             # same rule_id already exists (prevents duplicate rows on every
@@ -195,6 +266,7 @@ class ScoringEngine:
         suppress overlapping real-time anomalies, recalculates the
         aggregate score, updates the vessel profile, and publishes events.
         """
+        eval_start = time.monotonic()
         session_factory = get_session()
         async with session_factory() as session:
             profile = await get_vessel_profile_by_mmsi(session, mmsi)
@@ -205,18 +277,41 @@ class ScoringEngine:
             existing_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
 
             results: list[RuleResult] = []
+            rules_fired = 0
             for rule in self.gfw_rules:
+                rule_start = time.monotonic()
                 try:
                     result = await rule.evaluate(
                         mmsi, profile, [], existing_anomalies, gfw_events
                     )
                 except Exception:
+                    rule_ms = (time.monotonic() - rule_start) * 1000
                     logger.exception(
-                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi
+                        "Rule %s failed for MMSI %d", rule.rule_id, mmsi,
+                        extra={"rule_id": rule.rule_id, "mmsi": mmsi, "duration_ms": round(rule_ms, 2)},
                     )
                     continue
+                rule_ms = (time.monotonic() - rule_start) * 1000
+                if rule_ms > 100:
+                    logger.warning(
+                        "Slow rule evaluation",
+                        extra={"slow_rule": True, "rule_id": rule.rule_id, "duration_ms": round(rule_ms, 2), "mmsi": mmsi},
+                    )
                 if result is not None:
                     results.append(result)
+                    if result.fired:
+                        rules_fired += 1
+
+            total_ms = (time.monotonic() - eval_start) * 1000
+            logger.info(
+                "Vessel evaluation complete",
+                extra={
+                    "mmsi": mmsi,
+                    "total_evaluation_ms": round(total_ms, 2),
+                    "rules_evaluated": len(self.gfw_rules),
+                    "rules_fired": rules_fired,
+                },
+            )
 
             # Persist fired anomalies, run dedup, publish anomaly events
             # Skip if an unresolved anomaly for the same rule already exists
@@ -274,7 +369,13 @@ class ScoringEngine:
         """Recalculate aggregate score, update the vessel profile, and
         publish a tier change event if the tier changed."""
         # Re-fetch anomalies to include newly persisted + deduped ones
+        query_start = time.monotonic()
         all_anomalies = await list_anomaly_events_by_mmsi(session, mmsi)
+        query_ms = (time.monotonic() - query_start) * 1000
+        logger.debug(
+            "Aggregate score query completed",
+            extra={"mmsi": mmsi, "query_duration_ms": round(query_ms, 2), "anomaly_count": len(all_anomalies)},
+        )
         new_score = aggregate_score(all_anomalies)
         new_tier = calculate_tier(new_score)
 
@@ -299,17 +400,44 @@ class ScoringEngine:
 
     # -- Persistence helpers --
 
+    # Default escalation multipliers: 1st occurrence, 2nd, 3rd+
+    ESCALATION_MULTIPLIERS: list[float] = [1.0, 1.5, 2.0]
+    ESCALATION_DECAY_DAYS: int = 30
+
     @staticmethod
     async def _create_anomaly(
         session: Any, mmsi: int, result: RuleResult
     ) -> int:
-        """Write a single anomaly_event row from a fired rule result."""
+        """Write a single anomaly_event row from a fired rule result.
+
+        Applies escalation multiplier based on how many ended events for the
+        same (mmsi, rule_id) exist within the decay window.
+        """
+        # Count previous ended events for this (mmsi, rule_id) within decay window
+        ended_count = await count_ended_events(
+            session, mmsi, result.rule_id,
+            decay_days=ScoringEngine.ESCALATION_DECAY_DAYS,
+        )
+
+        # Apply escalation multiplier
+        multipliers = ScoringEngine.ESCALATION_MULTIPLIERS
+        multiplier_idx = min(ended_count, len(multipliers) - 1)
+        multiplier = multipliers[multiplier_idx]
+
+        escalated_points = result.points * multiplier
+
+        # Store escalation info in details
+        details = dict(result.details) if result.details else {}
+        if ended_count > 0:
+            details["occurrence_number"] = ended_count + 1
+            details["escalation_multiplier"] = multiplier
+
         data = {
             "mmsi": mmsi,
             "rule_id": result.rule_id,
             "severity": result.severity,
-            "points": result.points,
-            "details": json.dumps(result.details),
+            "points": escalated_points,
+            "details": json.dumps(details),
         }
         return await create_anomaly_event(session, data)
 

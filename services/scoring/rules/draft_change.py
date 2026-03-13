@@ -16,6 +16,9 @@ from .base import ScoringRule
 # Minimum draught increase to trigger (metres)
 _MIN_DRAUGHT_INCREASE_M = 2.0
 
+# Tolerance for draught return-to-normal check (metres)
+_DRAUGHT_RETURN_TOLERANCE_M = 0.5
+
 # Navigation statuses indicating anchored (1) or moored (5)
 _ANCHORED_NAV_STATUSES = {1, 5}
 
@@ -93,6 +96,30 @@ class DraftChangeRule(ScoringRule):
             },
             source="realtime",
         )
+
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """End when draught returns to within 0.5m of the earliest draught value."""
+        details = active_anomaly.get("details", {})
+        if isinstance(details, str):
+            import json
+            details = json.loads(details)
+        earliest_draught = details.get("earliest_draught")
+        if earliest_draught is None:
+            return False
+
+        # Get the latest draught from recent positions
+        sorted_pos = sorted(recent_positions, key=lambda p: p.get("timestamp", ""))
+        for pos in reversed(sorted_pos):
+            draught = pos.get("draught")
+            if draught is not None:
+                return abs(draught - earliest_draught) <= _DRAUGHT_RETURN_TOLERANCE_M
+        return False
 
     # ------------------------------------------------------------------
 

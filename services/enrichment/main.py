@@ -16,11 +16,9 @@ sys.path.insert(0, "/app")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from shared.config import settings
+from shared.logging import setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(name)s %(levelname)s %(message)s",
-)
+setup_logging("enrichment")
 logger = logging.getLogger("enrichment.main")
 
 

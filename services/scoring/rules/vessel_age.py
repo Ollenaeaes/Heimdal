@@ -19,8 +19,12 @@ _CURRENT_YEAR = 2026
 _TANKER_TYPE_MIN = 80
 _TANKER_TYPE_MAX = 89
 
-_HIGH_AGE_YEARS = 20
-_LOW_AGE_YEARS = 15
+# Three-tier progressive scoring thresholds: (min_age, severity, points)
+_THRESHOLDS = [
+    (25, "high", 25.0),      # 25+ years
+    (20, "moderate", 15.0),   # 20-24 years
+    (15, "low", 5.0),         # 15-19 years
+]
 
 
 class VesselAgeRule(ScoringRule):
@@ -57,32 +61,19 @@ class VesselAgeRule(ScoringRule):
 
         age = _CURRENT_YEAR - build_year
 
-        if age > _HIGH_AGE_YEARS:
-            return RuleResult(
-                fired=True,
-                rule_id=self.rule_id,
-                severity="high",
-                points=40.0,
-                details={
-                    "build_year": build_year,
-                    "age_years": age,
-                    "ship_type": ship_type,
-                },
-                source="realtime",
-            )
-
-        if age >= _LOW_AGE_YEARS:
-            return RuleResult(
-                fired=True,
-                rule_id=self.rule_id,
-                severity="low",
-                points=5.0,
-                details={
-                    "build_year": build_year,
-                    "age_years": age,
-                    "ship_type": ship_type,
-                },
-                source="realtime",
-            )
+        for min_age, severity, points in _THRESHOLDS:
+            if age >= min_age:
+                return RuleResult(
+                    fired=True,
+                    rule_id=self.rule_id,
+                    severity=severity,
+                    points=points,
+                    details={
+                        "build_year": build_year,
+                        "age_years": age,
+                        "ship_type": ship_type,
+                    },
+                    source="realtime",
+                )
 
         return RuleResult(fired=False, rule_id=self.rule_id)

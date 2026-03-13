@@ -15,7 +15,7 @@ SEVERITY_POINTS: dict[str, int] = {
 
 # ---------------------------------------------------------------------------
 # Maximum points per rule (caps prevent a single rule from dominating)
-# 5 GFW-sourced + 9 real-time = 14 rules
+# 5 GFW-sourced + 13 real-time = 18+ rules
 # ---------------------------------------------------------------------------
 MAX_PER_RULE: dict[str, int] = {
     # GFW-sourced rules — cap at max single firing
@@ -32,9 +32,14 @@ MAX_PER_RULE: dict[str, int] = {
     "flag_hopping": 40,
     "sanctions_match": 100,
     "vessel_age": 40,
-    "speed_anomaly": 15,
+    "speed_anomaly": 10,
     "identity_mismatch": 100,
     "flag_of_convenience": 40,
+    "ais_spoofing": 100,
+    "ownership_risk": 60,
+    "insurance_class_risk": 60,
+    # GFW-sourced enrichment rule
+    "voyage_pattern": 80,
 }
 
 # All rule IDs as a frozenset for validation
@@ -352,6 +357,7 @@ GFW_RULE_IDS: list[str] = [
     "gfw_loitering",
     "gfw_port_visit",
     "gfw_dark_sar",
+    "voyage_pattern",
 ]
 
 REALTIME_RULE_IDS: list[str] = [
@@ -365,6 +371,9 @@ REALTIME_RULE_IDS: list[str] = [
     "speed_anomaly",
     "identity_mismatch",
     "flag_of_convenience",
+    "ais_spoofing",
+    "ownership_risk",
+    "insurance_class_risk",
 ]
 
 # ---------------------------------------------------------------------------
@@ -384,4 +393,27 @@ SHADOW_FLEET_FLAGS: frozenset[str] = frozenset({
     "GA",  # Gabon
     "TZ",  # Tanzania
     "TG",  # Togo
+})
+
+# ---------------------------------------------------------------------------
+# Known fraudulent registries (separate from SHADOW_FLEET_FLAGS)
+# ---------------------------------------------------------------------------
+FRAUDULENT_REGISTRY_FLAGS: frozenset[str] = frozenset({
+    "CM",  # Cameroon
+    "KM",  # Comoros
+    "PW",  # Palau
+    "GA",  # Gabon
+    "TZ",  # Tanzania
+    "GM",  # Gambia
+    "MW",  # Malawi
+    "SL",  # Sierra Leone
+})
+
+# ---------------------------------------------------------------------------
+# Shadow fleet destination ports (Indian/Chinese/Turkish refinery ports)
+# ---------------------------------------------------------------------------
+SHADOW_FLEET_DESTINATIONS: frozenset[str] = frozenset({
+    "SIKKA", "JAMNAGAR", "PARADIP", "VADINAR", "MUMBAI", "CHENNAI",
+    "QINGDAO", "RIZHAO", "DONGYING", "ZHOUSHAN", "NINGBO", "DALIAN",
+    "ISKENDERUN", "MERSIN", "ALIAGA", "DORTYOL", "CEYHAN",
 })

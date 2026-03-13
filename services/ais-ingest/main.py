@@ -12,6 +12,7 @@ import logging
 import redis.asyncio as aioredis
 
 from shared.config import settings
+from shared.logging import setup_logging
 from shared.models.ais_message import PositionReport, ShipStaticData
 
 # These imports work inside the Docker container where the service code
@@ -27,10 +28,7 @@ logger = logging.getLogger("ais-ingest")
 
 
 async def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    setup_logging("ais-ingest")
 
     # Initialize Redis
     redis = aioredis.from_url(settings.redis_url, decode_responses=True)

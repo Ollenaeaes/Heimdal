@@ -111,6 +111,33 @@ class DestinationSpoofRule(ScoringRule):
 
         return RuleResult(fired=False, rule_id=self.rule_id)
 
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """End when destination changes from a placeholder/sea-area to a real port name."""
+        if not profile:
+            return False
+        destination = (profile.get("destination") or "").strip().upper()
+        if not destination:
+            return False
+
+        # Check if the current destination is still a placeholder
+        for pattern in _PLACEHOLDER_PATTERNS:
+            if pattern in destination:
+                return False  # still a placeholder
+
+        # Check if the current destination is still a sea area
+        for pattern in _SEA_AREA_PATTERNS:
+            if pattern in destination:
+                return False  # still a sea area
+
+        # If we get here, the destination looks like a real port name
+        return True
+
     # ------------------------------------------------------------------
 
     @staticmethod

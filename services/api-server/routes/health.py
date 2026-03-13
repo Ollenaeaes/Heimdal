@@ -1,12 +1,13 @@
 """Health and stats endpoints for the Heimdal API server.
 
 Provides:
-- GET /api/health — system health check (DB, Redis, AIS websocket state)
+- GET /api/health — system health check (DB, Redis, AIS websocket state, service heartbeats)
 - GET /api/stats  — platform statistics (vessels, anomalies, ingestion)
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -14,6 +15,7 @@ from fastapi import APIRouter, Request, Response
 from sqlalchemy import text
 
 from shared.db.connection import get_session
+from shared.heartbeat import HEARTBEAT_KEY_PREFIX, SERVICES
 
 logger = logging.getLogger("api-server.health")
 
@@ -23,6 +25,10 @@ router = APIRouter(prefix="/api", tags=["health"])
 _RATE_KEY = "heimdal:metrics:ingest_rate"
 _LAST_MESSAGE_KEY = "heimdal:metrics:last_message_at"
 _VESSELS_KEY = "heimdal:metrics:total_vessels"
+
+# Heartbeat staleness thresholds (seconds)
+_HEARTBEAT_DEGRADED_THRESHOLD = 90
+_HEARTBEAT_STALE_THRESHOLD = 120
 
 
 @router.get("/health")
@@ -83,8 +89,55 @@ async def health(request: Request, response: Response):
         except Exception:
             logger.warning("Failed to read counts for health endpoint", exc_info=True)
 
+    # --- Service heartbeat checks ---
+    services_status: dict[str, dict] = {}
+    any_service_degraded = False
+    if redis_ok:
+        for svc in SERVICES:
+            key = f"{HEARTBEAT_KEY_PREFIX}{svc}"
+            try:
+                raw = await redis.get(key)
+                if raw is None:
+                    services_status[svc] = {
+                        "status": "down",
+                        "last_heartbeat": None,
+                        "age_seconds": None,
+                    }
+                    any_service_degraded = True
+                else:
+                    data = json.loads(raw)
+                    hb_ts = data.get("timestamp")
+                    if hb_ts:
+                        hb_dt = datetime.fromisoformat(hb_ts)
+                        age = (datetime.now(timezone.utc) - hb_dt).total_seconds()
+                    else:
+                        age = float("inf")
+
+                    if age > _HEARTBEAT_STALE_THRESHOLD:
+                        svc_status = "down"
+                        any_service_degraded = True
+                    elif age > _HEARTBEAT_DEGRADED_THRESHOLD:
+                        svc_status = "degraded"
+                        any_service_degraded = True
+                    else:
+                        svc_status = "healthy"
+
+                    services_status[svc] = {
+                        "status": svc_status,
+                        "last_heartbeat": hb_ts,
+                        "age_seconds": round(age, 1),
+                    }
+            except Exception:
+                logger.warning("Failed to read heartbeat for %s", svc, exc_info=True)
+                services_status[svc] = {
+                    "status": "down",
+                    "last_heartbeat": None,
+                    "age_seconds": None,
+                }
+                any_service_degraded = True
+
     # --- Determine overall status ---
-    all_healthy = db_ok and redis_ok
+    all_healthy = db_ok and redis_ok and not any_service_degraded
     if not all_healthy:
         response.status_code = 503
 
@@ -92,6 +145,7 @@ async def health(request: Request, response: Response):
         "status": "ok" if all_healthy else "degraded",
         "database": db_ok,
         "redis": redis_ok,
+        "services": services_status,
         "ais_connected": ais_connected,
         "last_position_timestamp": last_position_ts,
         "vessel_count": vessel_count,

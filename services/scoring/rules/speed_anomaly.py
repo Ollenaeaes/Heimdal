@@ -72,6 +72,41 @@ class SpeedAnomalyRule(ScoringRule):
 
         return RuleResult(fired=False, rule_id=self.rule_id)
 
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """End when vessel's SOG exceeds 8 knots sustained for 30+ minutes."""
+        if len(recent_positions) < 2:
+            return False
+        sorted_pos = sorted(recent_positions, key=lambda p: p.get("timestamp", ""))
+        # Walk backwards — all positions must have SOG > 8 knots
+        fast_start: datetime | None = None
+        for pos in reversed(sorted_pos):
+            sog = pos.get("sog")
+            if sog is None or sog <= 8.0:
+                return False
+            ts = pos.get("timestamp")
+            if isinstance(ts, str):
+                ts = datetime.fromisoformat(ts)
+            if ts and not getattr(ts, "tzinfo", None):
+                ts = ts.replace(tzinfo=timezone.utc)
+            fast_start = ts
+        # Check duration of fast positions
+        if fast_start:
+            latest_ts = sorted_pos[-1].get("timestamp")
+            if isinstance(latest_ts, str):
+                latest_ts = datetime.fromisoformat(latest_ts)
+            if latest_ts and not getattr(latest_ts, "tzinfo", None):
+                latest_ts = latest_ts.replace(tzinfo=timezone.utc)
+            if fast_start and latest_ts:
+                duration = (latest_ts - fast_start).total_seconds() / 60
+                return duration >= 30
+        return False
+
     # ------------------------------------------------------------------
 
     def _check_abrupt_change(

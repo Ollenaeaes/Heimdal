@@ -116,14 +116,14 @@ class TestAggregateScore:
 
     def test_per_rule_cap_prevents_runaway_scores(self):
         """10 AIS gap events should not give 10x points — capped by MAX_PER_RULE."""
-        # MAX_PER_RULE["ais_gap"] = 30
+        # MAX_PER_RULE["ais_gap"] = 40
         anomalies = [
             {"rule_id": "ais_gap", "points": 15.0, "resolved": False}
             for _ in range(10)
         ]
         score = aggregate_score(anomalies)
-        # 10 * 15 = 150, but cap is 30
-        assert score == 30.0
+        # 10 * 15 = 150, but cap is 40
+        assert score == 40.0
 
     def test_resolved_anomalies_excluded(self):
         """Resolved anomalies should not contribute to the score."""
@@ -140,7 +140,7 @@ class TestAggregateScore:
 
     def test_multiple_rules_each_capped_independently(self):
         """Each rule's total is capped independently."""
-        # MAX_PER_RULE["ais_gap"] = 30, MAX_PER_RULE["sts_proximity"] = 25
+        # MAX_PER_RULE["ais_gap"] = 40, MAX_PER_RULE["sts_proximity"] = 40
         anomalies = [
             {"rule_id": "ais_gap", "points": 15.0, "resolved": False},
             {"rule_id": "ais_gap", "points": 15.0, "resolved": False},
@@ -149,19 +149,18 @@ class TestAggregateScore:
             {"rule_id": "sts_proximity", "points": 15.0, "resolved": False},
         ]
         score = aggregate_score(anomalies)
-        # ais_gap: 3*15=45, capped at 30
-        # sts_proximity: 2*15=30, capped at 25
-        assert score == 55.0
+        # ais_gap: 3*15=45, capped at 40
+        # sts_proximity: 2*15=30, under cap of 40
+        assert score == 70.0
 
     def test_cap_at_exact_max(self):
         """If total equals the cap, it should pass through unchanged."""
-        # MAX_PER_RULE["ais_gap"] = 30
+        # MAX_PER_RULE["ais_gap"] = 40
         anomalies = [
-            {"rule_id": "ais_gap", "points": 15.0, "resolved": False},
-            {"rule_id": "ais_gap", "points": 15.0, "resolved": False},
+            {"rule_id": "ais_gap", "points": 40.0, "resolved": False},
         ]
         score = aggregate_score(anomalies)
-        assert score == 30.0
+        assert score == 40.0
 
     def test_single_anomaly_below_cap(self):
         """A single anomaly below the cap should pass through unchanged."""
@@ -178,7 +177,7 @@ class TestAggregateScore:
 
 
 class TestCalculateTier:
-    """Verify tier thresholds: 0-29=green, 30-99=yellow, 100+=red."""
+    """Verify tier thresholds: 0-29=green, 30-79=yellow, 80+=red."""
 
     def test_green_below_30(self):
         assert calculate_tier(0.0) == "green"
@@ -186,13 +185,14 @@ class TestCalculateTier:
         assert calculate_tier(29.0) == "green"
         assert calculate_tier(29.9) == "green"
 
-    def test_yellow_30_to_99(self):
+    def test_yellow_30_to_79(self):
         assert calculate_tier(30.0) == "yellow"
         assert calculate_tier(50.0) == "yellow"
-        assert calculate_tier(99.0) == "yellow"
-        assert calculate_tier(99.9) == "yellow"
+        assert calculate_tier(79.0) == "yellow"
+        assert calculate_tier(79.9) == "yellow"
 
-    def test_red_100_and_above(self):
+    def test_red_80_and_above(self):
+        assert calculate_tier(80.0) == "red"
         assert calculate_tier(100.0) == "red"
         assert calculate_tier(150.0) == "red"
         assert calculate_tier(500.0) == "red"
@@ -201,7 +201,7 @@ class TestCalculateTier:
         """Exact boundary values must map to the correct tier."""
         assert calculate_tier(0.0) == "green"
         assert calculate_tier(30.0) == "yellow"
-        assert calculate_tier(100.0) == "red"
+        assert calculate_tier(80.0) == "red"
 
 
 # ---------------------------------------------------------------------------
@@ -427,10 +427,12 @@ class TestEngineTierChangePublish:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],  # first call: existing anomalies for rule evaluation
                 anomalies_after,  # second call: after persist, for score calc
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)
@@ -469,10 +471,12 @@ class TestEngineTierChangePublish:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)
@@ -498,10 +502,12 @@ class TestEngineTierChangePublish:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)
@@ -567,6 +573,7 @@ class TestEngineGfwDedup:
                 existing_anomalies,
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=2),
         ):
             results = await engine.evaluate_gfw(123456789)
@@ -595,10 +602,12 @@ class TestEngineGfwDedup:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             results = await engine.evaluate_realtime(123456789)
@@ -639,10 +648,12 @@ class TestEngineDbUpdate:
             patch("engine.get_session", return_value=mock_factory),
             patch("engine.get_vessel_profile_by_mmsi", new_callable=AsyncMock, return_value=profile),
             patch("engine.get_vessel_track", new_callable=AsyncMock, return_value=[]),
+            patch("engine.list_active_anomalies_by_mmsi", new_callable=AsyncMock, return_value=[]),
             patch("engine.list_anomaly_events_by_mmsi", new_callable=AsyncMock, side_effect=[
                 [],
                 anomalies_after,
             ]),
+            patch("engine.count_ended_events", new_callable=AsyncMock, return_value=0),
             patch("engine.create_anomaly_event", new_callable=AsyncMock, return_value=1),
         ):
             await engine.evaluate_realtime(123456789)

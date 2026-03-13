@@ -57,26 +57,43 @@ def calculate_tier(score: float) -> str:
 
 
 def aggregate_score(anomalies: Sequence[dict[str, Any]]) -> float:
-    """Sum points from unresolved anomalies, capping each rule at its
-    ``MAX_PER_RULE`` value.
+    """Sum points from unresolved, active anomalies, capping each rule at its
+    ``MAX_PER_RULE`` value (adjusted by escalation multiplier when present).
 
-    Only unresolved anomalies contribute.  Each rule_id's total is capped
-    at ``MAX_PER_RULE[rule_id]`` (defaults to 2x the individual points if
-    the rule_id is not in the constant — though all known rules should be).
+    Only unresolved anomalies with ``event_state`` of ``'active'`` (or
+    ``None`` for backward compatibility) contribute.  Each rule_id's total
+    is capped at ``MAX_PER_RULE[rule_id]``, scaled by the highest escalation
+    multiplier found among that rule's anomalies.
     """
     per_rule_totals: dict[str, float] = {}
+    max_escalation_per_rule: dict[str, float] = {}
 
     for anomaly in anomalies:
         if anomaly.get("resolved", False):
+            continue
+        # Only count active anomalies (backward compat: treat None/missing as active)
+        event_state = anomaly.get("event_state")
+        if event_state is not None and event_state != "active":
             continue
         rule_id = anomaly.get("rule_id", "")
         points = float(anomaly.get("points", 0))
         per_rule_totals[rule_id] = per_rule_totals.get(rule_id, 0.0) + points
 
+        # Track highest escalation multiplier for cap adjustment
+        details = anomaly.get("details", {})
+        if isinstance(details, str):
+            details = json.loads(details)
+        mult = details.get("escalation_multiplier", 1.0) if isinstance(details, dict) else 1.0
+        max_escalation_per_rule[rule_id] = max(
+            max_escalation_per_rule.get(rule_id, 1.0), mult
+        )
+
     total = 0.0
     for rule_id, raw_total in per_rule_totals.items():
-        cap = MAX_PER_RULE.get(rule_id, raw_total)  # fallback: no cap
-        total += min(raw_total, cap)
+        base_cap = MAX_PER_RULE.get(rule_id, raw_total)  # fallback: no cap
+        escalation = max_escalation_per_rule.get(rule_id, 1.0)
+        adjusted_cap = base_cap * escalation
+        total += min(raw_total, adjusted_cap)
 
     return total
 

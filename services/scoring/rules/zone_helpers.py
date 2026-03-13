@@ -84,6 +84,34 @@ async def is_near_russian_terminal(
     return row[0] if row else None
 
 
+async def is_near_port(
+    session: AsyncSession,
+    lat: float,
+    lon: float,
+    radius_nm: float = 5.0,
+) -> Optional[str]:
+    """Return port name if *lat*/*lon* is within *radius_nm* of a known port.
+
+    Queries the ``ports`` table seeded by migration 007.
+    Returns ``None`` if not near any port.
+    """
+    buffer_m = int(radius_nm * 1852)  # Convert nautical miles to metres
+    result = await session.execute(
+        text("""
+            SELECT name FROM ports
+            WHERE ST_DWithin(
+                    position,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
+                    :buffer
+            )
+            LIMIT 1
+        """),
+        {"lat": lat, "lon": lon, "buffer": buffer_m},
+    )
+    row = result.first()
+    return row[0] if row else None
+
+
 def is_russian_terminal_port(port_name: Optional[str]) -> bool:
     """Check if a port name matches a known Russian terminal.
 

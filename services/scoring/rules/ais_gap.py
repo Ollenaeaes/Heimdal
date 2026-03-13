@@ -81,6 +81,40 @@ class AisGapRule(ScoringRule):
         # Gap < 2 h — does not fire
         return RuleResult(fired=False, rule_id=self.rule_id)
 
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """End when a new position is received (signal resumed).
+
+        If recent_positions has a position newer than the anomaly's
+        event_start, the gap is over.
+        """
+        # Determine when the gap started
+        event_start = active_anomaly.get("event_start") or active_anomaly.get("created_at")
+        if event_start is None:
+            return False
+        if isinstance(event_start, str):
+            event_start = datetime.fromisoformat(event_start)
+        if not event_start.tzinfo:
+            event_start = event_start.replace(tzinfo=timezone.utc)
+
+        # Check if any recent position is newer than event_start
+        for pos in recent_positions:
+            ts = pos.get("timestamp")
+            if ts is None:
+                continue
+            if isinstance(ts, str):
+                ts = datetime.fromisoformat(ts)
+            if not ts.tzinfo:
+                ts = ts.replace(tzinfo=timezone.utc)
+            if ts > event_start:
+                return True
+        return False
+
     # ------------------------------------------------------------------
 
     @staticmethod

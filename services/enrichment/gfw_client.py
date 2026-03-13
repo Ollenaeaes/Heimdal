@@ -55,6 +55,10 @@ class GFWClient:
             events = await client.get("/events", params={"limit": 10})
     """
 
+    # Thresholds for slow API call warnings (milliseconds)
+    SLOW_CALL_WARNING_MS = 5000
+    SLOW_CALL_ERROR_MS = 30000
+
     def __init__(
         self,
         api_token: str | None = None,
@@ -74,6 +78,11 @@ class GFWClient:
         # HTTP client (created on __aenter__)
         self._http: httpx.AsyncClient | None = None
 
+        # API call statistics (reset per enrichment cycle)
+        self._call_count: int = 0
+        self._total_call_duration_ms: float = 0.0
+        self._retry_count: int = 0
+
     async def __aenter__(self) -> GFWClient:
         self._http = httpx.AsyncClient(
             base_url=self._base_url,
@@ -85,6 +94,30 @@ class GFWClient:
         if self._http:
             await self._http.aclose()
             self._http = None
+
+    # ------------------------------------------------------------------
+    # API call statistics
+    # ------------------------------------------------------------------
+
+    def reset_stats(self) -> None:
+        """Reset API call statistics. Call before each enrichment cycle."""
+        self._call_count = 0
+        self._total_call_duration_ms = 0.0
+        self._retry_count = 0
+
+    def get_stats(self) -> dict[str, Any]:
+        """Return API call statistics for the current cycle."""
+        avg_ms = (
+            self._total_call_duration_ms / self._call_count
+            if self._call_count > 0
+            else 0.0
+        )
+        return {
+            "api_calls_made": self._call_count,
+            "total_call_duration_ms": round(self._total_call_duration_ms, 1),
+            "avg_call_duration_ms": round(avg_ms, 1),
+            "rate_limit_retries": self._retry_count,
+        }
 
     # ------------------------------------------------------------------
     # Rate limiting
@@ -102,6 +135,45 @@ class GFWClient:
     # ------------------------------------------------------------------
     # Request execution with retries
     # ------------------------------------------------------------------
+
+    def _log_api_call(
+        self, method: str, path: str, status_code: int, duration_ms: float
+    ) -> None:
+        """Log an API call with duration and threshold-based severity."""
+        log_extra = {
+            "duration_ms": round(duration_ms, 1),
+            "url": path,
+            "status_code": status_code,
+            "method": method,
+        }
+
+        if duration_ms > self.SLOW_CALL_ERROR_MS:
+            logger.error(
+                "GFW API call %s %s took %.0fms (status %d)",
+                method,
+                path,
+                duration_ms,
+                status_code,
+                extra=log_extra,
+            )
+        elif duration_ms > self.SLOW_CALL_WARNING_MS:
+            logger.warning(
+                "GFW API call %s %s took %.0fms (status %d)",
+                method,
+                path,
+                duration_ms,
+                status_code,
+                extra={**log_extra, "slow_api_call": True},
+            )
+        else:
+            logger.debug(
+                "GFW API call %s %s completed in %.0fms (status %d)",
+                method,
+                path,
+                duration_ms,
+                status_code,
+                extra=log_extra,
+            )
 
     async def _request(
         self,
@@ -121,6 +193,7 @@ class GFWClient:
             await self._wait_for_rate_limit()
 
             try:
+                call_start = time.monotonic()
                 response = await self._http.request(
                     method,
                     path,
@@ -128,11 +201,17 @@ class GFWClient:
                     json=json_body,
                     headers={"Authorization": f"Bearer {self._api_token}"},
                 )
+                duration_ms = (time.monotonic() - call_start) * 1000
+
+                # Track stats
+                self._call_count += 1
+                self._total_call_duration_ms += duration_ms
 
                 if response.status_code in RETRYABLE_STATUS_CODES:
                     if attempt < MAX_RETRIES:
                         retry_after = response.headers.get("Retry-After")
                         wait = float(retry_after) if retry_after else backoff
+                        self._retry_count += 1
                         logger.warning(
                             "GFW API returned %d on attempt %d/%d for %s %s, retrying in %.1fs",
                             response.status_code,
@@ -141,15 +220,28 @@ class GFWClient:
                             method,
                             path,
                             wait,
+                            extra={
+                                "duration_ms": round(duration_ms, 1),
+                                "url": path,
+                                "status_code": response.status_code,
+                                "method": method,
+                                "retry_attempt": attempt + 1,
+                                "retry_reason": f"HTTP {response.status_code}",
+                            },
                         )
                         await asyncio.sleep(wait)
                         backoff *= 2
                         continue
+                    # Final attempt also failed — log before raising
+                    self._log_api_call(method, path, response.status_code, duration_ms)
                     raise GFWAPIError(
                         f"GFW API request failed after {MAX_RETRIES + 1} attempts: "
                         f"{response.status_code} {response.text}",
                         status_code=response.status_code,
                     )
+
+                # Successful response — log with duration and threshold checks
+                self._log_api_call(method, path, response.status_code, duration_ms)
 
                 response.raise_for_status()
                 return response
@@ -160,13 +252,24 @@ class GFWClient:
                     status_code=e.response.status_code,
                 ) from e
             except httpx.HTTPError as e:
+                duration_ms = (time.monotonic() - call_start) * 1000
+                self._call_count += 1
+                self._total_call_duration_ms += duration_ms
                 if attempt < MAX_RETRIES:
+                    self._retry_count += 1
                     logger.warning(
                         "GFW API connection error on attempt %d/%d: %s, retrying in %.1fs",
                         attempt + 1,
                         MAX_RETRIES + 1,
                         e,
                         backoff,
+                        extra={
+                            "duration_ms": round(duration_ms, 1),
+                            "url": path,
+                            "method": method,
+                            "retry_attempt": attempt + 1,
+                            "retry_reason": str(type(e).__name__),
+                        },
                     )
                     await asyncio.sleep(backoff)
                     backoff *= 2
