@@ -50,6 +50,18 @@ export interface EnrichmentPayload {
   notes?: string;
 }
 
+export interface EquasisUploadSummary {
+  id: number;
+  upload_timestamp: string;
+  edition_date: string | null;
+}
+
+export interface EquasisData {
+  latest: Record<string, any>;
+  upload_count: number;
+  uploads: EquasisUploadSummary[];
+}
+
 export interface VesselDetail {
   mmsi: number;
   imo?: number;
@@ -76,6 +88,7 @@ export interface VesselDetail {
   ownershipData?: OwnershipData;
   manualEnrichment?: ManualEnrichment;
   manualEnrichments?: ManualEnrichmentRecord[];
+  equasis?: EquasisData | null;
 }
 
 export interface TrackPoint {
