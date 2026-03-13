@@ -104,7 +104,7 @@ class TestNoClassification:
 
     @pytest.mark.asyncio
     async def test_no_class_fires_critical(self, rule):
-        """Vessel with no classification society should fire critical."""
+        """Vessel with no classification society should fire critical (after enrichment)."""
         profile = _profile(
             ship_type=80,
             pi_tier="IG",
@@ -112,6 +112,7 @@ class TestNoClassification:
         )
         # Remove class_society to simulate no classification
         profile.pop("class_society", None)
+        # pi_details counts as "has_data" so no_classification will fire
         result = await rule.evaluate(123456789, profile, [], [], [])
         assert result.fired is True
         findings = result.details["findings"]
@@ -216,12 +217,13 @@ class TestCombinedFactors:
 
     @pytest.mark.asyncio
     async def test_no_class_no_insurance_critical(self, rule):
-        """No classification + no insurance should escalate to critical."""
+        """No classification + no insurance after enrichment → critical."""
         profile = _profile(
             ship_type=80,
             pi_tier=None,
             pi_details=None,
             insurer=None,
+            enriched_at="2026-03-12T10:00:00+00:00",
         )
         profile.pop("class_society", None)
         result = await rule.evaluate(123456789, profile, [], [], [])
@@ -247,6 +249,19 @@ class TestEdgeCases:
         """Rule should return None if no profile available."""
         result = await rule.evaluate(123456789, None, [], [], [])
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_unenriched_vessel_does_not_fire(self, rule):
+        """Vessel with no data and no enrichment attempted → don't penalise."""
+        profile = _profile(
+            ship_type=80,
+            pi_tier=None,
+            pi_details=None,
+            insurer=None,
+        )
+        profile.pop("class_society", None)
+        result = await rule.evaluate(123456789, profile, [], [], [])
+        assert result.fired is False
 
     @pytest.mark.asyncio
     async def test_iacs_name_variations(self, rule):

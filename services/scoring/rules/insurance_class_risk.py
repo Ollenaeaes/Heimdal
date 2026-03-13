@@ -137,8 +137,23 @@ class InsuranceClassRiskRule(ScoringRule):
         class_society = profile.get("class_society")
         is_iacs, is_russian = _is_iacs(class_society)
 
+        # Has any data source populated insurance/classification info?
+        # If not, we can't fairly penalise for missing data.
+        pi_details = profile.get("pi_details")
+        has_pi_details = isinstance(pi_details, dict) and bool(pi_details)
+        has_data = bool(
+            profile.get("enriched_at")
+            or profile.get("equasis_data")
+            or class_society
+            or profile.get("insurer")
+            or has_pi_details
+        )
+
         # --- 1. No classification at all (critical, 25 pts) ---
-        if not class_society:
+        # Only flag if we've actually tried to look it up
+        if not class_society and not has_data:
+            pass  # No data yet — don't penalise
+        elif not class_society:
             findings.append({
                 "check": "no_classification",
                 "severity": "critical",
@@ -173,7 +188,8 @@ class InsuranceClassRiskRule(ScoringRule):
             max_severity = _escalate(max_severity, "high")
 
         # --- 4. No IG P&I coverage ---
-        if not _has_ig_pi(profile):
+        # Only flag if we have some data source — don't penalise unenriched vessels
+        if not _has_ig_pi(profile) and has_data:
             if is_tanker:
                 # Tanker without IG P&I → high (15 pts)
                 findings.append({
