@@ -212,6 +212,104 @@ async def publish_enrichment_complete(
     )
 
 
+async def update_enrichment_status(
+    session: Any,
+    mmsi: int,
+    *,
+    gfw_events_found: bool = False,
+    sar_detections_found: bool = False,
+    sanctions_checked: bool = False,
+    ownership_found: bool = False,
+    classification_found: bool = False,
+    insurance_found: bool = False,
+    tier_at_enrichment: str = "green",
+) -> None:
+    """Update the enrichment_status JSONB for a vessel after enrichment.
+
+    Writes a structured status object containing last_enriched timestamp,
+    enrichment_sources list, data_coverage booleans, and the tier at time
+    of enrichment.
+
+    Args:
+        session: An async SQLAlchemy session.
+        mmsi: Vessel MMSI.
+        gfw_events_found: Whether GFW behavioral events were found.
+        sar_detections_found: Whether SAR detections were found.
+        sanctions_checked: Whether sanctions screening was performed.
+        ownership_found: Whether ownership data is available.
+        classification_found: Whether classification data is available.
+        insurance_found: Whether insurance data is available.
+        tier_at_enrichment: The vessel's risk tier at time of enrichment.
+    """
+    from sqlalchemy import text
+
+    status = {
+        "last_enriched": datetime.now(timezone.utc).isoformat(),
+        "enrichment_sources": [],
+        "data_coverage": {
+            "gfw_events": gfw_events_found,
+            "sar_detections": sar_detections_found,
+            "sanctions": sanctions_checked,
+            "ownership": ownership_found,
+            "classification": classification_found,
+            "insurance": insurance_found,
+            "port_state_control": False,  # not yet implemented
+        },
+        "tier_at_enrichment": tier_at_enrichment,
+    }
+
+    # Build sources list based on what was found
+    if gfw_events_found:
+        status["enrichment_sources"].append("gfw_events")
+    if sar_detections_found:
+        status["enrichment_sources"].append("gfw_sar")
+    if ownership_found:
+        status["enrichment_sources"].append("gfw_identity")
+    if sanctions_checked:
+        status["enrichment_sources"].append("opensanctions")
+
+    await session.execute(
+        text(
+            "UPDATE vessel_profiles SET enrichment_status = :status, "
+            "enriched_at = NOW() WHERE mmsi = :mmsi"
+        ),
+        {"mmsi": mmsi, "status": json.dumps(status)},
+    )
+
+
+async def _log_enrichment_coverage(session: Any) -> None:
+    """Log enrichment data coverage statistics for yellow and red tier vessels.
+
+    Queries the database for coverage percentages of ownership, classification,
+    and insurance data across risk tiers.
+
+    Args:
+        session: An async SQLAlchemy session.
+    """
+    from sqlalchemy import text
+
+    result = await session.execute(text("""
+        SELECT risk_tier,
+            COUNT(*) as total,
+            COUNT(*) FILTER (WHERE enrichment_status->'data_coverage'->>'ownership' = 'true') as has_ownership,
+            COUNT(*) FILTER (WHERE enrichment_status->'data_coverage'->>'classification' = 'true') as has_classification,
+            COUNT(*) FILTER (WHERE enrichment_status->'data_coverage'->>'insurance' = 'true') as has_insurance
+        FROM vessel_profiles
+        WHERE risk_tier IN ('yellow', 'red')
+        GROUP BY risk_tier
+    """))
+    for row in result.fetchall():
+        tier, total, has_own, has_class, has_ins = row
+        logger.info(
+            "Enrichment coverage for %s tier: %d total, %.0f%% ownership, %.0f%% classification, %.0f%% insurance",
+            tier,
+            total,
+            (has_own / total * 100) if total > 0 else 0,
+            (has_class / total * 100) if total > 0 else 0,
+            (has_ins / total * 100) if total > 0 else 0,
+        )
+
+
 async def enrich_batch(
     mmsis: list[int],
     *,
@@ -356,6 +454,32 @@ async def enrich_batch(
                     logger.debug("MARS data merged for MMSI %d", mmsi)
             except Exception:
                 logger.debug("MARS lookup failed for MMSI %d (non-blocking)", mmsi)
+
+    # Step 7: Update enrichment_status JSONB for each vessel
+    from shared.db.repositories import get_vessel_profile_by_mmsi as _get_profile_status
+
+    for mmsi in mmsis:
+        if mmsi in failed_mmsis:
+            continue
+        try:
+            profile = await _get_profile_status(session, mmsi)
+            tier = (profile or {}).get("risk_tier") or "green"
+
+            await update_enrichment_status(
+                session,
+                mmsi,
+                gfw_events_found=gfw_events_count > 0,
+                sar_detections_found=sar_detections_count > 0,
+                sanctions_checked=sanctions_index is not None,
+                ownership_found=bool((profile or {}).get("ownership_data")),
+                classification_found=bool((profile or {}).get("classification_data")),
+                insurance_found=bool((profile or {}).get("insurance_data")),
+                tier_at_enrichment=tier,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to update enrichment_status for MMSI %d", mmsi, exc_info=True
+            )
 
     return {
         "gfw_events_count": gfw_events_count,
@@ -560,6 +684,11 @@ async def run_cycle(
         await publish_enrichment_complete(
             redis_client, all_enriched, total_events, total_sar
         )
+        # Log enrichment coverage statistics
+        try:
+            await _log_enrichment_coverage(session)
+        except Exception:
+            logger.warning("Failed to log enrichment coverage statistics", exc_info=True)
 
     return {
         "total_vessels": len(all_enriched),
