@@ -414,9 +414,9 @@ class TestRunCycle:
         # Setup: 3 vessels, 2 unenriched
         mock_result = MagicMock()
         mock_result.fetchall.return_value = [
-            (273456789,),
-            (351123456,),
-            (211234567,),
+            (273456789, "green"),
+            (351123456, "green"),
+            (211234567, "green"),
         ]
         mock_session.execute.return_value = mock_result
 
@@ -455,7 +455,7 @@ class TestRunCycle:
     ):
         """last_enriched_at is updated after enrichment via Redis hash."""
         mock_result = MagicMock()
-        mock_result.fetchall.return_value = [(273456789,)]
+        mock_result.fetchall.return_value = [(273456789, "green")]
         mock_session.execute.return_value = mock_result
 
         async def mock_events(*a, **kw):
@@ -484,7 +484,7 @@ class TestRunCycle:
     ):
         """enrichment_complete event is published to Redis after cycle."""
         mock_result = MagicMock()
-        mock_result.fetchall.return_value = [(273456789,)]
+        mock_result.fetchall.return_value = [(273456789, "green")]
         mock_session.execute.return_value = mock_result
 
         async def mock_events(*a, **kw):
@@ -534,7 +534,7 @@ class TestRunCycle:
     ):
         """Vessels are processed in batches of the configured size."""
         # Create 5 vessels with batch size of 2
-        mmsis = [(i,) for i in range(100000000, 100000005)]
+        mmsis = [(i, "green") for i in range(100000000, 100000005)]
         mock_result = MagicMock()
         mock_result.fetchall.return_value = mmsis
         mock_session.execute.return_value = mock_result

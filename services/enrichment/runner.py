@@ -107,6 +107,71 @@ async def get_unenriched_mmsis(
     return unenriched
 
 
+async def get_vessels_needing_enrichment(
+    session: Any,
+    redis_client: Any,
+    *,
+    green_hours: float = 6,
+    yellow_hours: float = 2,
+    red_hours: float = 1,
+) -> list[int]:
+    """Get MMSIs needing enrichment, prioritized by risk tier.
+
+    Each risk tier has its own enrichment interval:
+      - red: every ``red_hours`` (default 1h)
+      - yellow: every ``yellow_hours`` (default 2h)
+      - green: every ``green_hours`` (default 6h)
+
+    Returns vessels sorted by priority: red first, then yellow, then green.
+
+    Args:
+        session: An async SQLAlchemy session.
+        redis_client: An async Redis client.
+        green_hours: Hours between enrichments for green vessels.
+        yellow_hours: Hours between enrichments for yellow vessels.
+        red_hours: Hours between enrichments for red vessels.
+
+    Returns:
+        List of MMSIs needing enrichment, ordered by risk tier priority.
+    """
+    from sqlalchemy import text
+
+    result = await session.execute(
+        text("SELECT mmsi, risk_tier FROM vessel_profiles ORDER BY mmsi")
+    )
+    vessels = [(row[0], row[1] or "green") for row in result.fetchall()]
+
+    # Tier-specific intervals in seconds
+    intervals = {
+        "red": red_hours * 3600,
+        "yellow": yellow_hours * 3600,
+        "green": green_hours * 3600,
+    }
+
+    # Priority ordering
+    tier_priority = {"red": 0, "yellow": 1, "green": 2}
+
+    now = datetime.now(timezone.utc).timestamp()
+    needing: list[tuple[int, str]] = []
+
+    for mmsi, tier in vessels:
+        interval = intervals.get(tier, intervals["green"])
+        last_enriched = await redis_client.hget(ENRICHED_KEY, str(mmsi))
+        if last_enriched is None:
+            needing.append((mmsi, tier))
+        else:
+            try:
+                ts = float(last_enriched)
+                if ts < now - interval:
+                    needing.append((mmsi, tier))
+            except (ValueError, TypeError):
+                needing.append((mmsi, tier))
+
+    # Sort by tier priority
+    needing.sort(key=lambda x: tier_priority.get(x[1], 99))
+    return [mmsi for mmsi, _tier in needing]
+
+
 async def mark_enriched(redis_client: Any, mmsis: list[int]) -> None:
     """Record enrichment timestamps for the given MMSIs in Redis.
 
@@ -421,13 +486,21 @@ async def run_cycle(
     Returns:
         Dict with 'total_vessels', 'gfw_events_count', 'sar_detections_count'.
     """
-    # Get all MMSIs from the database
-    all_mmsis = await get_all_mmsis(session)
-    logger.info("Found %d total vessel profiles", len(all_mmsis))
+    # Load adaptive frequency config from settings
+    freq = settings.enrichment.frequency
+    green_hours = freq.green_hours
+    yellow_hours = freq.yellow_hours
+    red_hours = freq.red_hours
 
-    # Filter to those needing enrichment
-    unenriched = await get_unenriched_mmsis(redis_client, all_mmsis, interval_seconds)
-    logger.info("Found %d vessels needing enrichment", len(unenriched))
+    # Get vessels needing enrichment, prioritized by risk tier
+    unenriched = await get_vessels_needing_enrichment(
+        session,
+        redis_client,
+        green_hours=green_hours,
+        yellow_hours=yellow_hours,
+        red_hours=red_hours,
+    )
+    logger.info("Found %d vessels needing enrichment (adaptive frequency)", len(unenriched))
 
     if not unenriched:
         return {"total_vessels": 0, "gfw_events_count": 0, "sar_detections_count": 0}

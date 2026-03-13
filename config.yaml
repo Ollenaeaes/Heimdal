@@ -97,6 +97,14 @@ enrichment:
   # Higher = stricter matching, fewer false positives.
   fuzzy_threshold: 0.85
 
+  # Adaptive enrichment frequency by risk tier.
+  # Higher-risk vessels are enriched more frequently.
+  frequency:
+    green_hours: 6
+    yellow_hours: 2
+    red_hours: 1
+  priority_order: ["red", "yellow", "green"]
+
   # Tier-change triggered enrichment.
   # When a vessel transitions to yellow or red, trigger immediate enrichment
   # instead of waiting for the 6-hour cycle.

@@ -31,10 +31,17 @@ class IngestConfig(BaseSettings):
     stale_connection: float = 120.0
 
 
+class EnrichmentFrequencyConfig(BaseSettings):
+    green_hours: float = 6.0
+    yellow_hours: float = 2.0
+    red_hours: float = 1.0
+
+
 class EnrichmentConfig(BaseSettings):
     opensanctions_rate_limit: int = 10
     fuzzy_name_threshold: float = 80.0
     fuzzy_owner_threshold: float = 75.0
+    frequency: EnrichmentFrequencyConfig = Field(default_factory=EnrichmentFrequencyConfig)
 
 
 class GfwConfig(BaseSettings):
@@ -132,7 +139,14 @@ def _merge_yaml(settings: Settings, yaml_data: dict[str, Any]) -> Settings:
             sub_model = getattr(settings, attr_name)
             for k, v in section.items():
                 if hasattr(sub_model, k):
-                    object.__setattr__(sub_model, k, v)
+                    current = getattr(sub_model, k)
+                    if isinstance(v, dict) and isinstance(current, BaseSettings):
+                        # Recursively merge nested sub-models
+                        for nk, nv in v.items():
+                            if hasattr(current, nk):
+                                object.__setattr__(current, nk, nv)
+                    else:
+                        object.__setattr__(sub_model, k, v)
 
     # Top-level scalar overrides
     for key in ("redis_url", "aisstream_api_key", "gfw_api_token"):
