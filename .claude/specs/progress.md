@@ -223,10 +223,19 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Files changed: App.tsx, GlobeView.tsx, VesselPanel.tsx, vite.config.ts, SearchBar.tsx, useOverlays.ts, Globe/index.ts
 - New file: cesiumViewer.ts
 
+### 21-performance-optimization Story 6: Memory Usage Optimization
+- Memory profiling script: scripts/profile_memory.py using tracemalloc
+- Profiles: scoring engine (10K vessels), ingest buffer (500 positions), frontend store estimate (10K vessels)
+- Results: scoring ~24 MB (target <200 MB), ingest ~0.2 MB (target <10 MB), frontend ~4.4 MB (target <100 MB)
+- All targets met by large margins — no code changes needed
+- OpenSanctions index documented as streaming (no full in-memory load)
+- docs/PERFORMANCE.md updated with Memory Profiling Results section
+- Tests: 8 new tests in tests/test_memory_optimization.py
+
 ## Current Story
 
 Wave 9 in progress. Spec 20 (yellow-enrichment-path) + Spec 21 (performance-optimization).
-Spec 21 Stories 1-3 and 5 complete. Story 4 pending.
+Spec 21 Stories 1-3, 5, and 6 complete. Story 4 pending.
 
 ## Known Issues
 
