@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import redis.asyncio as aioredis
 
 from shared.config import settings
+from shared.logging import setup_logging
 
 from engine import ScoringEngine
 
@@ -33,10 +34,7 @@ ENRICHMENT_CHANNEL = "heimdal:enrichment_complete"
 
 
 async def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    setup_logging("scoring")
 
     redis = aioredis.from_url(settings.redis_url, decode_responses=True)
     pubsub = redis.pubsub()
