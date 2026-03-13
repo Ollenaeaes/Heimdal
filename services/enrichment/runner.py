@@ -425,6 +425,10 @@ async def run_loop(
         cycle_start = time.monotonic()
 
         try:
+            # Reset GFW client stats before each cycle
+            if hasattr(gfw_client, "reset_stats"):
+                gfw_client.reset_stats()
+
             async with session_factory() as session:
                 result = await run_cycle(
                     gfw_client=gfw_client,
@@ -440,12 +444,27 @@ async def run_loop(
                 await session.commit()
 
             elapsed = time.monotonic() - cycle_start
+            elapsed_ms = elapsed * 1000
+
+            # Build cycle summary with API call stats
+            summary_extra: dict[str, Any] = {
+                "total_duration_ms": round(elapsed_ms, 1),
+            }
+            if hasattr(gfw_client, "get_stats"):
+                api_stats = gfw_client.get_stats()
+                summary_extra.update(api_stats)
+
             logger.info(
-                "Enrichment cycle complete in %.1fs: %d vessels, %d events, %d SAR",
+                "Enrichment cycle complete in %.1fs: %d vessels, %d events, %d SAR"
+                " | API calls: %d, avg %.0fms, retries: %d",
                 elapsed,
                 result["total_vessels"],
                 result["gfw_events_count"],
                 result["sar_detections_count"],
+                summary_extra.get("api_calls_made", 0),
+                summary_extra.get("avg_call_duration_ms", 0),
+                summary_extra.get("rate_limit_retries", 0),
+                extra=summary_extra,
             )
         except Exception:
             logger.exception("Enrichment cycle failed")
