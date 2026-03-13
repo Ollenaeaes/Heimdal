@@ -70,6 +70,22 @@ class StsProximityRule(ScoringRule):
 
         return RuleResult(fired=False, rule_id=self.rule_id)
 
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """End when vessel exits all STS zone buffers (latest position not in any zone)."""
+        if not recent_positions:
+            return False
+        sorted_pos = sorted(recent_positions, key=lambda p: p.get("timestamp", ""))
+        latest = sorted_pos[-1]
+        # Check if the latest position is NOT in any STS zone
+        zone_name = await _check_sts_zone_db([latest])
+        return zone_name is None
+
     # ------------------------------------------------------------------
 
     @staticmethod
