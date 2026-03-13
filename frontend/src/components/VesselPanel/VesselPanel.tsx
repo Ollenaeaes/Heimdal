@@ -11,7 +11,9 @@ import { TrackReplay } from './TrackReplay';
 import { SanctionsSection } from './SanctionsSection';
 import { OwnershipSection } from './OwnershipSection';
 import { EnrichmentForm } from './EnrichmentForm';
+import { EquasisUpload } from './EquasisUpload';
 import { EnrichmentHistory } from './EnrichmentHistory';
+import { EquasisSection } from './EquasisSection';
 
 function VesselPanel() {
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
@@ -84,6 +86,8 @@ function VesselPanel() {
             manualEnrichment={vessel.manualEnrichment}
           />
           <EnrichmentForm mmsi={vessel.mmsi} />
+          <EquasisSection mmsi={vessel.mmsi} equasis={vessel.equasis} />
+          <EquasisUpload mmsi={vessel.mmsi} />
           <EnrichmentHistory enrichments={vessel.manualEnrichments} />
         </>
       )}

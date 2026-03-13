@@ -7,6 +7,8 @@ export { TrackReplay } from './TrackReplay';
 export { SanctionsSection } from './SanctionsSection';
 export { OwnershipSection } from './OwnershipSection';
 export { EnrichmentForm } from './EnrichmentForm';
+export { EquasisUpload } from './EquasisUpload';
+export { EquasisSection } from './EquasisSection';
 export { EnrichmentHistory } from './EnrichmentHistory';
 export { WatchButton } from './WatchButton';
 export { DossierExport } from './DossierExport';
