@@ -275,6 +275,65 @@ async def list_anomaly_events_by_mmsi(
     return [dict(r) for r in result.mappings().all()]
 
 
+async def list_anomalies_with_vessel(
+    session: AsyncSession,
+    *,
+    severity: Optional[str] = None,
+    resolved: Optional[bool] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """List anomalies with vessel name via JOIN (avoids N+1)."""
+    clauses = []
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
+
+    if severity:
+        clauses.append("ae.severity = :severity")
+        params["severity"] = severity
+    if resolved is not None:
+        clauses.append("ae.resolved = :resolved")
+        params["resolved"] = resolved
+
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    result = await session.execute(
+        text(
+            f"SELECT ae.*, vp.ship_name, vp.risk_tier "
+            f"FROM anomaly_events ae "
+            f"LEFT JOIN vessel_profiles vp ON ae.mmsi = vp.mmsi "
+            f"{where} "
+            f"ORDER BY ae.created_at DESC LIMIT :limit OFFSET :offset"
+        ),
+        params,
+    )
+    return [dict(r) for r in result.mappings().all()]
+
+
+async def count_anomaly_events(
+    session: AsyncSession,
+    *,
+    severity: Optional[str] = None,
+    resolved: Optional[bool] = None,
+) -> int:
+    """Count anomaly events with optional filters."""
+    clauses = []
+    params: dict[str, Any] = {}
+
+    if severity:
+        clauses.append("severity = :severity")
+        params["severity"] = severity
+    if resolved is not None:
+        clauses.append("resolved = :resolved")
+        params["resolved"] = resolved
+
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    result = await session.execute(
+        text(f"SELECT COUNT(*) FROM anomaly_events {where}"),
+        params,
+    )
+    row = result.first()
+    return row[0] if row else 0
+
+
 async def list_anomaly_events(
     session: AsyncSession,
     *,
@@ -307,6 +366,56 @@ async def list_anomaly_events(
         params,
     )
     return [dict(r) for r in result.mappings().all()]
+
+
+# ===================================================================
+# Score Aggregation (SQL-based)
+# ===================================================================
+
+
+async def aggregate_score_sql(session: AsyncSession, mmsi: int) -> float:
+    """Calculate aggregate risk score using SQL with per-rule caps.
+
+    This is the SQL equivalent of aggregator.aggregate_score() -- moves
+    the heavy lifting to PostgreSQL to reduce Python CPU usage.
+    """
+    from shared.constants import MAX_PER_RULE
+
+    caps_values = ", ".join(
+        f"('{rule_id}', {cap})" for rule_id, cap in MAX_PER_RULE.items()
+    )
+
+    result = await session.execute(
+        text(f"""
+            WITH rule_totals AS (
+                SELECT
+                    ae.rule_id,
+                    SUM(ae.points) as total_points,
+                    MAX(
+                        COALESCE(
+                            (ae.details::json->>'escalation_multiplier')::float,
+                            1.0
+                        )
+                    ) as max_escalation
+                FROM anomaly_events ae
+                WHERE ae.mmsi = :mmsi
+                  AND ae.resolved = false
+                  AND (ae.event_state = 'active' OR ae.event_state IS NULL)
+                GROUP BY ae.rule_id
+            ),
+            caps(rule_id, cap) AS (
+                VALUES {caps_values}
+            )
+            SELECT COALESCE(SUM(
+                LEAST(rt.total_points, c.cap * rt.max_escalation)
+            ), 0) as score
+            FROM rule_totals rt
+            LEFT JOIN caps c ON rt.rule_id = c.rule_id
+        """),
+        {"mmsi": mmsi},
+    )
+    row = result.first()
+    return float(row[0]) if row else 0.0
 
 
 # ===================================================================

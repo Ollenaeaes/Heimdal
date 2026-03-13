@@ -196,14 +196,41 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Key finding confirmed by profiling: json.loads inside aggregate_score consumes ~46% of scoring CPU time (5M calls for 10K iterations)
 - Rule discovery overhead is minimal (~0.6s for 100 iterations, 19 rules discovered)
 
+### 21-performance-optimization Story 2: Scoring Engine Debounce and Batching
+- ScoringDebouncer class in services/scoring/debouncer.py — asyncio-based debounce with per-vessel timers
+- New vessel → immediate evaluation; subsequent positions → debounced (timer resets on each new position)
+- Red-tier vessels use shorter debounce (30s vs 60s default), configurable via config.yaml scoring.debounce section
+- ScoringDebounceConfig added to shared/config.py, config.yaml updated with debounce settings
+- main.py updated: positions channel uses debouncer.on_position(), enrichment channel evaluates immediately (no debounce)
+- Concurrency limited via asyncio.Semaphore (max_concurrent configurable)
+- shutdown() for clean timer cancellation on service stop
+- Tests: 11 new tests in test_debounce.py; 415 total scoring tests pass
+
+### 21-performance-optimization Story 3: Database Query Optimization
+- aggregate_score_sql() in shared/db/repositories.py — SQL-based score aggregation with per-rule caps and escalation multiplier, equivalent to Python aggregate_score()
+- list_anomalies_with_vessel() — JOIN-based anomaly listing with vessel_profiles (avoids N+1 queries)
+- count_anomaly_events() — efficient count with optional severity/resolved filters
+- Tests: 30 new tests in tests/test_db_optimization.py (8 SQL verification + 10 Python equivalence + 7 JOIN query + 6 count)
+- All 415 existing scoring tests still pass
+
+### 21-performance-optimization Story 5: Frontend Bundle Optimization
+- Lazy-loaded GlobeView and VesselPanel via React.lazy() + Suspense in App.tsx
+- Extracted getCesiumViewer + constants into cesiumViewer.ts to break static import chain (SearchBar, useOverlays no longer force GlobeView into main chunk)
+- Added default exports to GlobeView.tsx and VesselPanel.tsx (keeping named exports for backward compat)
+- Configured manual chunks in vite.config.ts (cesium+resium → separate chunk)
+- Build now produces 4 chunks: index (254KB), cesium (60KB), VesselPanel (46KB), GlobeView (10KB)
+- All 315 passing tests remain passing; 8 pre-existing failures unchanged
+- Files changed: App.tsx, GlobeView.tsx, VesselPanel.tsx, vite.config.ts, SearchBar.tsx, useOverlays.ts, Globe/index.ts
+- New file: cesiumViewer.ts
+
 ## Current Story
 
 Wave 9 in progress. Spec 20 (yellow-enrichment-path) + Spec 21 (performance-optimization).
-Spec 21 Story 1 complete. Stories 2+ pending.
+Spec 21 Stories 1-3 and 5 complete. Story 4 pending.
 
 ## Known Issues
 
-- Frontend build produces a large chunk (4.6MB) from CesiumJS — consider code-splitting in a future wave
+- Frontend build now code-split into 4 chunks (GlobeView, VesselPanel, cesium, index) — Story 5 of spec 21
 - Minor warnings in ws_positions tests (unawaited coroutines from AsyncMock) — cosmetic only, all tests pass
 - identity_mismatch rule added as 14th rule (spec originally said 13 but had 14 distinct rules)
 - Pre-existing TS errors in vesselPanel.test.ts (type narrowing on undefined) and VesselCluster.tsx (Cesium type mismatch) — cosmetic only, all tests pass
