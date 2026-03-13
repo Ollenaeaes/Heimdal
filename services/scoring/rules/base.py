@@ -61,3 +61,44 @@ class ScoringRule(abc.ABC):
         ``RuleResult`` with ``fired=False`` / ``None`` otherwise.
         """
         ...
+
+    async def evaluate_all(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        existing_anomalies: Sequence[dict[str, Any]],
+        gfw_events: Sequence[dict[str, Any]],
+    ) -> list[RuleResult]:
+        """Evaluate and return multiple results.
+
+        The default implementation calls :meth:`evaluate` and wraps the
+        single result in a list.  GFW-sourced rules override this to
+        iterate over all matching events and return one result per
+        distinct event.
+
+        Returns
+        -------
+        A list of ``RuleResult`` objects with ``fired=True``.  Empty list
+        if the rule does not trigger.
+        """
+        result = await self.evaluate(
+            mmsi, profile, recent_positions, existing_anomalies, gfw_events,
+        )
+        if result is not None and result.fired:
+            return [result]
+        return []
+
+    async def check_event_ended(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        active_anomaly: dict[str, Any],
+    ) -> bool:
+        """Check if conditions for an active anomaly have ceased.
+
+        Returns True if the anomaly should be ended.
+        Default implementation returns False (backward-compatible).
+        """
+        return False

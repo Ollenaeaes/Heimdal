@@ -43,11 +43,26 @@ class GfwDarkSarRule(ScoringRule):
         existing_anomalies: Sequence[dict[str, Any]],
         gfw_events: Sequence[dict[str, Any]],
     ) -> Optional[RuleResult]:
+        results = await self.evaluate_all(
+            mmsi, profile, recent_positions, existing_anomalies, gfw_events,
+        )
+        if results:
+            return results[0]
+        return RuleResult(fired=False, rule_id=self.rule_id)
+
+    async def evaluate_all(
+        self,
+        mmsi: int,
+        profile: dict[str, Any] | None,
+        recent_positions: Sequence[dict[str, Any]],
+        existing_anomalies: Sequence[dict[str, Any]],
+        gfw_events: Sequence[dict[str, Any]],
+    ) -> list[RuleResult]:
         # Step 1: Query sar_detections for dark detections matching this MMSI
         dark_detections = await self._get_dark_sar_detections(mmsi)
 
         if not dark_detections:
-            return RuleResult(fired=False, rule_id=self.rule_id)
+            return []
 
         # Step 2: Check existing anomalies for ais_gap within 48h window
         ais_gap_anomalies = [
@@ -56,10 +71,25 @@ class GfwDarkSarRule(ScoringRule):
         ]
 
         if not ais_gap_anomalies:
-            return RuleResult(fired=False, rule_id=self.rule_id)
+            return []
 
-        # Step 3: Check temporal correlation
+        # Collect gfw_event_ids already present in existing anomalies
+        seen_detection_ids: set[str] = set()
+        for anomaly in existing_anomalies:
+            details = anomaly.get("details") or {}
+            if isinstance(details, dict):
+                det_id = details.get("sar_detection_id")
+                if det_id:
+                    seen_detection_ids.add(str(det_id))
+
+        # Step 3: Check temporal correlation for each detection
+        results: list[RuleResult] = []
+
         for detection in dark_detections:
+            det_id = str(detection.get("id", ""))
+            if det_id in seen_detection_ids:
+                continue
+
             det_time = detection.get("detection_time")
             if det_time is None:
                 continue
@@ -75,13 +105,14 @@ class GfwDarkSarRule(ScoringRule):
                     gap_time = gap_time.replace(tzinfo=timezone.utc)
 
                 if abs(det_time - gap_time) <= _CORRELATION_WINDOW:
-                    return RuleResult(
+                    results.append(RuleResult(
                         fired=True,
                         rule_id=self.rule_id,
                         severity="high",
                         points=40.0,
                         details={
                             "event_type": "DARK_SAR",
+                            "sar_detection_id": det_id,
                             "detection_time": str(det_time),
                             "ais_gap_created_at": str(gap_time),
                             "lat": detection.get("lat"),
@@ -89,9 +120,10 @@ class GfwDarkSarRule(ScoringRule):
                             "reason": "Dark SAR detection correlated with AIS gap",
                         },
                         source="gfw",
-                    )
+                    ))
+                    break  # One result per detection, matched to first gap
 
-        return RuleResult(fired=False, rule_id=self.rule_id)
+        return results
 
     async def _get_dark_sar_detections(
         self, mmsi: int
