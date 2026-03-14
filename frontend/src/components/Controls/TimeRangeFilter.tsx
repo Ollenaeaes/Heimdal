@@ -34,8 +34,8 @@ export function TimeRangeFilter() {
           onClick={() => handleClick(preset)}
           className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
             activeKey === preset.key
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-[#3B82F6] text-white'
+              : 'bg-[#111827] text-gray-300 hover:bg-[#1F2937] border border-[#1F2937]'
           }`}
         >
           {preset.label}

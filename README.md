@@ -216,6 +216,46 @@ heimdal/
 └── config.yaml          # Application configuration
 ```
 
+## External Data Dependencies
+
+Some capability modules require external geospatial datasets that are too large to bundle in the repository. Download them manually and load via the provided scripts.
+
+### GSHHG Coastline Data (for AIS Spoofing Detection)
+
+Global coastline polygons used by the `spoof_land_position` rule to detect vessels reporting positions on land.
+
+- **Source:** [GSHHG — Global Self-consistent, Hierarchical, High-resolution Geography Database](https://www.soest.hawaii.edu/pwessel/gshhg/)
+- **Download:** <https://www.soest.hawaii.edu/pwessel/gshhg/> — get the **ESRI Shapefile** version (`gshhg-shp-*.zip`)
+- **Resolution:** Use crude resolution (`GSHHS_c_L1.shp`) — sufficient for land/sea discrimination (~50 MB)
+- **Load:**
+  ```bash
+  python scripts/load_land_mask.py --input path/to/GSHHS_c_L1.shp
+  ```
+
+### Submarine Cable & Pipeline Routes (for Infrastructure Protection)
+
+Cable and pipeline route geometries used by the `cable_slow_transit`, `cable_alignment`, and `infra_speed_anomaly` rules.
+
+- **EMODnet Human Activities — Telecommunication Cables:** [Actual Routes dataset](https://emodnet.ec.europa.eu/geonetwork/srv/api/records/39ebe289-410b-4a5d-88a4-51bfcde538de)
+- **EMODnet Human Activities — Pipelines:** [Pipelines dataset](https://emodnet.ec.europa.eu/geonetwork/srv/api/records/aca3dd01-77ac-47fe-8291-6ca916daaa6d)
+- **HELCOM — Baltic Sea Cables:** [Cables (HOLAS 2)](https://metadata.helcom.fi/geonetwork/srv/api/records/c0e73e71-cafb-4422-a3a3-115687fd5c49)
+- **TeleGeography — Global Submarine Cable Map:** [submarinecablemap.com](https://www.submarinecablemap.com/) (community GeoJSON: [GitHub](https://github.com/lintaojlu/submarine_cable_information))
+- **Load:**
+  ```bash
+  # From shapefile
+  python scripts/load_infrastructure.py --input path/to/cables.shp --type telecom_cable
+
+  # From GeoJSON
+  python scripts/load_infrastructure.py --input path/to/cables.geojson --type telecom_cable
+
+  # Sample Baltic Sea data is included for testing
+  python scripts/load_infrastructure.py --input data/infrastructure/sample_cables.geojson
+  ```
+
+### OpenSanctions (for Sanctions Matching)
+
+Already documented above — download via `make fetch-sanctions`.
+
 ## Troubleshooting
 
 **Services won't start:**

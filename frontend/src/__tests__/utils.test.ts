@@ -11,15 +11,15 @@ import terminals from '../data/terminals.json';
 
 describe('riskColors', () => {
   it('returns correct hex for green', () => {
-    expect(getRiskColor('green')).toBe('#27AE60');
+    expect(getRiskColor('green')).toBe('#22C55E');
   });
 
   it('returns correct hex for yellow', () => {
-    expect(getRiskColor('yellow')).toBe('#D4820C');
+    expect(getRiskColor('yellow')).toBe('#F59E0B');
   });
 
   it('returns correct hex for red', () => {
-    expect(getRiskColor('red')).toBe('#C0392B');
+    expect(getRiskColor('red')).toBe('#EF4444');
   });
 
   it('RISK_COLORS has exactly 3 tiers', () => {

@@ -135,7 +135,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
   };
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700" data-testid="enrichment-form-section">
+    <div className="border-b border-[#1F2937]" data-testid="enrichment-form-section">
       {/* Toast */}
       {toast && (
         <div
@@ -154,16 +154,16 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
       <button
         data-testid="enrichment-form-toggle"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full text-left"
+        className="w-full flex items-center justify-between px-3 py-2"
       >
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
+        <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">
           Manual Enrichment
-        </h3>
+        </span>
         <span className="text-gray-500 text-xs">{isOpen ? '▲' : '▼'}</span>
       </button>
 
       {isOpen && (
-        <div className="mt-3 space-y-3" data-testid="enrichment-form-body">
+        <div className="px-3 pb-2 space-y-3" data-testid="enrichment-form-body">
           {/* Source (required) */}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Source *</label>
@@ -171,7 +171,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               data-testid="enrichment-source"
               value={form.source}
               onChange={(e) => updateField('source', e.target.value)}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             >
               <option value="">Select source...</option>
               {SOURCE_OPTIONS.map((opt) => (
@@ -190,7 +190,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               data-testid="enrichment-registered-owner"
               value={form.registeredOwner}
               onChange={(e) => updateField('registeredOwner', e.target.value)}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -202,7 +202,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               data-testid="enrichment-commercial-manager"
               value={form.commercialManager}
               onChange={(e) => updateField('commercialManager', e.target.value)}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -214,7 +214,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               data-testid="enrichment-beneficial-owner"
               value={form.beneficialOwner}
               onChange={(e) => updateField('beneficialOwner', e.target.value)}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -226,7 +226,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               data-testid="enrichment-pi-insurer"
               value={form.piInsurer}
               onChange={(e) => updateField('piInsurer', e.target.value)}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -237,7 +237,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               data-testid="enrichment-pi-tier"
               value={form.piInsurerTier}
               onChange={(e) => updateField('piInsurerTier', e.target.value as PiTier | '')}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             >
               <option value="">Select tier...</option>
               {PI_TIER_OPTIONS.map((opt) => (
@@ -256,7 +256,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               data-testid="enrichment-classification-society"
               value={form.classificationSociety}
               onChange={(e) => updateField('classificationSociety', e.target.value)}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -281,7 +281,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               value={form.pscDetentions}
               onChange={(e) => updateField('pscDetentions', e.target.value)}
               min="0"
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -294,7 +294,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               value={form.pscDeficiencies}
               onChange={(e) => updateField('pscDeficiencies', e.target.value)}
               min="0"
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -306,7 +306,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
               value={form.notes}
               onChange={(e) => updateField('notes', e.target.value)}
               rows={3}
-              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none resize-none"
+              className="w-full bg-gray-800 text-gray-200 text-sm rounded px-2 py-1.5 border border-[#1F2937] focus:border-blue-500 focus:outline-none resize-none"
             />
           </div>
 

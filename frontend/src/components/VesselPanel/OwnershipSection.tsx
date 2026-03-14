@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { OwnershipData, ManualEnrichment } from '../../types/api';
 
 interface OwnershipSectionProps {
@@ -6,6 +7,7 @@ interface OwnershipSectionProps {
 }
 
 export function OwnershipSection({ ownershipData, manualEnrichment }: OwnershipSectionProps) {
+  const [expanded, setExpanded] = useState(false);
   const hasOwnership = ownershipData && (
     ownershipData.registeredOwner ||
     ownershipData.commercialManager ||
@@ -17,59 +19,54 @@ export function OwnershipSection({ ownershipData, manualEnrichment }: OwnershipS
   );
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700" data-testid="ownership-section">
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-        Ownership
-      </h3>
+    <div className="border-b border-[#1F2937]" data-testid="ownership-section">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-2"
+      >
+        <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">Ownership</span>
+        <span className="text-gray-500 text-xs">{expanded ? '▲' : '▼'}</span>
+      </button>
 
-      {!hasOwnership && !hasEnrichment ? (
-        <div className="text-xs text-gray-500" data-testid="ownership-empty">
-          No ownership data — enrich this vessel
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {hasOwnership && (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm" data-testid="ownership-data">
-              <FieldRow label="Registered Owner" value={ownershipData!.registeredOwner} />
-              <FieldRow label="Commercial Manager" value={ownershipData!.commercialManager} />
-              <FieldRow label="ISM Manager" value={ownershipData!.ismManager} />
-              <FieldRow label="Beneficial Owner" value={ownershipData!.beneficialOwner} />
+      {expanded && (
+        <div className="px-3 pb-2">
+          {!hasOwnership && !hasEnrichment ? (
+            <div className="text-xs text-gray-500" data-testid="ownership-empty">
+              No ownership data — enrich this vessel
             </div>
-          )}
-
-          {hasEnrichment && (
-            <div data-testid="enrichment-data">
-              {manualEnrichment!.ownershipChain && (
-                <div className="mb-2">
-                  <dt className="text-gray-500 text-xs">Ownership Chain</dt>
-                  <dd className="text-gray-300 text-sm">{manualEnrichment!.ownershipChain}</dd>
+          ) : (
+            <div className="space-y-2">
+              {hasOwnership && (
+                <div className="text-xs text-gray-400 space-y-0.5" data-testid="ownership-data">
+                  {ownershipData!.registeredOwner && (
+                    <div>Registered Owner: <span className="text-gray-300">{ownershipData!.registeredOwner}</span></div>
+                  )}
+                  {ownershipData!.commercialManager && (
+                    <div>Commercial Manager: <span className="text-gray-300">{ownershipData!.commercialManager}</span></div>
+                  )}
+                  {ownershipData!.ismManager && (
+                    <div>ISM Manager: <span className="text-gray-300">{ownershipData!.ismManager}</span></div>
+                  )}
+                  {ownershipData!.beneficialOwner && (
+                    <div>Beneficial Owner: <span className="text-gray-300">{ownershipData!.beneficialOwner}</span></div>
+                  )}
                 </div>
               )}
-              {manualEnrichment!.notes && (
-                <div>
-                  <dt className="text-gray-500 text-xs">Notes</dt>
-                  <dd className="text-gray-300 text-sm">{manualEnrichment!.notes}</dd>
+
+              {hasEnrichment && (
+                <div className="text-xs text-gray-400 space-y-0.5" data-testid="enrichment-data">
+                  {manualEnrichment!.ownershipChain && (
+                    <div>Ownership Chain: <span className="text-gray-300">{manualEnrichment!.ownershipChain}</span></div>
+                  )}
+                  {manualEnrichment!.notes && (
+                    <div>Notes: <span className="text-gray-300">{manualEnrichment!.notes}</span></div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function FieldRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | undefined;
-}) {
-  return (
-    <div>
-      <dt className="text-gray-500 text-xs">{label}</dt>
-      <dd className="text-gray-300">{value ?? '—'}</dd>
     </div>
   );
 }

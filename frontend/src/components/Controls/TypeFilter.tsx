@@ -42,9 +42,9 @@ export function TypeFilter() {
       <select
         value={selected === 'custom' ? 'custom' : selected === 'all' ? 'all' : TYPE_PRESETS.find((p) => p.label === selected)?.label ?? 'all'}
         onChange={handleChange}
-        className="px-2.5 py-1.5 rounded-md text-xs font-medium bg-gray-800/80 text-white
-                   border border-gray-600 focus:border-blue-500 focus:outline-none
-                   backdrop-blur-sm cursor-pointer appearance-none pr-6"
+        className="px-2.5 py-1.5 rounded text-xs font-medium bg-[#111827]/80 text-white
+                   border border-[#1F2937] focus:border-[#3B82F6] focus:outline-none
+                   backdrop-blur-md cursor-pointer appearance-none pr-6"
         aria-label="Filter by vessel type"
         data-testid="type-filter-select"
       >

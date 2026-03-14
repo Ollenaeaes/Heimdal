@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { Viewer as ResiumViewer } from 'resium';
-import { Ion, Cartesian3, type Viewer } from 'cesium';
+import { Ion, Cartesian3, Color, IonImageryProvider, type Viewer } from 'cesium';
 import { VesselMarkers } from './VesselMarkers';
 import { TrackTrail } from './TrackTrail';
 import { GfwEventMarkers } from './GfwEventMarkers';
@@ -29,6 +29,30 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeVi
       const viewer = viewerRef.current?.cesiumElement;
       if (viewer && !viewer.isDestroyed()) {
         setCesiumViewer(viewer);
+
+        // Globe styling — dark maritime ops aesthetic
+        const { scene } = viewer;
+        scene.backgroundColor = Color.fromCssColorString('#0A0E17');
+        scene.globe.baseColor = Color.fromCssColorString('#0A1628');
+        scene.globe.showGroundAtmosphere = true;
+        scene.fog.enabled = true;
+        scene.fog.density = 0.0003;
+        scene.skyAtmosphere.brightnessShift = -0.4;
+
+        // Remove default imagery layers so Bing Maps doesn't show
+        scene.globe.imageryLayers.removeAll();
+
+        // Attempt Earth at Night imagery, fall back to base color on failure
+        IonImageryProvider.fromAssetId(3812)
+          .then((provider) => {
+            if (!viewer.isDestroyed()) {
+              scene.globe.imageryLayers.addImageryProvider(provider);
+            }
+          })
+          .catch(() => {
+            // Fallback: globe base color (#0A1628) is already set, nothing else needed
+          });
+
         viewer.camera.flyTo({
           destination: Cartesian3.fromDegrees(INITIAL_LON, INITIAL_LAT, INITIAL_ALT),
           duration: 0,

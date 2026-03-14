@@ -1,10 +1,5 @@
 import { useVesselStore } from '../../hooks/useVesselStore';
-
-const RISK_COLORS: Record<string, string> = {
-  green: '#27AE60',
-  yellow: '#D4820C',
-  red: '#C0392B',
-};
+import { RISK_COLORS } from '../../utils/riskColors';
 
 const TIERS = ['green', 'yellow', 'red'] as const;
 
@@ -47,11 +42,11 @@ export function RiskFilter() {
             key={tier}
             type="button"
             onClick={() => toggle(tier)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium
                         transition-all border ${
                           active
-                            ? 'border-gray-600 bg-gray-800/80 text-white'
-                            : 'border-gray-700/50 bg-gray-900/60 text-gray-500'
+                            ? 'border-[#1F2937] bg-[#111827]/80 text-white'
+                            : 'border-[#1F2937]/50 bg-[#0A0E17]/60 text-gray-500'
                         }`}
             data-testid={`risk-toggle-${tier}`}
             aria-pressed={active}

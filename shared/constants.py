@@ -38,8 +38,18 @@ MAX_PER_RULE: dict[str, int] = {
     "ais_spoofing": 100,
     "ownership_risk": 60,
     "insurance_class_risk": 60,
+    # AIS spoofing detection rules
+    "spoof_land_position": 100,
+    "spoof_impossible_speed": 100,
+    "spoof_duplicate_mmsi": 100,
+    "spoof_frozen_position": 40,
+    "spoof_identity_mismatch": 100,
     # GFW-sourced enrichment rule
     "voyage_pattern": 80,
+    # Infrastructure protection rules
+    "cable_slow_transit": 140,
+    "cable_alignment": 100,
+    "infra_speed_anomaly": 15,
 }
 
 # All rule IDs as a frozenset for validation
@@ -374,6 +384,14 @@ REALTIME_RULE_IDS: list[str] = [
     "ais_spoofing",
     "ownership_risk",
     "insurance_class_risk",
+    "cable_slow_transit",
+    "cable_alignment",
+    "infra_speed_anomaly",
+    "spoof_land_position",
+    "spoof_impossible_speed",
+    "spoof_duplicate_mmsi",
+    "spoof_frozen_position",
+    "spoof_identity_mismatch",
 ]
 
 # ---------------------------------------------------------------------------

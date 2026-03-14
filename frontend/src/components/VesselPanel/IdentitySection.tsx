@@ -17,13 +17,13 @@ export function IdentitySection({ vessel }: IdentitySectionProps) {
       : undefined;
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700">
+    <div className="px-3 py-2 border-b border-[#1F2937]">
       {/* Header */}
-      <div className="mb-3">
-        <h2 className="text-lg font-semibold text-white truncate">
+      <div className="mb-2">
+        <h2 className="text-[1.25rem] font-semibold text-white truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
           {vessel.name ?? 'Unknown Vessel'}
         </h2>
-        <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+        <div className="flex items-center gap-3 mt-1 text-xs text-gray-400 font-mono">
           {vessel.imo && <span>IMO {vessel.imo}</span>}
           <span>MMSI {vessel.mmsi}</span>
           {vessel.flagCountry && (
@@ -38,33 +38,27 @@ export function IdentitySection({ vessel }: IdentitySectionProps) {
             style={{ backgroundColor: riskColor }}
             data-testid="risk-badge"
           >
-            {vessel.riskTier.toUpperCase()} {vessel.riskScore}
+            ● {vessel.riskTier.toUpperCase()} — {vessel.riskScore}pts
           </span>
         </div>
       </div>
 
-      {/* Identity grid */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <FieldRow label="Call Sign" value={vessel.callSign} />
-        <FieldRow label="Ship Type" value={shipTypeLabel} />
-        <FieldRow label="Dimensions" value={dimensions} />
-        <FieldRow label="Year Built" value={vessel.yearBuilt?.toString()} />
+      {/* Identity — inline layout */}
+      <div className="text-xs text-gray-400 space-y-0.5">
+        <div>
+          Flag: <span className="text-gray-300">{vessel.flagCountry ?? '—'}</span>
+          {shipTypeLabel && <> | Type: <span className="text-gray-300">{shipTypeLabel}</span></>}
+        </div>
+        <div>
+          Call Sign: <span className="text-gray-300">{vessel.callSign ?? '—'}</span>
+          {dimensions && <> | Dimensions: <span className="text-gray-300">{dimensions}</span></>}
+        </div>
+        {vessel.yearBuilt && (
+          <div>
+            Year Built: <span className="text-gray-300">{vessel.yearBuilt}</span>
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-function FieldRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | undefined;
-}) {
-  return (
-    <div>
-      <dt className="text-gray-500 text-xs">{label}</dt>
-      <dd className="text-gray-300">{value ?? '—'}</dd>
     </div>
   );
 }

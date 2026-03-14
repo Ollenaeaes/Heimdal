@@ -117,21 +117,21 @@ export function StatsBar() {
               label="Green"
               value={data.risk_tiers.green}
               percent={calcPercent(data.risk_tiers.green, totalRisk)}
-              color="#27AE60"
+              color="#22C55E"
               testId="bar-green"
             />
             <BarRow
               label="Yellow"
               value={data.risk_tiers.yellow}
               percent={calcPercent(data.risk_tiers.yellow, totalRisk)}
-              color="#D4820C"
+              color="#F59E0B"
               testId="bar-yellow"
             />
             <BarRow
               label="Red"
               value={data.risk_tiers.red}
               percent={calcPercent(data.risk_tiers.red, totalRisk)}
-              color="#C0392B"
+              color="#EF4444"
               testId="bar-red"
             />
           </div>
@@ -144,9 +144,9 @@ export function StatsBar() {
             {Object.entries(data.anomalies.by_severity).length > 0 ? (
               Object.entries(data.anomalies.by_severity).map(([severity, count]) => {
                 const severityColors: Record<string, string> = {
-                  critical: '#7F1D1D',
+                  critical: '#991B1B',
                   high: '#DC2626',
-                  moderate: '#D4820C',
+                  moderate: '#F59E0B',
                   low: '#6B7280',
                 };
                 return (

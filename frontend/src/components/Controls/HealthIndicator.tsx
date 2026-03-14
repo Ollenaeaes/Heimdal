@@ -66,9 +66,9 @@ export function computeHealthLevel(data: HealthResponse): { level: HealthLevel; 
 }
 
 const DOT_COLORS: Record<HealthLevel, string> = {
-  green: 'bg-green-500',
-  yellow: 'bg-yellow-500',
-  red: 'bg-red-500',
+  green: 'bg-[#22C55E]',
+  yellow: 'bg-[#F59E0B]',
+  red: 'bg-[#EF4444]',
 };
 
 export function HealthIndicator() {

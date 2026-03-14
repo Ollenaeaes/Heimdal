@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, StatsBar, HealthIndicator, WatchlistPanel, EquasisImport } from './components/Controls';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, HealthIndicator, WatchlistPanel, EquasisImport, STATS_REFETCH_INTERVAL } from './components/Controls';
+import type { StatsResponse } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useOverlays } from './hooks/useOverlays';
@@ -61,20 +62,130 @@ function AppInner() {
   const [overlays, setOverlays] = useState<OverlayToggleState>(DEFAULT_OVERLAYS);
   useOverlays(overlays);
 
+  const setFilter = useVesselStore((s) => s.setFilter);
+  const filters = useVesselStore((s) => s.filters);
+
+  const { data: stats } = useQuery<StatsResponse>({
+    queryKey: ['stats'],
+    queryFn: async () => {
+      const res = await fetch('/api/stats');
+      if (!res.ok) throw new Error(`Stats fetch failed: ${res.status}`);
+      const raw = await res.json();
+      return {
+        risk_tiers: raw.vessels_by_risk_tier ?? raw.risk_tiers ?? { green: 0, yellow: 0, red: 0 },
+        anomalies: raw.anomalies ?? { total_active: 0, by_severity: raw.active_anomalies_by_severity ?? {} },
+        dark_ships: raw.dark_ship_candidates ?? raw.dark_ships ?? 0,
+        ingestion_rate: raw.ingestion_rate ?? 0,
+        total_vessels: raw.total_vessels ?? 0,
+        storage_estimate_gb: raw.storage_estimate_gb ?? 0,
+        gfw_events: raw.gfw_events,
+      };
+    },
+    refetchInterval: STATS_REFETCH_INTERVAL,
+  });
+
+  const handleTierClick = (tier: string) => {
+    const current = filters.riskTiers;
+    if (current.has(tier) && current.size === 1) {
+      // Clicking the only active filter clears it
+      setFilter({ riskTiers: new Set() });
+    } else {
+      setFilter({ riskTiers: new Set([tier]) });
+    }
+  };
+
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <header className="h-12 shrink-0 flex items-center px-4 bg-gray-900 border-b border-gray-800 gap-4">
-        <h1 className="text-white text-sm font-semibold tracking-wide">HEIMDAL</h1>
-        <WatchlistPanel />
-        <EquasisImport />
-        <StatsBar />
+      <header
+        className="h-10 shrink-0 flex items-center px-4 border-b border-gray-800/50 backdrop-blur-sm"
+        style={{ backgroundColor: 'rgba(10, 14, 23, 0.9)' }}
+      >
+        {/* HEIMDAL label */}
+        <h1
+          className="text-gray-400 text-xs font-semibold"
+          style={{ fontVariant: 'small-caps', letterSpacing: '0.05em' }}
+        >
+          HEIMDAL
+        </h1>
+
+        {/* Vessel count */}
+        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center">
+          <span className="text-gray-500 text-xs">Vessels</span>
+          <span className="font-mono text-xs text-gray-200 ml-1.5">
+            {stats?.total_vessels.toLocaleString() ?? '—'}
+          </span>
+        </div>
+
+        {/* Risk tier counts */}
+        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center gap-3">
+          <button
+            onClick={() => handleTierClick('green')}
+            className={`flex items-center gap-1 text-xs hover:opacity-80 transition-opacity ${
+              filters.riskTiers.has('green') ? 'ring-1 ring-green-500/50 rounded px-1 -mx-1' : ''
+            }`}
+            title="Filter: green tier"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="font-mono text-gray-200">
+              {stats?.risk_tiers.green.toLocaleString() ?? '—'}
+            </span>
+          </button>
+          <button
+            onClick={() => handleTierClick('yellow')}
+            className={`flex items-center gap-1 text-xs hover:opacity-80 transition-opacity ${
+              filters.riskTiers.has('yellow') ? 'ring-1 ring-yellow-500/50 rounded px-1 -mx-1' : ''
+            }`}
+            title="Filter: yellow tier"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+            <span className="font-mono text-gray-200">
+              {stats?.risk_tiers.yellow.toLocaleString() ?? '—'}
+            </span>
+          </button>
+          <button
+            onClick={() => handleTierClick('red')}
+            className={`flex items-center gap-1 text-xs hover:opacity-80 transition-opacity ${
+              filters.riskTiers.has('red') ? 'ring-1 ring-red-500/50 rounded px-1 -mx-1' : ''
+            }`}
+            title="Filter: red tier"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            <span className="font-mono text-gray-200">
+              {stats?.risk_tiers.red.toLocaleString() ?? '—'}
+            </span>
+          </button>
+        </div>
+
+        {/* Ingestion rate */}
+        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center">
+          <span className="text-gray-500 text-xs">Ingestion</span>
+          <span className="font-mono text-xs text-gray-200 ml-1.5">
+            {stats ? `${stats.ingestion_rate} pos/s` : '—'}
+          </span>
+        </div>
+
+        {/* Active alerts */}
+        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center">
+          <span className="text-gray-500 text-xs">Alerts</span>
+          <span className="font-mono text-xs text-gray-200 ml-1.5">
+            {stats?.anomalies.total_active.toLocaleString() ?? '—'}
+          </span>
+        </div>
+
+        {/* WatchlistPanel & EquasisImport */}
+        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center gap-2">
+          <WatchlistPanel />
+          <EquasisImport />
+        </div>
+
+        {/* Health indicator — right side */}
         <div className="ml-auto">
           <HealthIndicator />
         </div>
       </header>
 
       <div style={{ flex: 1, position: 'relative' }}>
-        <Suspense fallback={<div className="w-full h-full bg-gray-900 flex items-center justify-center text-gray-500">Loading globe...</div>}>
+        <Suspense fallback={<div className="w-full h-full bg-heimdal-bg flex items-center justify-center text-gray-500">Loading globe...</div>}>
           <GlobeView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} />
         </Suspense>
 

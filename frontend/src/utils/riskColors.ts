@@ -1,7 +1,7 @@
 export const RISK_COLORS = {
-  green: '#27AE60', // subdued green
-  yellow: '#D4820C', // amber/orange
-  red: '#C0392B', // danger red
+  green: '#22C55E',
+  yellow: '#F59E0B',
+  red: '#EF4444',
 } as const;
 
 export type RiskTier = keyof typeof RISK_COLORS;

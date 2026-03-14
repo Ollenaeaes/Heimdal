@@ -1,0 +1,45 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "description": "Germany (simplified polygon covering Berlin area)"
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [5.87, 47.27],
+              [5.87, 55.06],
+              [15.04, 55.06],
+              [15.04, 47.27],
+              [5.87, 47.27]
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "description": "France (simplified polygon)"
+      },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [
+            [
+              [-5.14, 42.33],
+              [-5.14, 51.09],
+              [8.23, 51.09],
+              [8.23, 42.33],
+              [-5.14, 42.33]
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

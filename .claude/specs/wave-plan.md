@@ -1,10 +1,10 @@
 # Heimdal Build Wave Plan
 
 **Created:** 2026-03-11
-**Updated:** 2026-03-14 (Capability Modules — Update 004)
+**Updated:** 2026-03-14 (Operations Centre Theme — Update 005)
 **Status:** draft
-**Total Specs:** 28
-**Total Waves:** 13
+**Total Specs:** 29
+**Total Waves:** 14
 
 ---
 
@@ -18,6 +18,8 @@ Waves must run sequentially — each wave depends on the previous completing.
 > **Update 002:** Added Wave 8 (Scoring Overhaul + Observability) and Wave 9 (Enrichment Escalation + Performance). Wave 8 fixes critical scoring issues: event lifecycle model (anomalies with start/end), port awareness to eliminate false positives, repeat-event escalation, and 4 new detection rules based on CREA/Windward/Kpler/S&P Global shadow fleet intelligence (AIS spoofing, ownership risk, insurance/classification risk, voyage patterns). Also adds structured JSON logging and service health monitoring. Wave 9 adds tier-triggered enrichment (yellow vessels get immediate ownership/classification deep-dive) and performance optimization (profiling, scoring debounce, bundle splitting).
 
 > **Update 003:** Added Wave 10 (Equasis PDF Upload). Operators can upload Equasis Ship Folder PDFs to enrich vessels with comprehensive registry data: management chain, classification status/surveys, PSC inspection history, flag history, name history, company history, and safety certificates. Server-side PDF parsing with pdfplumber, two upload entry points (vessel panel + standalone toolbar button), expandable vessel information display, and scoring rule enhancements for PSC detentions and classification withdrawals.
+
+> **Update 005:** Inserted Wave 12 (Operations Centre Visual Theme) before capability module frontends. Full frontend restyle to maritime VTS aesthetic: dark navy globe, chevron vessel markers with tier-differentiated glow/pulse, HUD status bar, dense sharp-cornered panels, Inter + JetBrains Mono typography. Former Waves 12-13 renumbered to 13-14. Total: 29 specs across 14 waves.
 
 > **Update 004:** Added Waves 11–13 (Capability Modules). Three modules extending Heimdal from sanctions compliance into maritime domain awareness: (1) Critical Infrastructure Protection — 3 rules detecting anchor-drag sabotage patterns near subsea cables/pipelines, with globe overlays and dashboard panel; (2) AIS Spoofing Detection — 5 new rules (stacking with existing ais_spoofing) covering position-on-land, impossible speed, duplicate MMSI, frozen positions, and zombie vessel identity theft, plus GNSS interference zone clustering; (3) Sanctions Evasion Network Mapping — encounter/ownership graph construction, network risk score propagation, d3-force network visualization. Backend and frontend split into separate specs per module (6 specs total). New DB tables: infrastructure_routes, infrastructure_events, land_mask, gnss_interference_zones, network_edges.
 
@@ -112,16 +114,23 @@ Depends on: Wave 8 (scoring engine with event lifecycle), Wave 4 (GFW enrichment
 | 24 | `spoofing-detection-backend` | land_mask + gnss_interference_zones tables, GSHHG data loading, 5 rules (spoof_land_position, spoof_impossible_speed, spoof_duplicate_mmsi, spoof_frozen_position, spoof_identity_mismatch), GNSS clustering |
 | 25 | `network-mapping-backend` | network_edges table, network_repository, encounter/proximity/ownership edge creation, network risk scoring, network API endpoints |
 
-### Wave 12 — Capability Modules: Frontend — Infrastructure & Spoofing (2 specs, parallel)
-Depends on: Wave 11 (specs 23, 24)
+### Wave 12 — Operations Centre Visual Theme (1 spec)
+Depends on: Wave 5 (frontend components exist to restyle)
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 29 | `operations-centre-theme` | Dark navy globe, chevron vessel markers with tier-differentiated glow/pulse, HUD top bar, dense sharp-cornered panels, Inter + JetBrains Mono typography, updated colour palette, track trail tapering with AIS gap dashes |
+
+### Wave 13 — Capability Modules: Frontend — Infrastructure & Spoofing (2 specs, parallel)
+Depends on: Wave 11 (specs 23, 24), Wave 12 (visual theme established)
 
 | Spec | Slug | Scope |
 |------|------|-------|
 | 26 | `infrastructure-protection-frontend` | Cable/pipeline globe overlay, point features (landing stations, wind farms, platforms), infrastructure risk halos, infrastructure dashboard panel |
 | 27 | `spoofing-detection-frontend` | Dashed spoof marker borders, duplicate MMSI connector lines, GNSS interference zone overlay |
 
-### Wave 13 — Capability Modules: Frontend — Network (1 spec)
-Depends on: Wave 11 (spec 25), Wave 12 (for consistent frontend patterns)
+### Wave 14 — Capability Modules: Frontend — Network (1 spec)
+Depends on: Wave 11 (spec 25), Wave 13 (for consistent frontend patterns)
 
 | Spec | Slug | Scope |
 |------|------|-------|
@@ -168,15 +177,17 @@ Wave 9:       [20-yellow-enrichment] [21-performance-optimization]       ← COM
                                    │
 Wave 10:                  [22-equasis-upload]                             ← COMPLETED
                                    │
-Wave 11: [23-infra-backend] [24-spoofing-backend] [25-network-backend]
+Wave 11: [23-infra-backend] [24-spoofing-backend] [25-network-backend]   ← COMPLETED
                        │              │                    │
                        └──────────────┴────────────────────┘
                                    │
-Wave 12:       [26-infra-frontend] [27-spoofing-frontend]
+Wave 12:            [29-operations-centre-theme]
+                                   │
+Wave 13:       [26-infra-frontend] [27-spoofing-frontend]
                        │                    │
                        └────────────────────┘
                                    │
-Wave 13:               [28-network-frontend]
+Wave 14:               [28-network-frontend]
 ```
 
 ---

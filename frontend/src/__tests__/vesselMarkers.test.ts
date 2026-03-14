@@ -58,16 +58,16 @@ const makeVessel = (overrides: Partial<VesselState> = {}): VesselState => ({
 });
 
 describe('MARKER_STYLE', () => {
-  it('green tier has opacity 0.4 and scale 0.6', () => {
-    expect(MARKER_STYLE.green).toEqual({ opacity: 0.4, scale: 0.6 });
+  it('green tier has opacity 0.3 and scale 0.5', () => {
+    expect(MARKER_STYLE.green).toEqual({ opacity: 0.3, scale: 0.5 });
   });
 
-  it('yellow tier has opacity 0.9 and scale 0.8', () => {
-    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.9, scale: 0.8 });
+  it('yellow tier has opacity 0.8 and scale 1.0', () => {
+    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.8, scale: 1.0 });
   });
 
-  it('red tier has opacity 1.0 and scale 1.0', () => {
-    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, scale: 1.0 });
+  it('red tier has opacity 1.0 and scale 1.2', () => {
+    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, scale: 1.2 });
   });
 });
 
