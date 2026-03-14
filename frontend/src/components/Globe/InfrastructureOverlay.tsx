@@ -103,7 +103,7 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
     ds.load(routesData, {
       stroke: Color.fromCssColorString('#3B82F6').withAlpha(0.15),
       strokeWidth: 1,
-      clampToGround: true,
+      clampToGround: false,
     }).then(() => {
       if (viewer.isDestroyed()) return;
 
