@@ -266,8 +266,8 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
             Pipeline (Gas/Oil)
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-1.5 rounded-sm inline-block" style={{ backgroundColor: 'rgba(234, 179, 8, 0.5)' }} />
-            Risk Halo (vessel near route)
+            <span className="w-4 h-0.5 inline-block" style={{ backgroundColor: '#EF4444' }} />
+            Alert (slow transit / alignment)
           </div>
         </div>
       )}

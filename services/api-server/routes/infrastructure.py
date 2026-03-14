@@ -62,17 +62,18 @@ async def get_infrastructure_routes():
 
 @router.get("/infrastructure/alerts")
 async def get_infrastructure_alerts():
-    """Return vessels currently inside infrastructure corridors.
+    """Return infrastructure corridor events — both active and recent (last 48h).
 
-    Joins infrastructure_events (where exit_time IS NULL) with
-    vessel_profiles and infrastructure_routes. Sorted by risk_score desc.
+    Joins infrastructure_events with vessel_profiles and infrastructure_routes.
+    Sorted by entry_time desc (most recent first).
     """
     session_factory = get_session()
     async with session_factory() as session:
         result = await session.execute(
             text(
                 "SELECT ie.id, ie.mmsi, ie.route_id, ie.entry_time, "
-                "ie.min_speed, ie.max_alignment, "
+                "ie.exit_time, ie.duration_minutes, "
+                "ie.min_speed, ie.max_alignment, ie.details, "
                 "vp.ship_name AS vessel_name, vp.risk_tier, vp.risk_score, "
                 "ST_Y(vp.last_position::geometry) AS lat, "
                 "ST_X(vp.last_position::geometry) AS lon, "
@@ -81,7 +82,8 @@ async def get_infrastructure_alerts():
                 "JOIN vessel_profiles vp ON vp.mmsi = ie.mmsi "
                 "JOIN infrastructure_routes ir ON ir.id = ie.route_id "
                 "WHERE ie.exit_time IS NULL "
-                "ORDER BY vp.risk_score DESC"
+                "   OR ie.entry_time > NOW() - INTERVAL '48 hours' "
+                "ORDER BY ie.entry_time DESC"
             )
         )
         rows = result.mappings().all()
@@ -101,9 +103,91 @@ async def get_infrastructure_alerts():
                     "route_name": row["route_name"],
                     "route_type": row["route_type"],
                     "entry_time": str(row["entry_time"]),
+                    "exit_time": str(row["exit_time"]) if row["exit_time"] else None,
+                    "duration_minutes": row["duration_minutes"],
                     "min_speed": row["min_speed"],
                     "max_alignment": row["max_alignment"],
+                    "active": row["exit_time"] is None,
+                    "details": row["details"] or {},
                 }
             )
 
     return {"alerts": alerts}
+
+
+@router.get("/infrastructure/alerts/{alert_id}/track")
+async def get_infrastructure_alert_track(alert_id: int):
+    """Return the vessel track +-12 hours around an infrastructure event.
+
+    Used to visualize what the vessel was doing before, during, and after
+    the infrastructure corridor transit.
+    """
+    import json
+
+    session_factory = get_session()
+    async with session_factory() as session:
+        # Get the event to find mmsi and entry_time
+        event_result = await session.execute(
+            text(
+                "SELECT mmsi, entry_time, exit_time FROM infrastructure_events WHERE id = :id"
+            ),
+            {"id": alert_id},
+        )
+        event = event_result.mappings().first()
+        if not event:
+            from fastapi import HTTPException
+            raise HTTPException(404, "Alert not found")
+
+        center_time = event["entry_time"]
+        # Fetch track +-12 hours around the event
+        track_result = await session.execute(
+            text(
+                "SELECT ST_Y(position::geometry) AS lat, "
+                "ST_X(position::geometry) AS lon, "
+                "sog, cog, timestamp "
+                "FROM vessel_positions "
+                "WHERE mmsi = :mmsi "
+                "  AND timestamp BETWEEN :start AND :end "
+                "ORDER BY timestamp"
+            ),
+            {
+                "mmsi": event["mmsi"],
+                "start": f"{center_time}::timestamptz - INTERVAL '12 hours'",
+                "end": f"{center_time}::timestamptz + INTERVAL '12 hours'",
+            },
+        )
+
+        # Use parameterized interval calculation
+        track_result2 = await session.execute(
+            text(
+                "SELECT ST_Y(position::geometry) AS lat, "
+                "ST_X(position::geometry) AS lon, "
+                "sog, cog, timestamp "
+                "FROM vessel_positions "
+                "WHERE mmsi = :mmsi "
+                "  AND timestamp BETWEEN :center - INTERVAL '12 hours' "
+                "                   AND :center + INTERVAL '12 hours' "
+                "ORDER BY timestamp"
+            ),
+            {
+                "mmsi": event["mmsi"],
+                "center": center_time,
+            },
+        )
+        rows = track_result2.mappings().all()
+
+    return {
+        "mmsi": event["mmsi"],
+        "event_entry_time": str(center_time),
+        "event_exit_time": str(event["exit_time"]) if event["exit_time"] else None,
+        "track": [
+            {
+                "lat": row["lat"],
+                "lon": row["lon"],
+                "sog": row["sog"],
+                "cog": row["cog"],
+                "timestamp": str(row["timestamp"]),
+            }
+            for row in rows
+        ],
+    }

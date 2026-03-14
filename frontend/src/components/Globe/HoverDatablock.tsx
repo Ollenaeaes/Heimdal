@@ -7,6 +7,7 @@ import {
 import { getCesiumViewer } from './cesiumViewer';
 import { useVesselStore } from '../../hooks/useVesselStore';
 import { RISK_COLORS } from '../../utils/riskColors';
+import { ROUTE_TYPE_COLORS, ROUTE_TYPE_LABELS } from './InfrastructureOverlay';
 import type { VesselState } from '../../types/vessel';
 
 function getShipTypeLabel(shipType?: number): string {
@@ -20,11 +21,22 @@ function getShipTypeLabel(shipType?: number): string {
   return 'Vessel';
 }
 
-interface HoverState {
+interface VesselHoverState {
+  type: 'vessel';
   vessel: VesselState;
   x: number;
   y: number;
 }
+
+interface InfraHoverState {
+  type: 'infra';
+  name: string;
+  routeType: string;
+  x: number;
+  y: number;
+}
+
+type HoverState = VesselHoverState | InfraHoverState;
 
 export function HoverDatablock() {
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -51,12 +63,34 @@ export function HoverDatablock() {
           const vessel = vessels.get(mmsi);
           if (vessel) {
             setHover({
+              type: 'vessel',
               vessel,
               x: movement.endPosition.x,
               y: movement.endPosition.y,
             });
             return;
           }
+        }
+        if (entityId.startsWith('infra-route-') || entityId.startsWith('infra-point-')) {
+          const entity = picked.id;
+          const name = entity.name || 'Infrastructure';
+          // Extract route_type from the entity description or name
+          const desc: string = entity.description?.getValue?.() ?? entity.description ?? '';
+          let routeType = '';
+          for (const [key, label] of Object.entries(ROUTE_TYPE_LABELS)) {
+            if (desc.includes(label)) {
+              routeType = key;
+              break;
+            }
+          }
+          setHover({
+            type: 'infra',
+            name,
+            routeType,
+            x: movement.endPosition.x,
+            y: movement.endPosition.y,
+          });
+          return;
         }
       }
 
@@ -86,6 +120,35 @@ export function HoverDatablock() {
 
   if (!hover) return null;
 
+  const offsetX = 14;
+  const offsetY = -10;
+
+  if (hover.type === 'infra') {
+    const colorHex = ROUTE_TYPE_COLORS[hover.routeType] ?? '#3B82F6';
+    const typeLabel = ROUTE_TYPE_LABELS[hover.routeType] ?? 'Infrastructure';
+    return (
+      <div
+        className="pointer-events-none fixed z-50"
+        style={{ left: hover.x + offsetX, top: hover.y + offsetY, maxWidth: 280 }}
+      >
+        <div
+          className="flex overflow-hidden rounded"
+          style={{ backgroundColor: 'rgba(30, 41, 59, 0.92)' }}
+        >
+          <div className="w-1 shrink-0" style={{ backgroundColor: colorHex }} />
+          <div className="px-2.5 py-1.5 min-w-0">
+            <div className="truncate font-semibold tracking-wide text-white" style={{ fontSize: 11 }}>
+              {hover.name.toUpperCase()}
+            </div>
+            <div className="mt-0.5 text-slate-400" style={{ fontSize: 11 }}>
+              {typeLabel}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const { vessel, x, y } = hover;
   const riskColor = RISK_COLORS[vessel.riskTier];
   const name = vessel.name || `MMSI ${vessel.mmsi}`;
@@ -94,56 +157,29 @@ export function HoverDatablock() {
   const sog = vessel.sog != null ? `${vessel.sog.toFixed(1)}kn` : '—';
   const cog = vessel.cog != null ? `${Math.round(vessel.cog)}°` : '—';
 
-  // Offset so the datablock doesn't cover the marker
-  const offsetX = 14;
-  const offsetY = -10;
-
   return (
     <div
       className="pointer-events-none fixed z-50"
-      style={{
-        left: x + offsetX,
-        top: y + offsetY,
-        maxWidth: 280,
-      }}
+      style={{ left: x + offsetX, top: y + offsetY, maxWidth: 280 }}
     >
       <div
         className="flex overflow-hidden rounded"
         style={{ backgroundColor: 'rgba(30, 41, 59, 0.92)' }}
       >
-        {/* Left risk colour bar */}
         <div className="w-1 shrink-0" style={{ backgroundColor: riskColor }} />
-
         <div className="px-2.5 py-1.5 min-w-0">
-          {/* Row 1: Name + risk score */}
           <div className="flex items-baseline justify-between gap-3">
-            <span
-              className="truncate font-semibold tracking-wide text-white"
-              style={{ fontSize: 11 }}
-            >
+            <span className="truncate font-semibold tracking-wide text-white" style={{ fontSize: 11 }}>
               {name.toUpperCase()}
             </span>
-            <span
-              className="shrink-0 font-mono tabular-nums"
-              style={{ fontSize: 11, color: riskColor }}
-            >
+            <span className="shrink-0 font-mono tabular-nums" style={{ fontSize: 11, color: riskColor }}>
               {vessel.riskScore}
             </span>
           </div>
-
-          {/* Row 2: IMO / flag / type */}
-          <div
-            className="mt-0.5 truncate text-slate-400"
-            style={{ fontSize: 11 }}
-          >
+          <div className="mt-0.5 truncate text-slate-400" style={{ fontSize: 11 }}>
             MMSI {vessel.mmsi} · {flag} · {typeLabel}
           </div>
-
-          {/* Row 3: Dynamics */}
-          <div
-            className="mt-0.5 text-slate-300"
-            style={{ fontSize: 11 }}
-          >
+          <div className="mt-0.5 text-slate-300" style={{ fontSize: 11 }}>
             {sog} · {cog}
           </div>
         </div>

@@ -1,8 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { CustomDataSource, Entity, PolylineGraphics, PointGraphics, LabelGraphics } from 'resium';
 import { Cartesian3, Color, Cartesian2, LabelStyle, VerticalOrigin, NearFarScalar } from 'cesium';
 import { useQuery } from '@tanstack/react-query';
-import { useVesselStore } from '../../hooks/useVesselStore';
 
 export interface InfrastructureOverlayProps {
   visible: boolean;
@@ -22,12 +21,6 @@ export const ROUTE_TYPE_LABELS: Record<string, string> = {
   power_cable: 'Power Cable',
   gas_pipeline: 'Gas Pipeline',
   oil_pipeline: 'Oil Pipeline',
-};
-
-/** Risk halo colors by vessel tier */
-const RISK_HALO_COLORS: Record<string, Color> = {
-  yellow: Color.fromCssColorString('rgba(234, 179, 8, 0.4)'),
-  red: Color.fromCssColorString('rgba(239, 68, 68, 0.5)'),
 };
 
 interface RouteFeature {
@@ -50,63 +43,77 @@ interface InfrastructureRoutesResponse {
   features: RouteFeature[];
 }
 
-/**
- * Determine the point type from metadata (landing_station or platform).
- * For now, we check the route_type and geometry type.
- */
+interface InfrastructureAlert {
+  id: number;
+  mmsi: number;
+  vessel_name: string;
+  risk_tier: string;
+  risk_score: number;
+  lat: number;
+  lon: number;
+  route_id: number;
+  route_name: string;
+  route_type: string;
+  entry_time: string;
+  exit_time: string | null;
+  duration_minutes: number | null;
+  min_speed: number | null;
+  max_alignment: number | null;
+  active: boolean;
+  details: Record<string, unknown>;
+}
+
 function getPointMarkerPixelSize(routeType: string): number {
   return routeType.includes('cable') ? 8 : 10;
 }
 
-/**
- * Find the nearest point on a route to a given vessel position.
- * Returns the closest coordinate pair [lon, lat].
- */
-function findNearestSegment(
-  coords: number[][],
-  vesselLon: number,
-  vesselLat: number,
-): { nearIdx: number; dist: number } {
-  let minDist = Infinity;
-  let nearIdx = 0;
-  for (let i = 0; i < coords.length; i++) {
-    const dx = coords[i][0] - vesselLon;
-    const dy = coords[i][1] - vesselLat;
-    const d = dx * dx + dy * dy;
-    if (d < minDist) {
-      minDist = d;
-      nearIdx = i;
-    }
-  }
-  return { nearIdx, dist: Math.sqrt(minDist) };
+function formatTimeAgo(ts: string): string {
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 /**
- * Extract a small segment of route coordinates around an index.
- */
-function extractSegment(coords: number[][], centerIdx: number, radius: number): number[][] {
-  const start = Math.max(0, centerIdx - radius);
-  const end = Math.min(coords.length - 1, centerIdx + radius);
-  return coords.slice(start, end + 1);
-}
-
-/**
- * Renders infrastructure routes (cables, pipelines) as polylines on the globe.
- * Also renders risk halos for yellow/red vessels near routes and
- * point features at route endpoints (landing stations / platforms).
+ * Renders infrastructure routes as polylines, with alert-based halos
+ * from actual infrastructure_events (not raw proximity).
  */
 export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
-  const vessels = useVesselStore((s) => s.vessels);
-
   const { data } = useQuery<InfrastructureRoutesResponse>({
     queryKey: ['infrastructureRoutes'],
     queryFn: () => fetch('/api/infrastructure/routes').then((r) => r.json()),
     enabled: visible,
   });
 
-  const features = data?.features ?? [];
+  const { data: alertsData } = useQuery<{ alerts: InfrastructureAlert[] }>({
+    queryKey: ['infrastructureAlerts'],
+    queryFn: () => fetch('/api/infrastructure/alerts').then((r) => r.json()),
+    enabled: visible,
+    refetchInterval: 30_000,
+  });
 
-  // Extract point features from route endpoints (first and last coordinate)
+  const features = data?.features ?? [];
+  const alerts = alertsData?.alerts ?? [];
+
+  // Group alerts by route_id for quick lookup
+  const alertsByRoute = useMemo(() => {
+    const map = new Map<number, InfrastructureAlert[]>();
+    for (const a of alerts) {
+      const existing = map.get(a.route_id) ?? [];
+      existing.push(a);
+      map.set(a.route_id, existing);
+    }
+    return map;
+  }, [alerts]);
+
+  // Set of route IDs that have active alerts
+  const alertedRouteIds = useMemo(() => {
+    return new Set(alerts.map((a) => a.route_id));
+  }, [alerts]);
+
+  // Extract point features from route endpoints
   const pointFeatures = useMemo(() => {
     if (!features.length) return [];
     const points: Array<{
@@ -141,47 +148,6 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
     return points;
   }, [features]);
 
-  // Compute risk halos: yellow/red vessels near infrastructure routes
-  const riskHalos = useMemo(() => {
-    if (!features.length) return [];
-    const halos: Array<{
-      id: string;
-      positions: Cartesian3[];
-      color: Color;
-    }> = [];
-
-    const vesselArray = Array.from(vessels.values());
-    const riskyVessels = vesselArray.filter(
-      (v) => v.riskTier === 'yellow' || v.riskTier === 'red',
-    );
-
-    if (!riskyVessels.length) return [];
-
-    // For each route, check if any risky vessel is nearby (within ~0.5 deg approx)
-    const PROXIMITY_THRESHOLD = 0.5; // degrees, rough approximation
-    for (const f of features) {
-      const coords = f.geometry.coordinates;
-      for (const vessel of riskyVessels) {
-        const { nearIdx, dist } = findNearestSegment(coords, vessel.lon, vessel.lat);
-        if (dist < PROXIMITY_THRESHOLD) {
-          const segmentCoords = extractSegment(coords, nearIdx, 3);
-          const positions = segmentCoords.map(([lon, lat]) =>
-            Cartesian3.fromDegrees(lon, lat),
-          );
-          const haloColor = RISK_HALO_COLORS[vessel.riskTier];
-          if (haloColor) {
-            halos.push({
-              id: `halo-${f.properties.id}-${vessel.mmsi}`,
-              positions,
-              color: haloColor,
-            });
-          }
-        }
-      }
-    }
-    return halos;
-  }, [features, vessels]);
-
   if (!visible) return null;
 
   return (
@@ -192,24 +158,54 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
           const coords = f.geometry.coordinates;
           const positions = coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
           const colorHex = ROUTE_TYPE_COLORS[f.properties.route_type] ?? '#3B82F6';
+          const hasAlert = alertedRouteIds.has(f.properties.id);
           const color = Color.fromCssColorString(colorHex);
           const typeLabel = ROUTE_TYPE_LABELS[f.properties.route_type] ?? f.properties.route_type;
           const routeName = f.properties.name || 'Unknown';
-          // Midpoint for label placement
+
+          // Build description with alert info if flagged
+          const routeAlerts = alertsByRoute.get(f.properties.id) ?? [];
+          let description = `<b>${routeName}</b><br/>Type: ${typeLabel}`;
+          if (f.properties.operator) {
+            description += `<br/>Operator: ${f.properties.operator}`;
+          }
+          if (routeAlerts.length > 0) {
+            description += `<br/><br/><b style="color:#EF4444;">Alerts (${routeAlerts.length})</b><br/>`;
+            for (const a of routeAlerts) {
+              const status = a.active ? '<span style="color:#EF4444;">ACTIVE</span>' : `ended ${formatTimeAgo(a.exit_time!)}`;
+              description += `<div style="margin:4px 0;padding:4px;border-left:3px solid ${a.risk_tier === 'red' ? '#EF4444' : '#EAB308'};padding-left:8px;">`;
+              description += `<b>${a.vessel_name?.trim() || `MMSI ${a.mmsi}`}</b> (${a.risk_tier.toUpperCase()})`;
+              description += `<br/>Entry: ${new Date(a.entry_time).toUTCString()}`;
+              description += `<br/>Status: ${status}`;
+              if (a.duration_minutes != null) {
+                description += `<br/>Duration: ${Math.round(a.duration_minutes)}min`;
+              }
+              if (a.min_speed != null) {
+                description += `<br/>Min Speed: ${a.min_speed.toFixed(1)} kn`;
+              }
+              if (a.max_alignment != null) {
+                description += `<br/>Max Alignment: ${a.max_alignment.toFixed(0)}°`;
+              }
+              description += `</div>`;
+            }
+          }
+
+          // Midpoint for label
           const midIdx = Math.floor(coords.length / 2);
           const midPos = Cartesian3.fromDegrees(coords[midIdx][0], coords[midIdx][1]);
+
           return (
             <Entity
               key={`route-${f.properties.id}`}
               id={`infra-route-${f.properties.id}`}
               name={routeName}
-              description={`<b>${routeName}</b><br/>Type: ${typeLabel}${f.properties.operator ? `<br/>Operator: ${f.properties.operator}` : ''}`}
+              description={description}
               position={midPos}
             >
               <PolylineGraphics
                 positions={positions}
-                width={2}
-                material={color}
+                width={hasAlert ? 4 : 2}
+                material={hasAlert ? Color.fromCssColorString('#EF4444').withAlpha(0.8) : color}
               />
               <LabelGraphics
                 text={routeName}
@@ -239,7 +235,7 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
               id={`infra-point-${pt.id}`}
               position={position}
               name={`${pt.name} (${pt.isStart ? 'Landing A' : 'Landing B'})`}
-              description={`<b>${pt.name}</b><br/>Type: ${ROUTE_TYPE_LABELS[pt.routeType] ?? pt.routeType}<br/>Endpoint: ${pt.isStart ? 'Start' : 'End'}`}
+              description={`<b>${pt.name}</b><br/>Type: ${ROUTE_TYPE_LABELS[pt.routeType] ?? pt.routeType}`}
             >
               <PointGraphics
                 pixelSize={pixelSize}
@@ -250,17 +246,6 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
             </Entity>
           );
         })}
-
-        {/* Risk halos */}
-        {riskHalos.map((halo) => (
-          <Entity key={halo.id} id={`infra-${halo.id}`}>
-            <PolylineGraphics
-              positions={halo.positions}
-              width={8}
-              material={halo.color}
-            />
-          </Entity>
-        ))}
       </CustomDataSource>
     </>
   );
