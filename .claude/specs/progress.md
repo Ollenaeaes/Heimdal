@@ -278,7 +278,7 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 
 ## Current Story
 
-Wave 12 complete. All 7 stories of spec 29 implemented.
+Wave 13 in progress — Specs 26 (Infrastructure Protection Frontend) + 27 (Spoofing Detection Frontend) in parallel.
 
 ## Known Issues
 

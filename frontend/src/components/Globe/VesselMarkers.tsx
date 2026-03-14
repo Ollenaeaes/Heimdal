@@ -29,6 +29,25 @@ const SELECTION_RING_IMAGE = (() => {
   return canvas.toDataURL();
 })();
 
+/** Spoof indicator — dashed circle with contrasting white dashes. */
+export const SPOOF_INDICATOR_IMAGE = (() => {
+  if (typeof document === 'undefined') return '';
+  const size = 36;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+  }
+  return canvas.toDataURL();
+})();
+
 /** Subtle watchlist indicator — thin dashed circle. */
 const HALO_IMAGE = (() => {
   if (typeof document === 'undefined') return '';
@@ -81,6 +100,14 @@ export function filterVessels(
   return result;
 }
 
+/**
+ * Determine if an anomaly rule_id represents a spoofing anomaly.
+ * Spoofing anomalies have rule_id starting with 'spoof_'.
+ */
+export function isSpoofAnomaly(ruleId: string): boolean {
+  return ruleId.startsWith('spoof_');
+}
+
 /** Camera altitude when flying to a vessel (meters). */
 const FLY_TO_ALT = 50_000;
 
@@ -95,6 +122,7 @@ function VesselMarkersInner() {
   const selectVessel = useVesselStore((s) => s.selectVessel);
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
   const watchedMmsis = useWatchlistStore((s) => s.watchedMmsis);
+  const spoofedMmsis = useVesselStore((s) => s.spoofedMmsis);
 
   const handleClick = useCallback(
     (mmsi: number, lat: number, lon: number) => {
@@ -162,6 +190,21 @@ function VesselMarkersInner() {
               image={HALO_IMAGE}
               scale={0.9}
               translucencyByDistance={new NearFarScalar(1.0e3, 0.6, 1.5e7, 0.2)}
+            />
+          </Entity>
+        ))}
+      {/* Spoof indicator — dashed circle for vessels with active spoof anomalies */}
+      {SPOOF_INDICATOR_IMAGE && visibleVessels
+        .filter((v) => spoofedMmsis.has(v.mmsi))
+        .map((v) => (
+          <Entity
+            key={`spoof-${v.mmsi}`}
+            position={Cartesian3.fromDegrees(v.lon, v.lat)}
+          >
+            <BillboardGraphics
+              image={SPOOF_INDICATOR_IMAGE}
+              scale={1.1}
+              translucencyByDistance={new NearFarScalar(1.0e3, 0.9, 1.5e7, 0.4)}
             />
           </Entity>
         ))}

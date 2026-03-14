@@ -126,6 +126,8 @@ export interface OverlayToggleState {
   showEez: boolean;
   showSarDetections: boolean;
   showGfwEvents: boolean;
+  showInfrastructure: boolean;
+  showGnssZones: boolean;
 }
 
 export interface OverlayTogglesProps {
@@ -238,6 +240,25 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
           ))}
         </div>
       )}
+      <div className="border-t border-[#1F2937] my-1" />
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={state.showInfrastructure}
+          onChange={() => toggle('showInfrastructure')}
+          className="accent-cyan-500"
+        />
+        Infrastructure
+      </label>
+      <label className="flex items-center gap-2 cursor-pointer" data-testid="gnss-zones-toggle">
+        <input
+          type="checkbox"
+          checked={state.showGnssZones}
+          onChange={() => toggle('showGnssZones')}
+          className="accent-red-500"
+        />
+        GNSS / Spoofing
+      </label>
     </div>
   );
 }

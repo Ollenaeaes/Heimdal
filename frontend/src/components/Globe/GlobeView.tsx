@@ -11,6 +11,9 @@ import { VesselMarkers } from './VesselMarkers';
 import { TrackTrail } from './TrackTrail';
 import { GfwEventMarkers } from './GfwEventMarkers';
 import { SarMarkers } from './SarMarkers';
+import { InfrastructureOverlay } from './InfrastructureOverlay';
+import { GnssZoneOverlay } from './GnssZoneOverlay';
+import { DuplicateMmsiLines } from './DuplicateMmsiLines';
 import { HoverDatablock } from './HoverDatablock';
 import { INITIAL_LON, INITIAL_LAT, INITIAL_ALT, setCesiumViewer } from './cesiumViewer';
 
@@ -26,9 +29,11 @@ export { getCesiumViewer } from './cesiumViewer';
 export interface GlobeViewProps {
   showGfwEvents?: boolean;
   showSarDetections?: boolean;
+  showInfrastructure?: boolean;
+  showGnssZones?: boolean;
 }
 
-function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeViewProps = {}) {
+function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfrastructure = false, showGnssZones = false }: GlobeViewProps = {}) {
   const viewerRef = useRef<{ cesiumElement?: Viewer }>(null);
 
   useEffect(() => {
@@ -107,6 +112,9 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeVi
         <TrackTrail />
         <GfwEventMarkers visible={showGfwEvents} />
         <SarMarkers visible={showSarDetections} />
+        <InfrastructureOverlay visible={showInfrastructure} />
+        <GnssZoneOverlay visible={showGnssZones} />
+        <DuplicateMmsiLines visible={showGnssZones} />
       </ResiumViewer>
       <HoverDatablock />
     </>

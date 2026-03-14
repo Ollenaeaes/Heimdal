@@ -116,6 +116,15 @@ export interface SarDetection {
   imageUrl: string | null;
 }
 
+// GNSS Zone types
+export interface GnssZone {
+  id: number;
+  detectedAt: string;
+  expiresAt: string;
+  affectedCount: number;
+  geometry: { type: 'Polygon'; coordinates: number[][][] };
+}
+
 // GFW Event types
 export type GfwEventType = 'ENCOUNTER' | 'LOITERING' | 'AIS_DISABLING' | 'PORT_VISIT';
 

@@ -23,18 +23,23 @@ export interface VesselStore {
   vessels: Map<number, VesselState>;
   positionHistory: Map<number, PositionHistoryEntry[]>;
   selectedMmsi: number | null;
+  spoofedMmsis: Set<number>;
   filters: FilterState;
   updatePosition: (update: VesselState) => void;
   updatePositions: (updates: VesselState[]) => void;
   clearOldPositions: (maxAgeMs: number) => void;
   selectVessel: (mmsi: number | null) => void;
   setFilter: (filter: Partial<FilterState>) => void;
+  addSpoofedMmsi: (mmsi: number) => void;
+  removeSpoofedMmsi: (mmsi: number) => void;
+  setSpoofedMmsis: (mmsis: Set<number>) => void;
 }
 
 export const useVesselStore = create<VesselStore>((set) => ({
   vessels: new Map(),
   positionHistory: new Map(),
   selectedMmsi: null,
+  spoofedMmsis: new Set<number>(),
   filters: {
     riskTiers: new Set(),
     shipTypes: [],
@@ -74,4 +79,17 @@ export const useVesselStore = create<VesselStore>((set) => ({
   selectVessel: (mmsi) => set({ selectedMmsi: mmsi }),
   setFilter: (filter) =>
     set((state) => ({ filters: { ...state.filters, ...filter } })),
+  addSpoofedMmsi: (mmsi) =>
+    set((state) => {
+      const next = new Set(state.spoofedMmsis);
+      next.add(mmsi);
+      return { spoofedMmsis: next };
+    }),
+  removeSpoofedMmsi: (mmsi) =>
+    set((state) => {
+      const next = new Set(state.spoofedMmsis);
+      next.delete(mmsi);
+      return { spoofedMmsis: next };
+    }),
+  setSpoofedMmsis: (mmsis) => set({ spoofedMmsis: mmsis }),
 }));
