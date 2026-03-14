@@ -295,9 +295,19 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 29 frontend + 4 backend
 - Commit: `ca7d258`
 
+### 28-network-mapping-frontend (all 4 stories)
+- Story 1: Network score display in RiskSection — "Network: 45 pts · Connected to 2 vessels" or "No connections"
+- Story 2: NetworkGraph.tsx — d3-force SVG graph, depth selector (1/2/3), risk-colored nodes, edge labels, click-to-select
+- Story 3: NetworkOverlay.tsx — globe network mode, encounter/proximity lines, connected vessel highlights
+- Story 4: VesselChain.tsx — horizontal scrollable chain flow, port_visit → encounter → destination
+- Toggle: showNetwork in OverlayToggles with purple accent
+- Dependencies: d3-force, @types/d3-force
+- Tests: 25 frontend tests
+- Commit: `85034f9`
+
 ## Current Story
 
-Wave 14 in progress — Spec 28 (Network Mapping Frontend).
+Wave 14 complete. All 3 specs across waves 13-14 implemented.
 
 ## Known Issues
 
@@ -359,9 +369,7 @@ Wave 14 in progress — Spec 28 (Network Mapping Frontend).
 - Fonts: Inter (proportional) + JetBrains Mono (monospace) via Google Fonts
 - Ready for merge to main
 
-### Wave 13-14: Capability Modules Frontend (3 specs remaining)
-- **Spec 26** — Infrastructure Protection Frontend: 4 stories (cable/pipeline overlay, point features, risk halos, dashboard panel)
-- **Spec 27** — Spoofing Detection Frontend: 3 stories (spoof markers, duplicate MMSI lines, GNSS zone overlay)
-- **Spec 28** — Network Mapping Frontend: 4 stories (network score display, d3-force graph, globe network mode, vessel chain view)
-- Frontend specs depend on their corresponding backend spec (now complete)
-- All specs in draft status — awaiting approval
+### Wave 13-14: Capability Modules Frontend — ALL COMPLETE
+- **Spec 26** — Infrastructure Protection Frontend: 4 stories ✓
+- **Spec 27** — Spoofing Detection Frontend: 3 stories ✓
+- **Spec 28** — Network Mapping Frontend: 4 stories ✓
