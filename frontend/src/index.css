@@ -1,9 +1,35 @@
 @import "tailwindcss";
 
+@theme {
+  --color-heimdal-bg: #0A0E17;
+  --color-heimdal-panel: #111827;
+  --color-heimdal-border: #1F2937;
+  --color-heimdal-accent: #3B82F6;
+  --color-heimdal-infra: #06B6D4;
+  --color-heimdal-sar: #A78BFA;
+}
+
+:root {
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.8rem;
+  --font-size-base: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.25rem;
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  background-color: #0A0E17;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #E5E7EB;
+  font-size: var(--font-size-base);
+}
+
+/* Monospace utility */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 /* Ensure Cesium viewer fills its container */

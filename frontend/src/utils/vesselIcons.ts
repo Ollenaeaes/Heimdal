@@ -13,8 +13,8 @@ export const MARKER_STYLE: Record<
   RiskTier,
   { opacity: number; scale: number }
 > = {
-  green: { opacity: 0.35, scale: 0.5 },
-  yellow: { opacity: 1.0, scale: 1.0 },
+  green: { opacity: 0.3, scale: 0.5 },
+  yellow: { opacity: 0.8, scale: 1.0 },
   red: { opacity: 1.0, scale: 1.2 },
 };
 

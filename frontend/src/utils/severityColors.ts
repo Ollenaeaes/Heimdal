@@ -1,7 +1,7 @@
 export const SEVERITY_COLORS = {
-  critical: '#7F1D1D',
+  critical: '#991B1B',
   high: '#DC2626',
-  moderate: '#D4820C',
+  moderate: '#F59E0B',
   low: '#6B7280',
 } as const;
 

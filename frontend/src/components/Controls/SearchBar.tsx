@@ -3,12 +3,7 @@ import { useVesselStore } from '../../hooks/useVesselStore';
 import { getCesiumViewer } from '../Globe/cesiumViewer';
 import { Cartesian3 } from 'cesium';
 import type { VesselState } from '../../types/vessel';
-
-const RISK_COLORS: Record<string, string> = {
-  green: '#27AE60',
-  yellow: '#D4820C',
-  red: '#C0392B',
-};
+import { RISK_COLORS } from '../../utils/riskColors';
 
 /**
  * Detect search type from the input term.

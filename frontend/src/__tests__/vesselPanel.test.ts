@@ -139,15 +139,15 @@ describe('countryCodeToFlagEmoji', () => {
 
 describe('Risk tier badge colors', () => {
   it('green tier uses correct color', () => {
-    expect(getRiskColor('green')).toBe('#27AE60');
+    expect(getRiskColor('green')).toBe('#22C55E');
   });
 
   it('yellow tier uses correct color', () => {
-    expect(getRiskColor('yellow')).toBe('#D4820C');
+    expect(getRiskColor('yellow')).toBe('#F59E0B');
   });
 
   it('red tier uses correct color', () => {
-    expect(getRiskColor('red')).toBe('#C0392B');
+    expect(getRiskColor('red')).toBe('#EF4444');
   });
 
   it('RISK_COLORS has all three tiers', () => {
@@ -346,22 +346,22 @@ describe('Rule ID → human-readable names', () => {
     expect(getRuleName('some_unknown_rule')).toBe('some_unknown_rule');
   });
 
-  it('RULE_NAMES has all 14 entries', () => {
-    expect(Object.keys(RULE_NAMES)).toHaveLength(14);
+  it('RULE_NAMES has all 15 entries', () => {
+    expect(Object.keys(RULE_NAMES)).toHaveLength(15);
   });
 });
 
 describe('Severity color mapping', () => {
-  it('critical severity is dark red (#7F1D1D)', () => {
-    expect(getSeverityColor('critical')).toBe('#7F1D1D');
+  it('critical severity is dark red (#991B1B)', () => {
+    expect(getSeverityColor('critical')).toBe('#991B1B');
   });
 
   it('high severity is red (#DC2626)', () => {
     expect(getSeverityColor('high')).toBe('#DC2626');
   });
 
-  it('moderate severity is amber (#D4820C)', () => {
-    expect(getSeverityColor('moderate')).toBe('#D4820C');
+  it('moderate severity is amber (#F59E0B)', () => {
+    expect(getSeverityColor('moderate')).toBe('#F59E0B');
   });
 
   it('low severity is gray (#6B7280)', () => {

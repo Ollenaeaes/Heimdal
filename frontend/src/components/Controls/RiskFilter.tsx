@@ -1,10 +1,5 @@
 import { useVesselStore } from '../../hooks/useVesselStore';
-
-const RISK_COLORS: Record<string, string> = {
-  green: '#27AE60',
-  yellow: '#D4820C',
-  red: '#C0392B',
-};
+import { RISK_COLORS } from '../../utils/riskColors';
 
 const TIERS = ['green', 'yellow', 'red'] as const;
 

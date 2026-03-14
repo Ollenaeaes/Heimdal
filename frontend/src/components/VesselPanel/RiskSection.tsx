@@ -79,7 +79,7 @@ export function RiskSection({ vessel }: RiskSectionProps) {
             style={{
               width: `${fillPercent}%`,
               background:
-                'linear-gradient(to right, #27AE60, #D4820C, #C0392B)',
+                'linear-gradient(to right, #22C55E, #F59E0B, #EF4444)',
             }}
             data-testid="risk-score-fill"
           />
