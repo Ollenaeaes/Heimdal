@@ -45,3 +45,15 @@ This file is read at the start of every session. It captures mistakes, patterns,
 - (2026-03-12) **Never use React.StrictMode with CesiumJS/Resium.** StrictMode double-mounts components in dev; Cesium's `Viewer.destroy()` is irreversible, so the re-mount fails silently (blank page or "Page Unresponsive"). Remove StrictMode or wrap only non-Cesium parts.
 - (2026-03-12) `CESIUM_BASE_URL` should be set via Vite `define` in vite.config.ts (compile-time replacement). Do NOT also set `window.CESIUM_BASE_URL` in main.tsx — it's redundant and the `define` already handles it inside Cesium's own source.
 - (2026-03-12) When stuck on a rendering/integration bug, research online (docs, GitHub issues) after the first failed fix attempt. Don't keep guessing with code changes — one targeted research session beats ten blind attempts.
+
+## CesiumJS / Globe Rendering
+
+- (2026-03-15) **Never use `clampToGround: true` with large GeoJSON datasets in Cesium.** 7,570 polylines with terrain clamping causes `ArrayBuffer allocation failed` (OOM crash). Subsea cables/pipelines don't need clamping — use `clampToGround: false`.
+- (2026-03-15) **Never render thousands of features as individual React `<Entity>` components.** Use `GeoJsonDataSource` loaded directly via Cesium API instead. 7,570 routes × 3 entities each = 30,000 React components = unusable performance. A single `GeoJsonDataSource` handles it natively.
+- (2026-03-15) **Cesium `entity.id` is read-only** on entities created by `GeoJsonDataSource`. Use `entity.name` for custom identification/hover detection instead.
+- (2026-03-15) **CesiumJS billboard `rotation` with `alignedAxis=Cartesian3.UNIT_Z` doesn't work for screen-space rotation.** Remove `alignedAxis` and `ConstantProperty` wrapper — just pass a plain numeric radian value to `rotation` for COG-based heading.
+- (2026-03-15) **Vessel snapshot endpoint must include COG/SOG** for heading display. The `vessel_profiles` table only has `last_lat`/`last_lon` — COG lives in `vessel_positions`. Use a `LEFT JOIN LATERAL` to get the latest position's COG per vessel.
+- (2026-03-15) **`vessel_profiles` uses `last_lat`/`last_lon` columns, not `last_position`.** Several queries incorrectly referenced `ST_Y(vp.last_position::geometry)` which doesn't exist.
+- (2026-03-15) **When `podman compose up --build` rebuilds postgres, data is lost** because `init.sh` re-runs on container recreate. Use `--no-deps` flag to rebuild only the target service. Apply new migrations manually via `podman exec ... psql -f`.
+- (2026-03-15) **After rebuilding a container, restart the frontend container** so nginx DNS resolves the new container IP. Otherwise the API proxy returns empty responses.
+- (2026-03-15) **asyncpg requires JSON strings for JSONB columns**, not raw Python dicts. Always `json.dumps()` dict values before passing as SQL parameters. Symptom: `'dict' object has no attribute 'encode'`.
