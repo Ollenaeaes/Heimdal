@@ -63,7 +63,7 @@ describe('Globe Styling', () => {
 describe('Chevron Vessel Markers', () => {
   it('MARKER_STYLE has spec values for all tiers', async () => {
     const { MARKER_STYLE } = await import('../utils/vesselIcons');
-    expect(MARKER_STYLE.green).toEqual({ opacity: 0.4, scale: 0.6 });
+    expect(MARKER_STYLE.green).toEqual({ opacity: 0.6, scale: 0.6 });
     expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.9, scale: 0.8 });
     expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, scale: 1.0 });
   });

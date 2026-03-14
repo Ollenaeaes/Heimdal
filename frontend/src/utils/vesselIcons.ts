@@ -11,7 +11,7 @@ export const MARKER_STYLE: Record<
   RiskTier,
   { opacity: number; scale: number }
 > = {
-  green: { opacity: 0.4, scale: 0.6 },
+  green: { opacity: 0.6, scale: 0.6 },
   yellow: { opacity: 0.9, scale: 0.8 },
   red: { opacity: 1.0, scale: 1.0 },
 };

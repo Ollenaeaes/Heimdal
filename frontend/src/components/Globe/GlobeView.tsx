@@ -5,7 +5,6 @@ import {
   Cartesian3,
   Color,
   IonImageryProvider,
-  UrlTemplateImageryProvider,
   type Viewer,
 } from 'cesium';
 import { VesselMarkers } from './VesselMarkers';
@@ -39,39 +38,36 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeVi
 
         const { scene } = viewer;
 
-        // Dark maritime ops aesthetic
-        scene.backgroundColor = Color.fromCssColorString('#0A0E17');
+        // Dark ops-centre aesthetic — dark sky/space but real satellite terrain
+        scene.backgroundColor = Color.fromCssColorString('#070B12');
         scene.globe.baseColor = Color.fromCssColorString('#0B1120');
-        scene.globe.showGroundAtmosphere = true;
+        scene.globe.showGroundAtmosphere = false;
         scene.fog.enabled = true;
-        scene.fog.density = 0.00025;
-        scene.skyAtmosphere.brightnessShift = -0.3;
+        scene.fog.density = 0.0001;
+        scene.skyAtmosphere.brightnessShift = -0.5;
+        scene.skyAtmosphere.saturationShift = -0.5;
 
-        // Enable lighting for subtle land/sea shading
+        // No dynamic lighting — consistent look regardless of time
         scene.globe.enableLighting = false;
 
-        // Remove default imagery
+        // Remove default imagery and replace with satellite
         scene.globe.imageryLayers.removeAll();
 
-        // Use CartoDB dark matter tiles — dark basemap with visible coastlines & land contrast
-        const darkTiles = new UrlTemplateImageryProvider({
-          url: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-          credit: '© CARTO © OpenStreetMap contributors',
-          minimumLevel: 0,
-          maximumLevel: 18,
-        });
-        scene.globe.imageryLayers.addImageryProvider(darkTiles);
-
-        // Try Earth at Night on top (semi-transparent) for city glow, fallback silently
-        IonImageryProvider.fromAssetId(3812)
+        // Satellite imagery base — real terrain, coastlines, ports visible
+        IonImageryProvider.fromAssetId(2)
           .then((provider) => {
             if (!viewer.isDestroyed()) {
-              const nightLayer = scene.globe.imageryLayers.addImageryProvider(provider);
-              nightLayer.alpha = 0.3; // subtle city lights overlay
+              const satLayer = scene.globe.imageryLayers.addImageryProvider(provider);
+              // Darken & desaturate for military ops-centre look
+              // Terrain stays visible but muted — CMO-style
+              satLayer.brightness = 0.55;
+              satLayer.contrast = 1.3;
+              satLayer.saturation = 0.35;
+              satLayer.gamma = 0.9;
             }
           })
           .catch(() => {
-            // No Ion token or asset unavailable — dark tiles alone are fine
+            // No Ion token — fall back to dark base color
           });
 
         viewer.camera.flyTo({
