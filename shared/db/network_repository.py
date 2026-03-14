@@ -7,6 +7,7 @@ via sqlalchemy.text() matching the pattern in repositories.py.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any, Optional
 
@@ -45,7 +46,7 @@ async def upsert_network_edge(
             "confidence": confidence,
             "lat": location["lat"],
             "lon": location["lon"],
-            "details": details or {},
+            "details": json.dumps(details or {}),
         }
     else:
         location_expr = "NULL"
@@ -54,7 +55,7 @@ async def upsert_network_edge(
             "vessel_b": vessel_b,
             "edge_type": edge_type,
             "confidence": confidence,
-            "details": details or {},
+            "details": json.dumps(details or {}),
         }
 
     await session.execute(
