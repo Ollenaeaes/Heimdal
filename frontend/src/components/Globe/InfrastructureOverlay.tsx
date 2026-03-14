@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { CustomDataSource, Entity, PolylineGraphics, PointGraphics } from 'resium';
-import { Cartesian3, Color } from 'cesium';
+import { CustomDataSource, Entity, PolylineGraphics, PointGraphics, LabelGraphics } from 'resium';
+import { Cartesian3, Color, Cartesian2, LabelStyle, VerticalOrigin, NearFarScalar } from 'cesium';
 import { useQuery } from '@tanstack/react-query';
 import { useVesselStore } from '../../hooks/useVesselStore';
 
@@ -14,6 +14,14 @@ export const ROUTE_TYPE_COLORS: Record<string, string> = {
   power_cable: '#EAB308',
   gas_pipeline: '#F97316',
   oil_pipeline: '#F97316',
+};
+
+/** Human-readable labels for route types */
+export const ROUTE_TYPE_LABELS: Record<string, string> = {
+  telecom_cable: 'Telecom Cable',
+  power_cable: 'Power Cable',
+  gas_pipeline: 'Gas Pipeline',
+  oil_pipeline: 'Oil Pipeline',
 };
 
 /** Risk halo colors by vessel tier */
@@ -185,12 +193,35 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
           const positions = coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
           const colorHex = ROUTE_TYPE_COLORS[f.properties.route_type] ?? '#3B82F6';
           const color = Color.fromCssColorString(colorHex);
+          const typeLabel = ROUTE_TYPE_LABELS[f.properties.route_type] ?? f.properties.route_type;
+          const routeName = f.properties.name || 'Unknown';
+          // Midpoint for label placement
+          const midIdx = Math.floor(coords.length / 2);
+          const midPos = Cartesian3.fromDegrees(coords[midIdx][0], coords[midIdx][1]);
           return (
-            <Entity key={`route-${f.properties.id}`} id={`infra-route-${f.properties.id}`}>
+            <Entity
+              key={`route-${f.properties.id}`}
+              id={`infra-route-${f.properties.id}`}
+              name={routeName}
+              description={`<b>${routeName}</b><br/>Type: ${typeLabel}${f.properties.operator ? `<br/>Operator: ${f.properties.operator}` : ''}`}
+              position={midPos}
+            >
               <PolylineGraphics
                 positions={positions}
                 width={2}
                 material={color}
+              />
+              <LabelGraphics
+                text={routeName}
+                font="11px Inter, sans-serif"
+                fillColor={Color.fromCssColorString(colorHex)}
+                style={LabelStyle.FILL_AND_OUTLINE}
+                outlineColor={Color.BLACK}
+                outlineWidth={2}
+                verticalOrigin={VerticalOrigin.CENTER}
+                pixelOffset={new Cartesian2(0, -8)}
+                scaleByDistance={new NearFarScalar(5e4, 1.0, 5e6, 0)}
+                translucencyByDistance={new NearFarScalar(5e4, 1.0, 2e6, 0)}
               />
             </Entity>
           );
@@ -203,7 +234,13 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
           const color = Color.fromCssColorString(colorHex);
           const pixelSize = getPointMarkerPixelSize(pt.routeType);
           return (
-            <Entity key={pt.id} id={`infra-point-${pt.id}`} position={position}>
+            <Entity
+              key={pt.id}
+              id={`infra-point-${pt.id}`}
+              position={position}
+              name={`${pt.name} (${pt.isStart ? 'Landing A' : 'Landing B'})`}
+              description={`<b>${pt.name}</b><br/>Type: ${ROUTE_TYPE_LABELS[pt.routeType] ?? pt.routeType}<br/>Endpoint: ${pt.isStart ? 'Start' : 'End'}`}
+            >
               <PointGraphics
                 pixelSize={pixelSize}
                 color={color}

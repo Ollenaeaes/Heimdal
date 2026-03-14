@@ -251,6 +251,26 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
         />
         Infrastructure
       </label>
+      {state.showInfrastructure && (
+        <div className="ml-4 flex flex-col gap-1 text-[0.65rem] text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-0.5 inline-block" style={{ backgroundColor: '#3B82F6' }} />
+            Telecom Cable
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-0.5 inline-block" style={{ backgroundColor: '#EAB308' }} />
+            Power Cable
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-0.5 inline-block" style={{ backgroundColor: '#F97316' }} />
+            Pipeline (Gas/Oil)
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-1.5 rounded-sm inline-block" style={{ backgroundColor: 'rgba(234, 179, 8, 0.5)' }} />
+            Risk Halo (vessel near route)
+          </div>
+        </div>
+      )}
       <label className="flex items-center gap-2 cursor-pointer" data-testid="gnss-zones-toggle">
         <input
           type="checkbox"
