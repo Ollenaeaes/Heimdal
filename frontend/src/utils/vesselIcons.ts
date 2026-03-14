@@ -1,9 +1,7 @@
 import { RISK_COLORS, type RiskTier } from './riskColors';
 
 /** Size of the generated vessel icon canvas (px). */
-const ICON_SIZE = 32;
-/** Larger canvas for high-risk icons with glow. */
-const ICON_SIZE_GLOW = 48;
+const ICON_SIZE = 24;
 
 /**
  * Marker visual properties per risk tier.
@@ -13,9 +11,9 @@ export const MARKER_STYLE: Record<
   RiskTier,
   { opacity: number; scale: number }
 > = {
-  green: { opacity: 0.3, scale: 0.5 },
-  yellow: { opacity: 0.8, scale: 1.0 },
-  red: { opacity: 1.0, scale: 1.2 },
+  green: { opacity: 0.4, scale: 0.6 },
+  yellow: { opacity: 0.9, scale: 0.8 },
+  red: { opacity: 1.0, scale: 1.0 },
 };
 
 /**
@@ -28,48 +26,31 @@ export function cogToRotation(cogDeg: number | null): number {
 }
 
 /**
- * Draw a directional chevron/arrow vessel shape on a canvas and return the
- * data URL. The chevron points upward (north) so that billboard rotation
- * aligns naturally with COG. Yellow and red vessels get a glow ring for
- * visibility.
+ * Draw a clean, minimal vessel chevron on a canvas and return the data URL.
+ * No glow rings — just the shape with a thin outline.
+ * Points upward (north) so billboard rotation aligns with COG.
  */
-function drawVesselIcon(color: string, glow: boolean): string {
-  const size = glow ? ICON_SIZE_GLOW : ICON_SIZE;
+function drawVesselIcon(color: string): string {
+  const size = ICON_SIZE;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
   const cx = size / 2;
-  // Offset so the chevron is centered in the larger glow canvas
-  const pad = glow ? (ICON_SIZE_GLOW - ICON_SIZE) / 2 : 0;
 
-  if (glow) {
-    // Draw glow ring behind the icon
-    ctx.beginPath();
-    ctx.arc(cx, cx, size / 2 - 2, 0, Math.PI * 2);
-    ctx.fillStyle = color + '30'; // ~19% opacity fill
-    ctx.fill();
-    ctx.strokeStyle = color + '80'; // ~50% opacity ring
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  // Sharper chevron / military-style arrow pointing up
-  const w = ICON_SIZE; // reference width
+  // Clean chevron — narrow, directional
   ctx.beginPath();
-  ctx.moveTo(cx, pad + 1);                         // sharp bow point
-  ctx.lineTo(pad + w - 5, pad + w * 0.65);         // right wing
-  ctx.lineTo(pad + w - 7, pad + w * 0.6);          // right wing inner
-  ctx.lineTo(cx, pad + w * 0.45);                   // stern notch center
-  ctx.lineTo(pad + 7, pad + w * 0.6);              // left wing inner
-  ctx.lineTo(pad + 5, pad + w * 0.65);             // left wing
+  ctx.moveTo(cx, 1);                    // bow tip
+  ctx.lineTo(size - 3, size * 0.7);     // right wing
+  ctx.lineTo(cx, size * 0.5);           // stern notch
+  ctx.lineTo(3, size * 0.7);            // left wing
   ctx.closePath();
 
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-  ctx.lineWidth = glow ? 1.5 : 1;
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 0.8;
   ctx.stroke();
 
   return canvas.toDataURL('image/png');
@@ -84,8 +65,7 @@ const iconCache = new Map<RiskTier, string>();
 export function getVesselIcon(tier: RiskTier): string {
   let url = iconCache.get(tier);
   if (!url) {
-    const glow = tier === 'red' || tier === 'yellow';
-    url = drawVesselIcon(RISK_COLORS[tier], glow);
+    url = drawVesselIcon(RISK_COLORS[tier]);
     iconCache.set(tier, url);
   }
   return url;

@@ -1,6 +1,13 @@
 import { useRef, useEffect } from 'react';
 import { Viewer as ResiumViewer } from 'resium';
-import { Ion, Cartesian3, Color, IonImageryProvider, type Viewer } from 'cesium';
+import {
+  Ion,
+  Cartesian3,
+  Color,
+  IonImageryProvider,
+  UrlTemplateImageryProvider,
+  type Viewer,
+} from 'cesium';
 import { VesselMarkers } from './VesselMarkers';
 import { TrackTrail } from './TrackTrail';
 import { GfwEventMarkers } from './GfwEventMarkers';
@@ -30,27 +37,41 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeVi
       if (viewer && !viewer.isDestroyed()) {
         setCesiumViewer(viewer);
 
-        // Globe styling — dark maritime ops aesthetic
         const { scene } = viewer;
+
+        // Dark maritime ops aesthetic
         scene.backgroundColor = Color.fromCssColorString('#0A0E17');
-        scene.globe.baseColor = Color.fromCssColorString('#0A1628');
+        scene.globe.baseColor = Color.fromCssColorString('#0B1120');
         scene.globe.showGroundAtmosphere = true;
         scene.fog.enabled = true;
-        scene.fog.density = 0.0003;
-        scene.skyAtmosphere.brightnessShift = -0.4;
+        scene.fog.density = 0.00025;
+        scene.skyAtmosphere.brightnessShift = -0.3;
 
-        // Remove default imagery layers so Bing Maps doesn't show
+        // Enable lighting for subtle land/sea shading
+        scene.globe.enableLighting = false;
+
+        // Remove default imagery
         scene.globe.imageryLayers.removeAll();
 
-        // Attempt Earth at Night imagery, fall back to base color on failure
+        // Use CartoDB dark matter tiles — dark basemap with visible coastlines & land contrast
+        const darkTiles = new UrlTemplateImageryProvider({
+          url: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
+          credit: '© CARTO © OpenStreetMap contributors',
+          minimumLevel: 0,
+          maximumLevel: 18,
+        });
+        scene.globe.imageryLayers.addImageryProvider(darkTiles);
+
+        // Try Earth at Night on top (semi-transparent) for city glow, fallback silently
         IonImageryProvider.fromAssetId(3812)
           .then((provider) => {
             if (!viewer.isDestroyed()) {
-              scene.globe.imageryLayers.addImageryProvider(provider);
+              const nightLayer = scene.globe.imageryLayers.addImageryProvider(provider);
+              nightLayer.alpha = 0.3; // subtle city lights overlay
             }
           })
           .catch(() => {
-            // Fallback: globe base color (#0A1628) is already set, nothing else needed
+            // No Ion token or asset unavailable — dark tiles alone are fine
           });
 
         viewer.camera.flyTo({

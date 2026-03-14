@@ -13,30 +13,10 @@ import { useWatchlistStore } from '../../hooks/useWatchlist';
 import type { VesselState } from '../../types/vessel';
 import { getVesselIcon, MARKER_STYLE, cogToRotation } from '../../utils/vesselIcons';
 
-/** Create a simple white circle data URI for the watchlist halo. */
-const HALO_IMAGE = (() => {
-  if (typeof document === 'undefined') return '';
-  const size = 48;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-  return canvas.toDataURL();
-})();
-
-/** Bright white selection ring for the currently selected vessel. */
+/** Thin white selection ring for the currently selected vessel. */
 const SELECTION_RING_IMAGE = (() => {
   if (typeof document === 'undefined') return '';
-  const size = 48;
+  const size = 32;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -44,30 +24,28 @@ const SELECTION_RING_IMAGE = (() => {
   if (ctx) {
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
   return canvas.toDataURL();
 })();
 
-/** Semi-transparent amber glow billboard for yellow-tier vessels. */
-const AMBER_GLOW_IMAGE = (() => {
+/** Subtle watchlist indicator — thin dashed circle. */
+const HALO_IMAGE = (() => {
   if (typeof document === 'undefined') return '';
-  const size = 56;
+  const size = 36;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    const cx = size / 2;
-    const gradient = ctx.createRadialGradient(cx, cx, 4, cx, cx, cx - 2);
-    gradient.addColorStop(0, 'rgba(245, 158, 11, 0.35)');
-    gradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
     ctx.beginPath();
-    ctx.arc(cx, cx, cx - 2, 0, Math.PI * 2);
-    ctx.fillStyle = gradient;
-    ctx.fill();
+    ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
   }
   return canvas.toDataURL();
 })();
@@ -82,11 +60,9 @@ export function filterVessels(
   const result: VesselState[] = [];
 
   for (const vessel of vessels.values()) {
-    // Risk tier filter — empty set means "show all"
     if (filters.riskTiers.size > 0 && !filters.riskTiers.has(vessel.riskTier)) {
       continue;
     }
-    // Ship type filter — empty array means "show all"
     if (
       filters.shipTypes.length > 0 &&
       vessel.shipType != null &&
@@ -94,14 +70,12 @@ export function filterVessels(
     ) {
       continue;
     }
-    // Active-since filter
     if (filters.activeSince && vessel.timestamp < filters.activeSince) {
       continue;
     }
     result.push(vessel);
   }
 
-  // Sort so high-risk vessels render last (on top of green ones)
   const tierOrder: Record<string, number> = { green: 0, yellow: 1, red: 2 };
   result.sort((a, b) => (tierOrder[a.riskTier] ?? 0) - (tierOrder[b.riskTier] ?? 0));
 
@@ -122,13 +96,15 @@ function VesselMarkersInner() {
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
   const watchedMmsis = useWatchlistStore((s) => s.watchedMmsis);
 
-  // Pulsing scale for red vessels — oscillates between 1.0x and 1.15x at ~1Hz
+  // Slow breathing pulse for red vessels — 3 second cycle, subtle scale change
   const pulseRef = useRef(0);
   const redPulseScale = useMemo(
     () =>
       new CallbackProperty(() => {
-        pulseRef.current = (pulseRef.current + 0.06) % (2 * Math.PI);
-        const pulse = 1.0 + 0.15 * Math.sin(pulseRef.current);
+        // ~3 second full cycle at 60fps: 2*PI / (60*3) ≈ 0.035
+        pulseRef.current = (pulseRef.current + 0.035) % (2 * Math.PI);
+        // Subtle: oscillate between 0.95x and 1.05x of base scale
+        const pulse = 1.0 + 0.05 * Math.sin(pulseRef.current);
         return MARKER_STYLE.red.scale * pulse;
       }, false),
     [],
@@ -168,27 +144,12 @@ function VesselMarkersInner() {
               rotation={new ConstantProperty(cogToRotation(v.cog))}
               alignedAxis={Cartesian3.UNIT_Z}
               translucencyByDistance={
-                new NearFarScalar(1.0e3, style.opacity, 1.5e7, style.opacity * 0.6)
+                new NearFarScalar(1.0e3, style.opacity, 1.5e7, style.opacity * 0.5)
               }
             />
           </Entity>
         );
       })}
-      {/* Amber glow behind yellow-tier vessels */}
-      {AMBER_GLOW_IMAGE && visibleVessels
-        .filter((v) => v.riskTier === 'yellow')
-        .map((v) => (
-          <Entity
-            key={`glow-${v.mmsi}`}
-            position={Cartesian3.fromDegrees(v.lon, v.lat)}
-          >
-            <BillboardGraphics
-              image={AMBER_GLOW_IMAGE}
-              scale={1.2}
-              translucencyByDistance={new NearFarScalar(1.0e3, 0.6, 1.5e7, 0.2)}
-            />
-          </Entity>
-        ))}
       {/* Selection ring for the currently selected vessel */}
       {SELECTION_RING_IMAGE && selectedMmsi != null && visibleVessels
         .filter((v) => v.mmsi === selectedMmsi)
@@ -199,12 +160,12 @@ function VesselMarkersInner() {
           >
             <BillboardGraphics
               image={SELECTION_RING_IMAGE}
-              scale={1.0}
-              translucencyByDistance={new NearFarScalar(1.0e3, 1.0, 1.5e7, 0.6)}
+              scale={1.2}
+              translucencyByDistance={new NearFarScalar(1.0e3, 0.9, 1.5e7, 0.4)}
             />
           </Entity>
         ))}
-      {/* Watchlist halo indicators — rendered behind vessel markers */}
+      {/* Watchlist halo indicators */}
       {HALO_IMAGE && visibleVessels
         .filter((v) => watchedMmsis.has(v.mmsi))
         .map((v) => (
@@ -214,8 +175,8 @@ function VesselMarkersInner() {
           >
             <BillboardGraphics
               image={HALO_IMAGE}
-              scale={0.8}
-              translucencyByDistance={new NearFarScalar(1.0e3, 0.8, 1.5e7, 0.3)}
+              scale={0.9}
+              translucencyByDistance={new NearFarScalar(1.0e3, 0.6, 1.5e7, 0.2)}
             />
           </Entity>
         ))}

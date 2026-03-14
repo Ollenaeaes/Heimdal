@@ -63,9 +63,9 @@ describe('Globe Styling', () => {
 describe('Chevron Vessel Markers', () => {
   it('MARKER_STYLE has spec values for all tiers', async () => {
     const { MARKER_STYLE } = await import('../utils/vesselIcons');
-    expect(MARKER_STYLE.green).toEqual({ opacity: 0.3, scale: 0.5 });
-    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.8, scale: 1.0 });
-    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, scale: 1.2 });
+    expect(MARKER_STYLE.green).toEqual({ opacity: 0.4, scale: 0.6 });
+    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.9, scale: 0.8 });
+    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, scale: 1.0 });
   });
 
   it('cogToRotation converts COG degrees to radians correctly', async () => {
@@ -82,7 +82,7 @@ describe('Chevron Vessel Markers', () => {
     // At sin=1 → scale = 1.15 * 1.2 = 1.38
     // At sin=-1 → scale = 0.85 * 1.2 = 1.02
     // This verifies the pulse range is 1.0-1.15 multiplier on base scale
-    expect(MARKER_STYLE.red.scale).toBe(1.2);
+    expect(MARKER_STYLE.red.scale).toBe(1.0);
   });
 
   it('VesselMarkers exports filterVessels', async () => {
