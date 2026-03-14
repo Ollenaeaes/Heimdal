@@ -1,0 +1,111 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "NordBalt HVDC Cable",
+        "route_type": "power_cable",
+        "operator": "Svenska Kraftnät",
+        "buffer_nm": 1.0
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [19.08, 55.72],
+          [19.20, 55.90],
+          [19.50, 56.20],
+          [19.80, 56.50],
+          [20.00, 56.80],
+          [20.10, 57.10],
+          [20.05, 57.40]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "EstLink 2 HVDC Cable",
+        "route_type": "power_cable",
+        "operator": "Elering / Fingrid",
+        "buffer_nm": 1.0
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [24.80, 59.45],
+          [25.00, 59.60],
+          [25.20, 59.75],
+          [25.50, 59.90],
+          [25.80, 60.05],
+          [26.00, 60.15]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "C-Lion1 Submarine Telecom Cable",
+        "route_type": "telecom_cable",
+        "operator": "Cinia Oy",
+        "buffer_nm": 1.5
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [11.85, 54.50],
+          [13.00, 54.80],
+          [15.00, 55.30],
+          [17.00, 55.80],
+          [19.00, 56.50],
+          [21.00, 57.50],
+          [23.00, 58.50],
+          [24.50, 59.40],
+          [25.50, 60.00]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Balticconnector Gas Pipeline",
+        "route_type": "gas_pipeline",
+        "operator": "Gasgrid Finland / Elering",
+        "buffer_nm": 2.0
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [24.20, 59.35],
+          [24.50, 59.50],
+          [24.80, 59.65],
+          [25.10, 59.80],
+          [25.40, 59.95],
+          [25.70, 60.10]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nord Stream Route (Decommissioned)",
+        "route_type": "gas_pipeline",
+        "operator": "Nord Stream AG",
+        "buffer_nm": 2.0
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [11.50, 54.20],
+          [13.50, 54.80],
+          [16.00, 55.50],
+          [18.50, 56.30],
+          [21.00, 57.50],
+          [24.00, 59.00],
+          [27.00, 59.50],
+          [28.50, 60.00]
+        ]
+      }
+    }
+  ]
+}
