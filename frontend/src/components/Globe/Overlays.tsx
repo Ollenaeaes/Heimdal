@@ -14,13 +14,13 @@ export interface OverlayProps {
 }
 
 /** STS zone fill color: semi-transparent amber */
-const STS_FILL_COLOR = Color.fromCssColorString('rgba(212, 130, 12, 0.15)');
-/** STS zone outline color: amber */
-const STS_OUTLINE_COLOR = Color.fromCssColorString('#D4820C');
-/** Terminal marker color: red */
-const TERMINAL_COLOR = Color.fromCssColorString('#C0392B');
-/** EEZ line color: blue dashed */
-const EEZ_COLOR = Color.BLUE;
+const STS_FILL_COLOR = Color.fromCssColorString('rgba(255, 170, 30, 0.18)');
+/** STS zone outline color: bright amber for satellite visibility */
+const STS_OUTLINE_COLOR = Color.fromCssColorString('#FFB020');
+/** Terminal marker color: bright cyan for port/terminal visibility on satellite */
+const TERMINAL_COLOR = Color.fromCssColorString('#06B6D4');
+/** EEZ line color: bright blue dashed */
+const EEZ_COLOR = Color.fromCssColorString('#60A5FA');
 
 /** Convert GeoJSON [lon, lat] polygon ring to Cesium Cartesian3 array */
 function polygonToCartesian(coordinates: number[][]): Cartesian3[] {
@@ -80,10 +80,10 @@ export function Overlays({ showStsZones, showTerminals, showEez }: OverlayProps)
           return (
             <Entity key={feature.properties.id} position={position}>
               <PointGraphics
-                pixelSize={16}
+                pixelSize={10}
                 color={TERMINAL_COLOR}
-                outlineColor={Color.WHITE}
-                outlineWidth={1}
+                outlineColor={Color.fromCssColorString('rgba(6, 182, 212, 0.4)')}
+                outlineWidth={3}
               />
               <LabelGraphics
                 text={feature.properties.name}
