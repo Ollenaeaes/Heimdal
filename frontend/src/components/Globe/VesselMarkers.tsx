@@ -2,7 +2,6 @@ import { useRef, useCallback, useMemo } from 'react';
 import { Entity, BillboardGraphics } from 'resium';
 import {
   Cartesian3,
-  ConstantProperty,
   CallbackProperty,
   NearFarScalar,
   type Viewer as CesiumViewer,
@@ -141,8 +140,7 @@ function VesselMarkersInner() {
               image={getVesselIcon(v.riskTier)}
               scale={isRed ? (redPulseScale as unknown as number) : style.scale}
               color={undefined}
-              rotation={new ConstantProperty(cogToRotation(v.cog))}
-              alignedAxis={Cartesian3.UNIT_Z}
+              rotation={cogToRotation(v.cog)}
               translucencyByDistance={
                 new NearFarScalar(1.0e3, style.opacity, 1.5e7, style.opacity * 0.5)
               }
