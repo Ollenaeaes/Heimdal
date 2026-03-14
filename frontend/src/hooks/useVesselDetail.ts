@@ -49,6 +49,7 @@ async function fetchVesselDetail(mmsi: number): Promise<VesselDetail> {
     navStatus: raw.last_position?.nav_status ?? null,
     riskScore: raw.risk_score ?? 0,
     riskTier: raw.risk_tier ?? 'green',
+    networkScore: raw.network_score ?? 0,
     owner: raw.owner ?? raw.registered_owner ?? undefined,
     operator: raw.operator ?? raw.technical_manager ?? undefined,
     yearBuilt: raw.build_year ?? undefined,

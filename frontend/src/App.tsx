@@ -25,6 +25,7 @@ const DEFAULT_OVERLAYS: OverlayToggleState = {
   showGfwEvents: false,
   showInfrastructure: false,
   showGnssZones: false,
+  showNetwork: false,
 };
 
 /** Seed the vessel store from the REST API so the globe has data immediately. */
@@ -190,7 +191,7 @@ function AppInner() {
 
       <div style={{ flex: 1, position: 'relative' }}>
         <Suspense fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500">Loading globe...</div>}>
-          <GlobeView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} showInfrastructure={overlays.showInfrastructure} showGnssZones={overlays.showGnssZones} />
+          <GlobeView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} showInfrastructure={overlays.showInfrastructure} showGnssZones={overlays.showGnssZones} showNetwork={overlays.showNetwork} />
         </Suspense>
 
         {/* Left side layer control panel */}

@@ -128,6 +128,7 @@ export interface OverlayToggleState {
   showGfwEvents: boolean;
   showInfrastructure: boolean;
   showGnssZones: boolean;
+  showNetwork: boolean;
 }
 
 export interface OverlayTogglesProps {
@@ -258,6 +259,15 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
           className="accent-red-500"
         />
         GNSS / Spoofing
+      </label>
+      <label className="flex items-center gap-2 cursor-pointer" data-testid="network-toggle">
+        <input
+          type="checkbox"
+          checked={state.showNetwork}
+          onChange={() => toggle('showNetwork')}
+          className="accent-purple-500"
+        />
+        Network
       </label>
     </div>
   );

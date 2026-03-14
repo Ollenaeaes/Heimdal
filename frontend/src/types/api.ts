@@ -80,6 +80,7 @@ export interface VesselDetail {
   navStatus?: number | null;
   riskScore: number;
   riskTier: 'green' | 'yellow' | 'red';
+  networkScore?: number;
   owner?: string;
   operator?: string;
   yearBuilt?: number;

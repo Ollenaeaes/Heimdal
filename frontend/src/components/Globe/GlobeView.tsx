@@ -14,6 +14,7 @@ import { SarMarkers } from './SarMarkers';
 import { InfrastructureOverlay } from './InfrastructureOverlay';
 import { GnssZoneOverlay } from './GnssZoneOverlay';
 import { DuplicateMmsiLines } from './DuplicateMmsiLines';
+import { NetworkOverlay } from './NetworkOverlay';
 import { HoverDatablock } from './HoverDatablock';
 import { INITIAL_LON, INITIAL_LAT, INITIAL_ALT, setCesiumViewer } from './cesiumViewer';
 
@@ -31,9 +32,10 @@ export interface GlobeViewProps {
   showSarDetections?: boolean;
   showInfrastructure?: boolean;
   showGnssZones?: boolean;
+  showNetwork?: boolean;
 }
 
-function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfrastructure = false, showGnssZones = false }: GlobeViewProps = {}) {
+function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfrastructure = false, showGnssZones = false, showNetwork = false }: GlobeViewProps = {}) {
   const viewerRef = useRef<{ cesiumElement?: Viewer }>(null);
 
   useEffect(() => {
@@ -115,6 +117,7 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfra
         <InfrastructureOverlay visible={showInfrastructure} />
         <GnssZoneOverlay visible={showGnssZones} />
         <DuplicateMmsiLines visible={showGnssZones} />
+        <NetworkOverlay visible={showNetwork} />
       </ResiumViewer>
       <HoverDatablock />
     </>

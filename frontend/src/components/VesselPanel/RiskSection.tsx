@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { VesselDetail } from '../../types/api';
 import type { AnomalyEvent } from '../../types/anomaly';
 import { getRuleName } from '../../utils/ruleNames';
@@ -89,6 +90,7 @@ export function RiskSection({ vessel }: RiskSectionProps) {
           <span>100</span>
           <span>200+</span>
         </div>
+        <NetworkScoreLine vessel={vessel} />
       </div>
 
       {/* Anomaly list — deduplicated by rule */}
@@ -127,6 +129,32 @@ function formatDetailValue(value: unknown): string {
   }
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+export function NetworkScoreLine({ vessel }: { vessel: VesselDetail }) {
+  const hasNetwork = (vessel.networkScore ?? 0) > 0;
+
+  const { data: networkData } = useQuery<{ vessels: Record<string, unknown> }>({
+    queryKey: ['vesselNetwork', vessel.mmsi, 1],
+    queryFn: () =>
+      fetch(`/api/vessels/${vessel.mmsi}/network?depth=1`).then((r) => r.json()),
+    enabled: hasNetwork,
+  });
+
+  const connectedCount = networkData
+    ? Math.max(0, Object.keys(networkData.vessels).length - 1)
+    : 0;
+
+  return (
+    <div className="flex items-center gap-2 mt-2 text-xs" data-testid="network-score-line">
+      <span className="text-gray-400">Network:</span>
+      <span className="text-gray-200 font-mono" data-testid="network-score-value">
+        {hasNetwork
+          ? `${vessel.networkScore} pts · Connected to ${connectedCount} vessels`
+          : 'No connections'}
+      </span>
+    </div>
+  );
 }
 
 function AnomalyCard({ anomaly }: { anomaly: AnomalyEvent }) {

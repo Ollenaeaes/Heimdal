@@ -276,9 +276,28 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 16 new tests
 - Commits: 8 commits on feature/operations-centre-theme branch
 
+### 26-infrastructure-protection-frontend (all 4 stories)
+- Story 1: InfrastructureOverlay.tsx — cable/pipeline polylines color-coded (telecom=blue, power=yellow, pipeline=orange), TanStack Query fetch
+- Story 2: Point features — route start/end markers (cables size 8, pipelines size 10)
+- Story 3: Risk halos — yellow/red vessels near routes get amber/red semi-transparent overlay segments
+- Story 4: InfrastructurePanel.tsx — asset list + corridor alert feed, click-to-fly, empty state
+- Backend: GET /api/infrastructure/routes (GeoJSON), GET /api/infrastructure/alerts
+- Toggle: showInfrastructure in OverlayToggles with cyan accent
+- Tests: 29 frontend + 6 backend
+- Commit: `ca7d258`
+
+### 27-spoofing-detection-frontend (all 3 stories)
+- Story 1: Spoof marker styling — SPOOF_INDICATOR_IMAGE dashed circle overlay, spoofedMmsis Set in Zustand store
+- Story 2: DuplicateMmsiLines.tsx — dashed polylines between conflicting positions with "Duplicate MMSI" label
+- Story 3: GnssZoneOverlay.tsx — semi-transparent red polygons with opacity scaling (0.15-0.5 by affected_count)
+- Backend: GET /api/gnss-zones (GeoJSON, non-expired only)
+- Toggle: showGnssZones shared by GNSS zones + duplicate lines
+- Tests: 29 frontend + 4 backend
+- Commit: `ca7d258`
+
 ## Current Story
 
-Wave 13 in progress — Specs 26 (Infrastructure Protection Frontend) + 27 (Spoofing Detection Frontend) in parallel.
+Wave 14 in progress — Spec 28 (Network Mapping Frontend).
 
 ## Known Issues
 

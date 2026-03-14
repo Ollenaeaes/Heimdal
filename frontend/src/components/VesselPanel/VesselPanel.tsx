@@ -10,6 +10,8 @@ import { VoyageTimeline } from './VoyageTimeline';
 import { TrackReplay } from './TrackReplay';
 import { SanctionsSection } from './SanctionsSection';
 import { OwnershipSection } from './OwnershipSection';
+import { NetworkGraph } from './NetworkGraph';
+import { VesselChain } from './VesselChain';
 import { EnrichmentForm } from './EnrichmentForm';
 import { EquasisUpload } from './EquasisUpload';
 import { EnrichmentHistory } from './EnrichmentHistory';
@@ -75,6 +77,8 @@ function VesselPanel() {
             ownershipData={vessel.ownershipData}
             manualEnrichment={vessel.manualEnrichment}
           />
+          <NetworkGraph mmsi={vessel.mmsi} />
+          <VesselChain mmsi={vessel.mmsi} />
           <EnrichmentForm mmsi={vessel.mmsi} />
           <EquasisSection mmsi={vessel.mmsi} equasis={vessel.equasis} />
           <EquasisUpload mmsi={vessel.mmsi} />
