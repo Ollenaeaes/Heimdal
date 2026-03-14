@@ -120,9 +120,8 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
         const colorHex = ROUTE_TYPE_COLORS[routeType] ?? '#3B82F6';
         const typeLabel = ROUTE_TYPE_LABELS[routeType] ?? routeType;
 
-        // Set entity ID for hover detection
-        entity.id = `infra-route-${routeId}`;
-        entity.name = routeName;
+        // entity.id is read-only in Cesium — use name for hover detection
+        entity.name = `infra-route-${routeId}::${routeName}`;
 
         // Build description
         let desc = `<b>${routeName}</b><br/>Type: ${typeLabel}`;
