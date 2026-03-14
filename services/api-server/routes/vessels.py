@@ -144,10 +144,16 @@ async def vessel_snapshot():
     async with session_factory() as session:
         result = await session.execute(
             text(
-                "SELECT mmsi, last_lat, last_lon, risk_tier, risk_score, "
-                "ship_type, ship_name "
-                "FROM vessel_profiles "
-                "WHERE last_lat IS NOT NULL AND last_lon IS NOT NULL"
+                "SELECT vp.mmsi, vp.last_lat, vp.last_lon, vp.risk_tier, "
+                "vp.risk_score, vp.ship_type, vp.ship_name, "
+                "lp.cog, lp.sog "
+                "FROM vessel_profiles vp "
+                "LEFT JOIN LATERAL ("
+                "  SELECT cog, sog FROM vessel_positions "
+                "  WHERE mmsi = vp.mmsi "
+                "  ORDER BY timestamp DESC LIMIT 1"
+                ") lp ON true "
+                "WHERE vp.last_lat IS NOT NULL AND vp.last_lon IS NOT NULL"
             )
         )
         rows = result.mappings().all()
@@ -161,6 +167,8 @@ async def vessel_snapshot():
             "risk_score": r["risk_score"] or 0,
             "ship_type": r.get("ship_type"),
             "name": r.get("ship_name"),
+            "cog": r.get("cog"),
+            "sog": r.get("sog"),
         }
         for r in rows
     ]
