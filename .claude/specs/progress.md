@@ -289,8 +289,19 @@ Wave 10 complete. All 8 stories for spec 22 (equasis-upload) implemented.
 ## Notes for Next Session
 
 - WAVE 10 COMPLETE (spec 22) on branch `feature/equasis-upload`
-- All 22 specs across 10 waves now implemented
-- New tests this wave: 31 + 13 + 13 + 4 + 21 + 7 + 45 + 19 = 153 new tests
+- All 22 specs across 10 waves implemented
 - Backend tests passing: 426 (excluding 25 pre-existing failures)
 - Frontend tests: 388 passing (8 pre-existing failures, unchanged)
 - Ready for merge to main
+
+### Wave 11-13: Capability Modules (6 new specs, draft)
+- **Spec 23** — Infrastructure Protection Backend: 6 stories (2 tables, data loading, 3 rules: cable_slow_transit, cable_alignment, infra_speed_anomaly)
+- **Spec 24** — Spoofing Detection Backend: 8 stories (2 tables, GSHHG loading, 5 rules: spoof_land_position, spoof_impossible_speed, spoof_duplicate_mmsi, spoof_frozen_position, spoof_identity_mismatch, GNSS clustering)
+- **Spec 25** — Network Mapping Backend: 7 stories (1 table, network repository, 3 edge types, network scoring, API endpoints)
+- **Spec 26** — Infrastructure Protection Frontend: 4 stories (cable/pipeline overlay, point features, risk halos, dashboard panel)
+- **Spec 27** — Spoofing Detection Frontend: 3 stories (spoof markers, duplicate MMSI lines, GNSS zone overlay)
+- **Spec 28** — Network Mapping Frontend: 4 stories (network score display, d3-force graph, globe network mode, vessel chain view)
+- New rules STACK with existing ais_spoofing and identity_mismatch (do not replace)
+- Wave 11 backend specs are independent and can be parallelized
+- Frontend specs (12-13) depend on their corresponding backend spec
+- All specs in draft status — awaiting approval

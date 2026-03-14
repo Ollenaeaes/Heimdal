@@ -25,6 +25,8 @@ from shared.db.repositories import (
     upsert_vessel_profile,
 )
 
+from shared.constants import normalize_flag
+
 from equasis_parser import parse_equasis_pdf
 
 logger = logging.getLogger("api-server.equasis")
@@ -113,7 +115,7 @@ async def upload_equasis_pdf_endpoint(
                     "ship_name": ship_particulars.get("name"),
                     "ship_type": None,
                     "ship_type_text": ship_particulars.get("ship_type"),
-                    "flag_country": ship_particulars.get("flag"),
+                    "flag_country": normalize_flag(ship_particulars.get("flag")),
                     "call_sign": ship_particulars.get("call_sign"),
                     "length": None,
                     "width": None,
@@ -214,7 +216,7 @@ async def upload_equasis_pdf_endpoint(
             "build_year": ship_particulars.get("build_year"),
             "dwt": ship_particulars.get("dwt"),
             "gross_tonnage": ship_particulars.get("gross_tonnage"),
-            "flag_country": ship_particulars.get("flag"),
+            "flag_country": normalize_flag(ship_particulars.get("flag")),
             "ship_name": ship_particulars.get("name"),
             "call_sign": ship_particulars.get("call_sign"),
             "ship_type_text": ship_particulars.get("ship_type"),

@@ -1,10 +1,10 @@
 # Heimdal Build Wave Plan
 
 **Created:** 2026-03-11
-**Updated:** 2026-03-13 (Equasis Upload — Update 003)
+**Updated:** 2026-03-14 (Capability Modules — Update 004)
 **Status:** draft
-**Total Specs:** 22
-**Total Waves:** 10
+**Total Specs:** 28
+**Total Waves:** 13
 
 ---
 
@@ -18,6 +18,8 @@ Waves must run sequentially — each wave depends on the previous completing.
 > **Update 002:** Added Wave 8 (Scoring Overhaul + Observability) and Wave 9 (Enrichment Escalation + Performance). Wave 8 fixes critical scoring issues: event lifecycle model (anomalies with start/end), port awareness to eliminate false positives, repeat-event escalation, and 4 new detection rules based on CREA/Windward/Kpler/S&P Global shadow fleet intelligence (AIS spoofing, ownership risk, insurance/classification risk, voyage patterns). Also adds structured JSON logging and service health monitoring. Wave 9 adds tier-triggered enrichment (yellow vessels get immediate ownership/classification deep-dive) and performance optimization (profiling, scoring debounce, bundle splitting).
 
 > **Update 003:** Added Wave 10 (Equasis PDF Upload). Operators can upload Equasis Ship Folder PDFs to enrich vessels with comprehensive registry data: management chain, classification status/surveys, PSC inspection history, flag history, name history, company history, and safety certificates. Server-side PDF parsing with pdfplumber, two upload entry points (vessel panel + standalone toolbar button), expandable vessel information display, and scoring rule enhancements for PSC detentions and classification withdrawals.
+
+> **Update 004:** Added Waves 11–13 (Capability Modules). Three modules extending Heimdal from sanctions compliance into maritime domain awareness: (1) Critical Infrastructure Protection — 3 rules detecting anchor-drag sabotage patterns near subsea cables/pipelines, with globe overlays and dashboard panel; (2) AIS Spoofing Detection — 5 new rules (stacking with existing ais_spoofing) covering position-on-land, impossible speed, duplicate MMSI, frozen positions, and zombie vessel identity theft, plus GNSS interference zone clustering; (3) Sanctions Evasion Network Mapping — encounter/ownership graph construction, network risk score propagation, d3-force network visualization. Backend and frontend split into separate specs per module (6 specs total). New DB tables: infrastructure_routes, infrastructure_events, land_mask, gnss_interference_zones, network_edges.
 
 ### Wave 1 — Foundation Infrastructure (3 specs, parallel)
 No dependencies. Start here.
@@ -101,6 +103,30 @@ Depends on: Wave 6 (manual-enrichment), Wave 8 (enhanced-detection-rules)
 |------|------|-------|
 | 22 | `equasis-upload` | Equasis Ship Folder PDF parsing, upload API, vessel panel + standalone upload UI, expanded vessel information display, scoring enhancements for PSC/classification/flag history |
 
+### Wave 11 — Capability Modules: Backend (3 specs, parallel)
+Depends on: Wave 8 (scoring engine with event lifecycle), Wave 4 (GFW enrichment)
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 23 | `infrastructure-protection-backend` | infrastructure_routes + infrastructure_events tables, data loading script, infra_helpers.py, 3 rules (cable_slow_transit, cable_alignment, infra_speed_anomaly) |
+| 24 | `spoofing-detection-backend` | land_mask + gnss_interference_zones tables, GSHHG data loading, 5 rules (spoof_land_position, spoof_impossible_speed, spoof_duplicate_mmsi, spoof_frozen_position, spoof_identity_mismatch), GNSS clustering |
+| 25 | `network-mapping-backend` | network_edges table, network_repository, encounter/proximity/ownership edge creation, network risk scoring, network API endpoints |
+
+### Wave 12 — Capability Modules: Frontend — Infrastructure & Spoofing (2 specs, parallel)
+Depends on: Wave 11 (specs 23, 24)
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 26 | `infrastructure-protection-frontend` | Cable/pipeline globe overlay, point features (landing stations, wind farms, platforms), infrastructure risk halos, infrastructure dashboard panel |
+| 27 | `spoofing-detection-frontend` | Dashed spoof marker borders, duplicate MMSI connector lines, GNSS interference zone overlay |
+
+### Wave 13 — Capability Modules: Frontend — Network (1 spec)
+Depends on: Wave 11 (spec 25), Wave 12 (for consistent frontend patterns)
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 28 | `network-mapping-frontend` | Network score display, d3-force network graph tab, globe network mode, vessel chain view |
+
 ---
 
 ## Build Order Diagram
@@ -132,15 +158,25 @@ Wave 7:  [14-sar-frontend] [15-stats-replay] [16-testing-docs]           ← COM
                        │                    │
                        └────────────────────┘
                                    │
-Wave 8:  [17-event-scoring] [18-detection-rules] [19-logging-observability]
+Wave 8:  [17-event-scoring] [18-detection-rules] [19-logging-observability] ← COMPLETED
                        │              │                    │
                        └──────────────┴────────────────────┘
                                    │
-Wave 9:       [20-yellow-enrichment] [21-performance-optimization]
+Wave 9:       [20-yellow-enrichment] [21-performance-optimization]       ← COMPLETED
                        │                    │
                        └────────────────────┘
                                    │
-Wave 10:                  [22-equasis-upload]
+Wave 10:                  [22-equasis-upload]                             ← COMPLETED
+                                   │
+Wave 11: [23-infra-backend] [24-spoofing-backend] [25-network-backend]
+                       │              │                    │
+                       └──────────────┴────────────────────┘
+                                   │
+Wave 12:       [26-infra-frontend] [27-spoofing-frontend]
+                       │                    │
+                       └────────────────────┘
+                                   │
+Wave 13:               [28-network-frontend]
 ```
 
 ---
@@ -165,6 +201,9 @@ Wave 10:                  [22-equasis-upload]
 | `heimdal:heartbeat:{service}` | all services (Wave 8+) | STRING (TTL 120s) |
 | `heimdal:enrichment_triggered` | enrichment (Wave 9+) | HASH (mmsi → ts) |
 | `heimdal:scoring_debounce:{mmsi}` | scoring (Wave 9+) | STRING (TTL configurable) |
+| `heimdal:cable_entry:{mmsi}` | scoring (Wave 11+) | HASH (route_id, entry_time, entry_lat, entry_lon) |
+| `heimdal:cable_align:{mmsi}` | scoring (Wave 11+) | HASH (route_id, first_parallel_time, consecutive_count) |
+| `heimdal:last_pos:{mmsi}` | scoring (Wave 11+) | HASH (lat, lon, timestamp) — duplicate MMSI detection |
 
 ### Database Table Ownership
 | Table | Primary Writer | Readers |
@@ -179,6 +218,11 @@ Wave 10:                  [22-equasis-upload]
 | zones | seed data (init.sh) | scoring, api-server |
 | ports | seed data (Wave 8+) | scoring |
 | equasis_data | api-server (Wave 10+) | api-server, scoring |
+| infrastructure_routes | seed data (Wave 11+) | scoring, api-server |
+| infrastructure_events | scoring (Wave 11+) | api-server |
+| land_mask | seed data (Wave 11+) | scoring |
+| gnss_interference_zones | scoring (Wave 11+) | api-server |
+| network_edges | scoring, api-server (Wave 11+) | api-server, scoring |
 
 ### External API Dependencies
 | API | Consumer | Auth | Rate Limits |

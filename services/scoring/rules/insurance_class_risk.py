@@ -187,11 +187,61 @@ class InsuranceClassRiskRule(ScoringRule):
             total_points += 15
             max_severity = _escalate(max_severity, "high")
 
-        # --- 4. No IG P&I coverage ---
-        # Only flag if we have some data source — don't penalise unenriched vessels
-        if not _has_ig_pi(profile) and has_data:
+        # --- 4. P&I insurance checks ---
+        insurer = profile.get("insurer")
+        has_any_pi = bool(
+            insurer
+            or (isinstance(pi_details, dict) and pi_details.get("provider"))
+        )
+        has_equasis = bool(profile.get("equasis_data"))
+
+        # 4a. No P&I insurance at all — only flag when Equasis data has been
+        #     uploaded (the authoritative source that would list P&I).
+        if not has_any_pi and has_equasis:
+            pts = 20 if is_tanker else 15
+            sev = "critical" if is_tanker else "high"
+            findings.append({
+                "check": "no_pi_insurance",
+                "severity": sev,
+                "points": pts,
+                "ship_type": ship_type,
+                "reason": (
+                    "No P&I insurance listed in Equasis data"
+                    + (" (tanker)" if is_tanker else "")
+                ),
+            })
+            total_points += pts
+            max_severity = _escalate(max_severity, sev)
+
+        # 4b. Has P&I but not IG club — only flag if we have some data source
+        elif not _has_ig_pi(profile) and has_data and has_any_pi:
             if is_tanker:
-                # Tanker without IG P&I → high (15 pts)
+                findings.append({
+                    "check": "no_ig_pi_tanker",
+                    "severity": "high",
+                    "points": 15,
+                    "ship_type": ship_type,
+                    "insurer": insurer,
+                    "reason": f"Tanker without International Group P&I coverage (insurer: {insurer})",
+                })
+                total_points += 15
+                max_severity = _escalate(max_severity, "high")
+            else:
+                findings.append({
+                    "check": "no_ig_pi_non_tanker",
+                    "severity": "moderate",
+                    "points": 8,
+                    "ship_type": ship_type,
+                    "insurer": insurer,
+                    "reason": f"Non-tanker without IG P&I coverage (insurer: {insurer})",
+                })
+                total_points += 8
+                max_severity = _escalate(max_severity, "moderate")
+
+        # 4c. No IG P&I, no insurer at all, but has other data (non-equasis) —
+        #     keep the original softer flag for unenriched-via-equasis vessels
+        elif not _has_ig_pi(profile) and has_data and not has_equasis:
+            if is_tanker:
                 findings.append({
                     "check": "no_ig_pi_tanker",
                     "severity": "high",
@@ -201,23 +251,16 @@ class InsuranceClassRiskRule(ScoringRule):
                 })
                 total_points += 15
                 max_severity = _escalate(max_severity, "high")
-            else:
-                # Non-tanker without IG P&I → moderate (8 pts)
-                insurer = profile.get("insurer")
-                if insurer is None and not (
-                    isinstance(profile.get("pi_details"), dict)
-                    and profile["pi_details"].get("provider")
-                ):
-                    # Only flag if there's truly no insurance info
-                    findings.append({
-                        "check": "no_ig_pi_non_tanker",
-                        "severity": "moderate",
-                        "points": 8,
-                        "ship_type": ship_type,
-                        "reason": "Non-tanker without IG P&I coverage or known insurer",
-                    })
-                    total_points += 8
-                    max_severity = _escalate(max_severity, "moderate")
+            elif not has_any_pi:
+                findings.append({
+                    "check": "no_ig_pi_non_tanker",
+                    "severity": "moderate",
+                    "points": 8,
+                    "ship_type": ship_type,
+                    "reason": "Non-tanker without IG P&I coverage or known insurer",
+                })
+                total_points += 8
+                max_severity = _escalate(max_severity, "moderate")
 
         # --- 5. Recent class change (< 12 months) → moderate (8 pts) ---
         # Check for class change info in profile or manual enrichment

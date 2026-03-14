@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Sequence
 
-from shared.constants import FRAUDULENT_REGISTRY_FLAGS, MID_TO_FLAG, SHADOW_FLEET_FLAGS
+from shared.constants import FRAUDULENT_REGISTRY_FLAGS, MID_TO_FLAG, SHADOW_FLEET_FLAGS, normalize_flag
 from shared.models.anomaly import RuleResult
 
 from .base import ScoringRule
@@ -41,7 +41,7 @@ class FlagOfConvenienceRule(ScoringRule):
             return None
 
         # Determine flag from profile or derive from MMSI MID
-        flag = (profile.get("flag_country") or "").strip().upper()
+        flag = normalize_flag(profile.get("flag_country"))
         if not flag:
             mid = mmsi // 1000000
             flag = MID_TO_FLAG.get(mid, "")

@@ -111,7 +111,7 @@ class TestParseVesselIdentity:
         assert result["mmsi"] == 273456789
         assert result["imo"] == 9876543
         assert result["ship_name"] == "VOLGA TRADER"
-        assert result["flag_country"] == "RUS"
+        assert result["flag_country"] == "RU"  # normalized from "RUS"
         assert result["ship_type_text"] == "General Cargo"  # Registry preferred
         assert result["call_sign"] == "UBCD"
         assert result["gross_tonnage"] == 5400
@@ -129,7 +129,7 @@ class TestParseVesselIdentity:
 
         assert result["mmsi"] == 351123456
         assert result["ship_name"] == "PACIFIC STAR"
-        assert result["flag_country"] == "PAN"
+        assert result["flag_country"] == "PA"  # normalized from "PAN"
         # Missing fields are NOT in the result (filtered out)
         assert "gross_tonnage" not in result
         assert "dwt" not in result
@@ -144,7 +144,7 @@ class TestParseVesselIdentity:
         result = parse_vessel_identity(raw)
 
         assert result["ship_name"] == "REGISTRY NAME"
-        assert result["flag_country"] == "NOR"
+        assert result["flag_country"] == "NO"  # normalized from "NOR"
 
     def test_imo_parsing_with_prefix(self):
         """IMO number with 'IMO' prefix is cleaned."""
@@ -436,6 +436,6 @@ class TestFetchAndUpdateVesselProfile:
         assert profile_data["owner"] == "Volga Shipping Co."
         assert profile_data["operator"] == "Volga Maritime"
         assert profile_data["imo"] == 9876543
-        assert profile_data["flag_country"] == "RUS"
+        assert profile_data["flag_country"] == "RU"  # normalized from "RUS"
         assert profile_data["length"] == 112.5
         assert profile_data["width"] == 15.8

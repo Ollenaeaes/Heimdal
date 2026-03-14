@@ -417,3 +417,134 @@ SHADOW_FLEET_DESTINATIONS: frozenset[str] = frozenset({
     "QINGDAO", "RIZHAO", "DONGYING", "ZHOUSHAN", "NINGBO", "DALIAN",
     "ISKENDERUN", "MERSIN", "ALIAGA", "DORTYOL", "CEYHAN",
 })
+
+
+# ---------------------------------------------------------------------------
+# Flag normalization: alpha-3 / country name → alpha-2
+# Imported by scoring rules and enrichment writers to ensure consistent
+# flag codes across the system.
+# ---------------------------------------------------------------------------
+
+# ISO 3166-1 alpha-3 → alpha-2 (comprehensive)
+_ALPHA3_TO_ALPHA2: dict[str, str] = {
+    "CYP": "CY", "GBR": "GB", "GRC": "GR", "MLT": "MT", "PAN": "PA",
+    "LBR": "LR", "MHL": "MH", "NOR": "NO", "SWE": "SE", "DNK": "DK",
+    "DEU": "DE", "NLD": "NL", "FRA": "FR", "ESP": "ES", "ITA": "IT",
+    "PRT": "PT", "FIN": "FI", "IRL": "IE", "BEL": "BE", "HRV": "HR",
+    "ROU": "RO", "BGR": "BG", "POL": "PL", "EST": "EE", "LVA": "LV",
+    "LTU": "LT", "SVN": "SI", "TUR": "TR", "RUS": "RU", "UKR": "UA",
+    "USA": "US", "CAN": "CA", "BHS": "BS", "BMU": "BM", "BRB": "BB",
+    "BLZ": "BZ", "CHN": "CN", "TWN": "TW", "JPN": "JP", "KOR": "KR",
+    "SGP": "SG", "HKG": "HK", "IND": "IN", "IDN": "ID", "MYS": "MY",
+    "PHL": "PH", "THA": "TH", "VNM": "VN", "AUS": "AU", "NZL": "NZ",
+    "BRA": "BR", "ARG": "AR", "CHL": "CL", "COL": "CO", "MEX": "MX",
+    "ARE": "AE", "SAU": "SA", "IRN": "IR", "ISR": "IL", "EGY": "EG",
+    "ZAF": "ZA", "NGA": "NG", "KEN": "KE", "TZA": "TZ", "GHA": "GH",
+    "COM": "KM", "CMR": "CM", "GAB": "GA", "TGO": "TG", "SEN": "SN",
+    "ATG": "AG", "VCT": "VC", "KNA": "KN", "DMA": "DM", "GRD": "GD",
+    "TTO": "TT", "CRI": "CR", "CUB": "CU", "DOM": "DO", "GTM": "GT",
+    "HND": "HN", "NIC": "NI", "SLV": "SV", "JAM": "JM", "GIB": "GI",
+    "ISL": "IS", "FRO": "FO", "MCO": "MC", "LUX": "LU", "AND": "AD",
+    "MNE": "ME", "ALB": "AL", "GEO": "GE", "PLW": "PW", "TUV": "TV",
+    "VUT": "VU", "TON": "TO", "FJI": "FJ", "WSM": "WS", "KIR": "KI",
+    "WLF": "WF", "MYT": "YT", "REU": "RE", "GLP": "GP", "MTQ": "MQ",
+    "SPM": "PM", "BLM": "BL", "MAF": "MF", "SHN": "SH", "AIA": "AI",
+    "MSR": "MS", "CYM": "KY", "TCA": "TC", "VGB": "VG", "VIR": "VI",
+    "PRI": "PR", "GUM": "GU", "ASM": "AS", "MNP": "MP", "NCL": "NC",
+    "PYF": "PF", "PCN": "PN", "TKL": "TK", "NIU": "NU", "COK": "CK",
+    "NFK": "NF", "CCK": "CC", "CXR": "CX", "IOT": "IO", "TLS": "TL",
+    "BRN": "BN", "MMR": "MM", "KHM": "KH", "LAO": "LA", "BGD": "BD",
+    "LKA": "LK", "MDV": "MV", "NPL": "NP", "BTN": "BT", "MNG": "MN",
+    "PRK": "KP", "MAC": "MO", "PSE": "PS", "SYR": "SY", "IRQ": "IQ",
+    "JOR": "JO", "LBN": "LB", "KWT": "KW", "BHR": "BH", "QAT": "QA",
+    "OMN": "OM", "YEM": "YE", "AFG": "AF", "TKM": "TM", "UZB": "UZ",
+    "KGZ": "KG", "TJK": "TJ", "AZE": "AZ", "ARM": "AM", "MDA": "MD",
+    "BLR": "BY", "CZE": "CZ", "HUN": "HU", "MKD": "MK", "LIE": "LI",
+    "SRB": "RS", "BIH": "BA", "HTI": "HT", "CUW": "CW", "ABW": "AW",
+    "SUR": "SR", "GUY": "GY", "ECU": "EC", "PER": "PE", "BOL": "BO",
+    "PRY": "PY", "URY": "UY", "VEN": "VE",
+    "MAR": "MA", "DZA": "DZ", "TUN": "TN", "LBY": "LY", "SDN": "SD",
+    "SSD": "SS", "ERI": "ER", "ETH": "ET", "DJI": "DJ", "SOM": "SO",
+    "UGA": "UG", "RWA": "RW", "BDI": "BI", "COD": "CD", "COG": "CG",
+    "AGO": "AO", "MOZ": "MZ", "MDG": "MG", "MUS": "MU", "CPV": "CV",
+    "GNB": "GW", "GIN": "GN", "SLE": "SL", "GMB": "GM", "MLI": "ML",
+    "BFA": "BF", "NER": "NE", "TCD": "TD", "CAF": "CF", "GNQ": "GQ",
+    "BWA": "BW", "NAM": "NA", "ZMB": "ZM", "ZWE": "ZW", "MWI": "MW",
+    "LSO": "LS", "SWZ": "SZ", "SLB": "SB", "PNG": "PG", "NRU": "NR",
+    "FSM": "FM",
+}
+
+# Country name → alpha-2
+_NAME_TO_ALPHA2: dict[str, str] = {
+    "ANTIGUA AND BARBUDA": "AG", "AUSTRALIA": "AU", "BAHAMAS": "BS",
+    "BARBADOS": "BB", "BELGIUM": "BE", "BELIZE": "BZ", "BERMUDA": "BM",
+    "BRAZIL": "BR", "BULGARIA": "BG", "CAMEROON": "CM", "CANADA": "CA",
+    "CHILE": "CL", "CHINA": "CN", "COLOMBIA": "CO", "COMOROS": "KM",
+    "COOK ISLANDS": "CK", "COSTA RICA": "CR", "CROATIA": "HR", "CUBA": "CU",
+    "CYPRUS": "CY", "DENMARK": "DK", "DOMINICA": "DM",
+    "DOMINICAN REPUBLIC": "DO", "ECUADOR": "EC", "EGYPT": "EG",
+    "ESTONIA": "EE", "FAROE ISLANDS": "FO", "FIJI": "FJ", "FINLAND": "FI",
+    "FRANCE": "FR", "GABON": "GA", "GEORGIA": "GE", "GERMANY": "DE",
+    "GHANA": "GH", "GIBRALTAR": "GI", "GREECE": "GR", "GRENADA": "GD",
+    "GUATEMALA": "GT", "HONDURAS": "HN", "HONG KONG": "HK", "ICELAND": "IS",
+    "INDIA": "IN", "INDONESIA": "ID", "IRAN": "IR", "IRELAND": "IE",
+    "ISLE OF MAN": "IM", "ISRAEL": "IL", "ITALY": "IT", "JAMAICA": "JM",
+    "JAPAN": "JP", "KENYA": "KE", "KIRIBATI": "KI", "KOREA": "KR",
+    "SOUTH KOREA": "KR", "KUWAIT": "KW", "LATVIA": "LV", "LEBANON": "LB",
+    "LIBERIA": "LR", "LITHUANIA": "LT", "LUXEMBOURG": "LU", "MALAYSIA": "MY",
+    "MALDIVES": "MV", "MALTA": "MT", "MARSHALL ISLANDS": "MH",
+    "MAURITIUS": "MU", "MEXICO": "MX", "MONACO": "MC", "MONTENEGRO": "ME",
+    "MOROCCO": "MA", "MOZAMBIQUE": "MZ", "MYANMAR": "MM",
+    "NETHERLANDS": "NL", "NEW ZEALAND": "NZ", "NICARAGUA": "NI",
+    "NIGERIA": "NG", "NORWAY": "NO", "PALAU": "PW", "PANAMA": "PA",
+    "PAPUA NEW GUINEA": "PG", "PERU": "PE", "PHILIPPINES": "PH",
+    "POLAND": "PL", "PORTUGAL": "PT", "QATAR": "QA", "ROMANIA": "RO",
+    "RUSSIA": "RU", "RUSSIAN FEDERATION": "RU", "SAINT KITTS AND NEVIS": "KN",
+    "SAINT VINCENT AND THE GRENADINES": "VC", "SAINT VINCENT": "VC",
+    "SAMOA": "WS", "SAUDI ARABIA": "SA", "SENEGAL": "SN", "SIERRA LEONE": "SL",
+    "SINGAPORE": "SG", "SLOVENIA": "SI", "SOUTH AFRICA": "ZA", "SPAIN": "ES",
+    "SRI LANKA": "LK", "SWEDEN": "SE", "SWITZERLAND": "CH", "TAIWAN": "TW",
+    "TANZANIA": "TZ", "THAILAND": "TH", "TOGO": "TG", "TONGA": "TO",
+    "TRINIDAD AND TOBAGO": "TT", "TUNISIA": "TN", "TURKEY": "TR",
+    "TUVALU": "TV", "UKRAINE": "UA", "UNITED ARAB EMIRATES": "AE",
+    "UNITED KINGDOM": "GB", "UNITED STATES": "US", "URUGUAY": "UY",
+    "VANUATU": "VU", "VENEZUELA": "VE", "VIETNAM": "VN",
+    "CAYMAN ISLANDS": "KY", "WALLIS AND FUTUNA": "WF",
+    "NORTH KOREA": "KP", "DEMOCRATIC REPUBLIC OF THE CONGO": "CD",
+    "REPUBLIC OF THE CONGO": "CG", "IVORY COAST": "CI",
+    "COTE D'IVOIRE": "CI", "CABO VERDE": "CV", "CAPE VERDE": "CV",
+    "TIMOR-LESTE": "TL", "EAST TIMOR": "TL", "BRUNEI": "BN",
+    "HONG KONG SAR": "HK", "MACAU": "MO", "MACAO": "MO",
+    "CURACAO": "CW", "ARUBA": "AW", "SURINAME": "SR", "GUYANA": "GY",
+    "ALGERIA": "DZ", "LIBYA": "LY", "SUDAN": "SD", "SOUTH SUDAN": "SS",
+    "ERITREA": "ER", "ETHIOPIA": "ET", "DJIBOUTI": "DJ", "SOMALIA": "SO",
+    "UGANDA": "UG", "RWANDA": "RW", "BURUNDI": "BI", "ANGOLA": "AO",
+    "NAMIBIA": "NA", "ZAMBIA": "ZM", "ZIMBABWE": "ZW", "MALAWI": "MW",
+    "LESOTHO": "LS", "ESWATINI": "SZ", "SWAZILAND": "SZ",
+    "BOTSWANA": "BW", "MADAGASCAR": "MG", "SOLOMON ISLANDS": "SB",
+    "EQUATORIAL GUINEA": "GQ", "GUINEA-BISSAU": "GW", "GUINEA": "GN",
+    "GAMBIA": "GM", "BURKINA FASO": "BF",
+    "GREAT BRITAIN": "GB", "UK": "GB", "ENGLAND": "GB",
+    "REPUBLIC OF KOREA": "KR", "IRAN, ISLAMIC REPUBLIC OF": "IR",
+    "KOREA, REPUBLIC OF": "KR",
+    "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF": "KP",
+}
+
+
+def normalize_flag(flag: str | None) -> str | None:
+    """Normalize a flag code or country name to ISO alpha-2 uppercase.
+
+    Handles alpha-3 codes (GBR→GB), country names (Cyprus→CY),
+    and passes through valid alpha-2 codes unchanged.
+    Returns None if input is None/empty.
+    """
+    if not flag:
+        return None
+    flag = flag.strip().upper()
+    if not flag:
+        return None
+    if flag in _ALPHA3_TO_ALPHA2:
+        return _ALPHA3_TO_ALPHA2[flag]
+    if flag in _NAME_TO_ALPHA2:
+        return _NAME_TO_ALPHA2[flag]
+    return flag

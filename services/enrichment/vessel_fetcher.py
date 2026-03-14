@@ -15,6 +15,7 @@ from typing import Any
 sys.path.insert(0, "/app")
 
 from shared.config import settings
+from shared.constants import normalize_flag
 
 logger = logging.getLogger("enrichment.vessel_fetcher")
 
@@ -413,7 +414,7 @@ def parse_vessel_identity(raw: dict[str, Any]) -> dict[str, Any]:
         or raw.get("shipname")
     )
 
-    flag = (
+    flag = normalize_flag(
         registry_info.get("flag")
         or self_reported.get("flag")
         or combined_info.get("flag")

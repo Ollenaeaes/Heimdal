@@ -11,11 +11,10 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
 
-from shared.constants import MID_TO_FLAG
+from shared.constants import MID_TO_FLAG, normalize_flag as _normalize_flag
 from shared.models.anomaly import RuleResult
 
 from .base import ScoringRule
-from .identity_mismatch import _normalize_flag
 
 _WINDOW_MONTHS = 12
 
