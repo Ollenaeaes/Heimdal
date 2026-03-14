@@ -16,6 +16,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Allow imports from project root
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 logger = logging.getLogger(__name__)
 
 
@@ -184,9 +187,13 @@ async def insert_features(features: list[dict[str, Any]]) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Load land mask data into the database")
-    parser.add_argument("input_file", type=Path, help="GeoJSON or Shapefile path")
+    parser.add_argument("input_file", nargs="?", type=Path, help="GeoJSON or Shapefile path")
+    parser.add_argument("--input", type=Path, dest="input_flag", help="GeoJSON or Shapefile path (alternative to positional)")
     parser.add_argument("--dry-run", action="store_true", help="Parse only, don't insert")
     args = parser.parse_args()
+    args.input_file = args.input_flag or args.input_file
+    if not args.input_file:
+        parser.error("Provide an input file as positional arg or via --input")
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 

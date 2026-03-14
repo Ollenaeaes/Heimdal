@@ -18,5 +18,16 @@ dist/
 # Docker volumes (if mounted locally)
 pgdata/
 opensanctions-data/
+
+# Large data files (shapefiles, GeoJSON, PDFs, temp downloads)
 data/opensanctions/
 data/gfw-sar/
+data/infrastructure/
+data/land_mask/
+data/equasis-data/
+data/temp/
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cst
