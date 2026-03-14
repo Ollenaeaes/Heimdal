@@ -7,11 +7,13 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { useOverlays } from './hooks/useOverlays';
 import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Globe/Overlays';
+import Minimap from './components/Minimap';
 import type { OverlayToggleState } from './components/Globe/Overlays';
 import type { VesselState } from './types/vessel';
 
 const GlobeView = lazy(() => import('./components/Globe/GlobeView'));
 const VesselPanel = lazy(() => import('./components/VesselPanel/VesselPanel'));
+const EventLog = lazy(() => import('./components/EventLog'));
 
 const queryClient = new QueryClient();
 
@@ -60,6 +62,7 @@ function AppInner() {
   useWebSocket();
   useVesselSnapshot();
   const [overlays, setOverlays] = useState<OverlayToggleState>(DEFAULT_OVERLAYS);
+  const [layerPanelOpen, setLayerPanelOpen] = useState(true);
   useOverlays(overlays);
 
   const setFilter = useVesselStore((s) => s.setFilter);
@@ -87,7 +90,6 @@ function AppInner() {
   const handleTierClick = (tier: string) => {
     const current = filters.riskTiers;
     if (current.has(tier) && current.size === 1) {
-      // Clicking the only active filter clears it
       setFilter({ riskTiers: new Set() });
     } else {
       setFilter({ riskTiers: new Set([tier]) });
@@ -96,84 +98,84 @@ function AppInner() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* HUD Bar — thin, semi-transparent, status line per visual theme spec */}
       <header
-        className="h-10 shrink-0 flex items-center px-4 border-b border-gray-800/50 backdrop-blur-sm"
-        style={{ backgroundColor: 'rgba(10, 14, 23, 0.9)' }}
+        className="h-9 shrink-0 flex items-center px-4 border-b border-slate-700/50"
+        style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)' }}
       >
-        {/* HEIMDAL label */}
+        {/* HEIMDAL wordmark */}
         <h1
-          className="text-gray-400 text-xs font-semibold"
-          style={{ fontVariant: 'small-caps', letterSpacing: '0.05em' }}
+          className="text-slate-400 text-xs font-semibold tracking-wider"
         >
           HEIMDAL
         </h1>
 
         {/* Vessel count */}
-        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center">
-          <span className="text-gray-500 text-xs">Vessels</span>
-          <span className="font-mono text-xs text-gray-200 ml-1.5">
+        <div className="border-l border-slate-700/50 pl-3 ml-3 flex items-center">
+          <span className="text-slate-500 text-[0.7rem]">Vessels</span>
+          <span className="font-mono text-[0.7rem] text-slate-200 ml-1.5">
             {stats?.total_vessels.toLocaleString() ?? '—'}
           </span>
         </div>
 
-        {/* Risk tier counts */}
-        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center gap-3">
+        {/* Risk tier counts — clickable filter shortcuts */}
+        <div className="border-l border-slate-700/50 pl-3 ml-3 flex items-center gap-3">
           <button
             onClick={() => handleTierClick('green')}
-            className={`flex items-center gap-1 text-xs hover:opacity-80 transition-opacity ${
+            className={`flex items-center gap-1 text-[0.7rem] hover:opacity-80 transition-opacity ${
               filters.riskTiers.has('green') ? 'ring-1 ring-green-500/50 rounded px-1 -mx-1' : ''
             }`}
             title="Filter: green tier"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            <span className="font-mono text-gray-200">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#22C55E' }} />
+            <span className="font-mono text-slate-200">
               {stats?.risk_tiers.green.toLocaleString() ?? '—'}
             </span>
           </button>
           <button
             onClick={() => handleTierClick('yellow')}
-            className={`flex items-center gap-1 text-xs hover:opacity-80 transition-opacity ${
+            className={`flex items-center gap-1 text-[0.7rem] hover:opacity-80 transition-opacity ${
               filters.riskTiers.has('yellow') ? 'ring-1 ring-yellow-500/50 rounded px-1 -mx-1' : ''
             }`}
             title="Filter: yellow tier"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-            <span className="font-mono text-gray-200">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#EAB308' }} />
+            <span className="font-mono text-slate-200">
               {stats?.risk_tiers.yellow.toLocaleString() ?? '—'}
             </span>
           </button>
           <button
             onClick={() => handleTierClick('red')}
-            className={`flex items-center gap-1 text-xs hover:opacity-80 transition-opacity ${
+            className={`flex items-center gap-1 text-[0.7rem] hover:opacity-80 transition-opacity ${
               filters.riskTiers.has('red') ? 'ring-1 ring-red-500/50 rounded px-1 -mx-1' : ''
             }`}
             title="Filter: red tier"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            <span className="font-mono text-gray-200">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#EF4444' }} />
+            <span className="font-mono text-slate-200">
               {stats?.risk_tiers.red.toLocaleString() ?? '—'}
             </span>
           </button>
         </div>
 
         {/* Ingestion rate */}
-        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center">
-          <span className="text-gray-500 text-xs">Ingestion</span>
-          <span className="font-mono text-xs text-gray-200 ml-1.5">
+        <div className="border-l border-slate-700/50 pl-3 ml-3 flex items-center">
+          <span className="text-slate-500 text-[0.7rem]">Ingestion</span>
+          <span className="font-mono text-[0.7rem] text-slate-200 ml-1.5">
             {stats ? `${stats.ingestion_rate} pos/s` : '—'}
           </span>
         </div>
 
         {/* Active alerts */}
-        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center">
-          <span className="text-gray-500 text-xs">Alerts</span>
-          <span className="font-mono text-xs text-gray-200 ml-1.5">
+        <div className="border-l border-slate-700/50 pl-3 ml-3 flex items-center">
+          <span className="text-slate-500 text-[0.7rem]">Alerts</span>
+          <span className="font-mono text-[0.7rem] text-slate-200 ml-1.5">
             {stats?.anomalies.total_active.toLocaleString() ?? '—'}
           </span>
         </div>
 
         {/* WatchlistPanel & EquasisImport */}
-        <div className="border-l border-gray-700/50 pl-3 ml-3 flex items-center gap-2">
+        <div className="border-l border-slate-700/50 pl-3 ml-3 flex items-center gap-2">
           <WatchlistPanel />
           <EquasisImport />
         </div>
@@ -185,27 +187,45 @@ function AppInner() {
       </header>
 
       <div style={{ flex: 1, position: 'relative' }}>
-        <Suspense fallback={<div className="w-full h-full bg-heimdal-bg flex items-center justify-center text-gray-500">Loading globe...</div>}>
+        <Suspense fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500">Loading globe...</div>}>
           <GlobeView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} />
         </Suspense>
 
-        {/* Controls overlay — top-left */}
-        <div className="absolute top-3 left-3 z-40 flex flex-col gap-2">
+        {/* Left side layer control panel */}
+        <div className="absolute top-3 left-3 z-40 flex flex-col gap-2" style={{ maxHeight: 'calc(100vh - 80px)' }}>
+          {/* Search */}
           <SearchBar />
+
+          {/* Filters */}
           <div className="flex items-center gap-2">
             <RiskFilter />
             <TypeFilter />
             <TimeRangeFilter />
           </div>
+
+          {/* Layer panel toggle */}
+          <button
+            onClick={() => setLayerPanelOpen(!layerPanelOpen)}
+            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-slate-300 bg-slate-800/80 border border-slate-700/50 hover:bg-slate-700/80 backdrop-blur-sm"
+          >
+            <span className="text-[0.65rem]">{layerPanelOpen ? '▼' : '▶'}</span>
+            Layers
+          </button>
+
+          {/* Collapsible overlay toggles */}
+          {layerPanelOpen && (
+            <OverlayToggles state={overlays} onChange={setOverlays} />
+          )}
         </div>
 
-        {/* Overlay toggles — bottom-left */}
-        <div className="absolute bottom-3 left-3 z-40">
-          <OverlayToggles state={overlays} onChange={setOverlays} />
-        </div>
+        <Minimap />
 
         <Suspense fallback={null}>
           <VesselPanel />
+        </Suspense>
+
+        <Suspense fallback={null}>
+          <EventLog />
         </Suspense>
       </div>
     </div>

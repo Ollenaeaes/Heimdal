@@ -1,7 +1,7 @@
 """Equasis upload endpoints for the Heimdal API server.
 
 Provides:
-- POST /api/equasis/upload — upload and process an Equasis Ship Folder PDF
+- POST /api/equasis/upload — upload and process an Equasis Ship/Company Folder PDF
 - GET /api/equasis/{mmsi}/history — list all equasis uploads for a vessel
 - GET /api/equasis/{mmsi}/upload/{upload_id} — get a specific equasis upload
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+from itertools import combinations
 from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
@@ -19,11 +20,14 @@ from shared.db.connection import get_session
 from shared.db.repositories import (
     get_equasis_upload_by_id,
     get_vessel_profile_by_mmsi,
+    insert_company_upload,
     insert_equasis_data,
     list_equasis_uploads,
     update_vessel_profile_from_equasis,
+    upsert_fleet_vessel,
     upsert_vessel_profile,
 )
+from shared.db.network_repository import upsert_network_edge
 
 from shared.constants import normalize_flag
 
@@ -42,10 +46,9 @@ async def upload_equasis_pdf_endpoint(
     file: UploadFile = File(...),
     mmsi: Optional[int] = Query(None),
 ):
-    """Upload and process an Equasis Ship Folder PDF.
+    """Upload and process an Equasis Ship Folder or Company Folder PDF.
 
-    Parses the PDF, validates IMO/MMSI, stores data, updates vessel profile,
-    and triggers re-scoring.
+    Detects document type automatically and routes to the appropriate handler.
     """
     # 1. Read and validate file size
     pdf_bytes = await file.read()
@@ -60,31 +63,37 @@ async def upload_equasis_pdf_endpoint(
         if "Not a valid Equasis" in msg or "missing expected sections" in msg:
             raise HTTPException(
                 status_code=422,
-                detail="Not an Equasis Ship Folder: missing expected sections",
+                detail="Not a valid Equasis PDF: missing expected sections",
             )
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file: could not parse as PDF",
+            detail="Invalid file: could not parse as PDF",
         )
 
-    # 3. Extract IMO and MMSI from parsed ship_particulars
+    # 3. Route by document type
+    doc_type = parsed.get("document_type", "ship_folder")
+
+    if doc_type == "company_folder":
+        return await _handle_company_folder(request, parsed, mmsi)
+    else:
+        return await _handle_ship_folder(request, parsed, mmsi)
+
+
+async def _handle_ship_folder(request: Request, parsed: dict, mmsi: Optional[int]) -> dict:
+    """Process a ship folder upload."""
     ship_particulars = parsed.get("ship_particulars", {})
     pdf_imo = ship_particulars.get("imo")
     pdf_mmsi = ship_particulars.get("mmsi")
 
     session_factory = get_session()
     created = False
-    vessel = None
 
     async with session_factory() as session:
-        # 4/5. Resolve vessel
         if mmsi is not None:
-            # mmsi query param provided — look up by that mmsi
             vessel = await get_vessel_profile_by_mmsi(session, mmsi)
             if not vessel:
                 raise HTTPException(status_code=404, detail="Vessel not found")
 
-            # Verify IMO or MMSI from PDF matches
             vessel_imo = vessel.get("imo")
             vessel_mmsi = vessel.get("mmsi")
             imo_match = pdf_imo is not None and vessel_imo is not None and pdf_imo == vessel_imo
@@ -97,17 +106,15 @@ async def upload_equasis_pdf_endpoint(
                         f"target vessel (IMO={vessel_imo}, MMSI={vessel_mmsi})"
                     ),
                 )
-            # Use the provided mmsi as the canonical one
             resolved_mmsi = mmsi
         else:
-            # No mmsi param — try to find vessel by PDF's MMSI
+            vessel = None
             if pdf_mmsi is not None:
                 vessel = await get_vessel_profile_by_mmsi(session, pdf_mmsi)
 
             if vessel:
                 resolved_mmsi = pdf_mmsi
             else:
-                # Create a new vessel profile from the PDF data
                 resolved_mmsi = pdf_mmsi
                 profile_data = {
                     "mmsi": resolved_mmsi,
@@ -117,39 +124,22 @@ async def upload_equasis_pdf_endpoint(
                     "ship_type_text": ship_particulars.get("ship_type"),
                     "flag_country": normalize_flag(ship_particulars.get("flag")),
                     "call_sign": ship_particulars.get("call_sign"),
-                    "length": None,
-                    "width": None,
-                    "draught": None,
-                    "destination": None,
-                    "eta": None,
-                    "last_position_time": None,
-                    "last_lat": None,
-                    "last_lon": None,
-                    "risk_score": 0,
-                    "risk_tier": "green",
-                    "sanctions_status": None,
-                    "pi_tier": None,
-                    "pi_details": None,
-                    "owner": None,
-                    "operator": None,
-                    "insurer": None,
-                    "class_society": None,
+                    "length": None, "width": None, "draught": None,
+                    "destination": None, "eta": None,
+                    "last_position_time": None, "last_lat": None, "last_lon": None,
+                    "risk_score": 0, "risk_tier": "green",
+                    "sanctions_status": None, "pi_tier": None, "pi_details": None,
+                    "owner": None, "operator": None, "insurer": None, "class_society": None,
                     "build_year": ship_particulars.get("build_year"),
                     "dwt": ship_particulars.get("dwt"),
                     "gross_tonnage": ship_particulars.get("gross_tonnage"),
-                    "group_owner": None,
-                    "registered_owner": None,
-                    "technical_manager": None,
-                    "ownership_data": None,
-                    "classification_data": None,
-                    "insurance_data": None,
-                    "enrichment_status": None,
-                    "enriched_at": None,
+                    "group_owner": None, "registered_owner": None, "technical_manager": None,
+                    "ownership_data": None, "classification_data": None,
+                    "insurance_data": None, "enrichment_status": None, "enriched_at": None,
                 }
                 await upsert_vessel_profile(session, profile_data)
                 created = True
 
-        # 6. Insert into equasis_data
         management = parsed.get("management", [])
         classification_status = parsed.get("classification_status", [])
         psc_inspections = parsed.get("psc_inspections", [])
@@ -162,10 +152,10 @@ async def upload_equasis_pdf_endpoint(
             "imo": pdf_imo,
             "upload_timestamp": datetime.now(timezone.utc),
             "edition_date": (
-            datetime.strptime(parsed["edition_date"], "%d/%m/%Y").date()
-            if parsed.get("edition_date")
-            else None
-        ),
+                datetime.strptime(parsed["edition_date"], "%d/%m/%Y").date()
+                if parsed.get("edition_date")
+                else None
+            ),
             "ship_particulars": json.dumps(ship_particulars),
             "management": json.dumps(management),
             "classification_status": json.dumps(classification_status),
@@ -179,8 +169,7 @@ async def upload_equasis_pdf_endpoint(
         }
         equasis_data_id = await insert_equasis_data(session, equasis_row)
 
-        # 7. Update vessel_profiles fields from equasis data
-        # Extract management roles
+        # Update vessel_profiles fields from equasis data
         registered_owner = None
         technical_manager = None
         operator = None
@@ -194,14 +183,12 @@ async def upload_equasis_pdf_endpoint(
             elif "Ship manager" in role:
                 operator = company_name
 
-        # Extract class society from classification_status (first "Delivered" entry)
         class_society = None
         for entry in classification_status:
             if entry.get("status") == "Delivered":
                 class_society = entry.get("society")
                 break
 
-        # Extract P&I insurer (most recent entry)
         p_and_i = parsed.get("p_and_i", [])
         insurer = None
         if p_and_i and isinstance(p_and_i, list):
@@ -225,25 +212,11 @@ async def upload_equasis_pdf_endpoint(
 
         await session.commit()
 
-    # 8. Publish re-scoring event to Redis
-    try:
-        redis = request.app.state.redis
-        event = json.dumps({
-            "mmsis": [resolved_mmsi],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "count": 1,
-        })
-        await redis.publish("heimdal:positions", event)
-        logger.info("Published re-scoring event for MMSI %s", resolved_mmsi)
-    except Exception:
-        logger.warning(
-            "Failed to publish re-scoring event for MMSI %s",
-            resolved_mmsi,
-            exc_info=True,
-        )
+    # Publish re-scoring event
+    _publish_rescoring(request, [resolved_mmsi])
 
-    # 9. Return summary
     return {
+        "document_type": "ship_folder",
         "mmsi": resolved_mmsi,
         "imo": pdf_imo,
         "ship_name": ship_particulars.get("name"),
@@ -257,6 +230,137 @@ async def upload_equasis_pdf_endpoint(
             "name_changes": len(name_history),
         },
     }
+
+
+async def _handle_company_folder(request: Request, parsed: dict, mmsi: Optional[int]) -> dict:
+    """Process a company folder upload: extract fleet, create vessels, build network edges."""
+    company = parsed.get("company_particulars", {})
+    company_imo = company.get("company_imo")
+    company_name = company.get("company_name")
+    company_address = company.get("address")
+    fleet_list = parsed.get("fleet", [])
+    inspection_synthesis = parsed.get("inspection_synthesis", [])
+
+    if not company_imo:
+        raise HTTPException(status_code=422, detail="Could not extract company IMO from PDF")
+
+    session_factory = get_session()
+    vessels_created = 0
+    vessels_updated = 0
+    edges_created = 0
+    fleet_mmsis: list[int] = []
+    fleet_details: list[dict] = []
+
+    async with session_factory() as session:
+        # Process each vessel in the fleet list
+        for vessel_data in fleet_list:
+            imo = vessel_data.get("imo")
+            if not imo:
+                continue
+
+            # Prepare data for upsert
+            upsert_data = {
+                "ship_name": vessel_data.get("ship_name"),
+                "gross_tonnage": vessel_data.get("gross_tonnage"),
+                "ship_type_text": vessel_data.get("ship_type"),
+                "flag_country": normalize_flag(vessel_data.get("current_flag")),
+                "build_year": vessel_data.get("year_of_build"),
+                "class_society": vessel_data.get("current_class"),
+                "registered_owner": company_name,
+            }
+
+            vessel_mmsi, was_created = await upsert_fleet_vessel(session, imo, upsert_data)
+            fleet_mmsis.append(vessel_mmsi)
+
+            if was_created:
+                vessels_created += 1
+            else:
+                vessels_updated += 1
+
+            status = "new" if was_created else "updated"
+            fleet_details.append({
+                "imo": imo,
+                "mmsi": vessel_mmsi,
+                "name": vessel_data.get("ship_name"),
+                "type": vessel_data.get("ship_type"),
+                "flag": vessel_data.get("current_flag"),
+                "status": status,
+            })
+
+        # Create ownership network edges between ALL fleet vessels (all-pairs)
+        edge_details = {
+            "company_imo": company_imo,
+            "company_name": company_name,
+            "source": "equasis_upload",
+        }
+        for mmsi_a, mmsi_b in combinations(fleet_mmsis, 2):
+            await upsert_network_edge(
+                session,
+                mmsi_a,
+                mmsi_b,
+                edge_type="ownership",
+                confidence=1.0,
+                details=edge_details,
+            )
+            edges_created += 1
+
+        # Store the company upload audit record
+        edition_date = None
+        if parsed.get("edition_date"):
+            try:
+                edition_date = datetime.strptime(parsed["edition_date"], "%d/%m/%Y").date()
+            except (ValueError, TypeError):
+                pass
+
+        upload_record = {
+            "company_imo": company_imo,
+            "company_name": company_name,
+            "company_address": company_address,
+            "edition_date": edition_date,
+            "fleet_size": len(fleet_list),
+            "vessels_created": vessels_created,
+            "vessels_updated": vessels_updated,
+            "edges_created": edges_created,
+            "inspection_synthesis": json.dumps(inspection_synthesis),
+            "parsed_data": json.dumps(parsed),
+        }
+        upload_id = await insert_company_upload(session, upload_record)
+
+        await session.commit()
+
+    # Publish re-scoring for all fleet vessels
+    _publish_rescoring(request, fleet_mmsis)
+
+    return {
+        "document_type": "company_folder",
+        "upload_id": upload_id,
+        "company_imo": company_imo,
+        "company_name": company_name,
+        "fleet_size": len(fleet_list),
+        "vessels_created": vessels_created,
+        "vessels_updated": vessels_updated,
+        "network_edges_created": edges_created,
+        "fleet": fleet_details,
+        "scoring_triggered_for": len(fleet_mmsis),
+    }
+
+
+def _publish_rescoring(request: Request, mmsis: list[int]) -> None:
+    """Publish re-scoring events for a list of MMSIs."""
+    if not mmsis:
+        return
+    try:
+        import asyncio
+        redis = request.app.state.redis
+        event = json.dumps({
+            "mmsis": mmsis,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "count": len(mmsis),
+        })
+        asyncio.create_task(redis.publish("heimdal:positions", event))
+        logger.info("Published re-scoring event for %d vessels", len(mmsis))
+    except Exception:
+        logger.warning("Failed to publish re-scoring events", exc_info=True)
 
 
 @router.get("/{mmsi}/history")

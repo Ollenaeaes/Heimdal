@@ -762,3 +762,125 @@ async def update_vessel_profile_from_equasis(
         text(f"UPDATE vessel_profiles SET {set_sql} WHERE mmsi = :mmsi"),
         params,
     )
+
+
+# ===================================================================
+# Equasis Company Folder Uploads
+# ===================================================================
+
+
+async def insert_company_upload(
+    session: AsyncSession, data: dict[str, Any]
+) -> int:
+    """Insert a company folder upload record. Returns the new id."""
+    result = await session.execute(
+        text("""
+            INSERT INTO equasis_company_uploads (
+                company_imo, company_name, company_address, edition_date,
+                fleet_size, vessels_created, vessels_updated, edges_created,
+                inspection_synthesis, parsed_data
+            ) VALUES (
+                :company_imo, :company_name, :company_address, :edition_date,
+                :fleet_size, :vessels_created, :vessels_updated, :edges_created,
+                :inspection_synthesis, :parsed_data
+            )
+            RETURNING id
+        """),
+        data,
+    )
+    row = result.first()
+    return row[0] if row else 0
+
+
+async def get_vessel_profile_by_imo(
+    session: AsyncSession, imo: int
+) -> dict[str, Any] | None:
+    """Fetch a vessel profile by IMO number."""
+    result = await session.execute(
+        text("SELECT * FROM vessel_profiles WHERE imo = :imo LIMIT 1"),
+        {"imo": imo},
+    )
+    row = result.mappings().first()
+    return dict(row) if row else None
+
+
+async def upsert_fleet_vessel(
+    session: AsyncSession,
+    imo: int,
+    data: dict[str, Any],
+) -> tuple[int, bool]:
+    """Create or update a vessel from fleet list data.
+
+    For vessels with no MMSI (not yet seen on AIS), uses a synthetic
+    negative MMSI derived from IMO: -IMO.
+
+    Returns (mmsi, created) tuple.
+    """
+    # Check if vessel exists by IMO
+    existing = await get_vessel_profile_by_imo(session, imo)
+    if existing:
+        # Update with any new data from the fleet list
+        mmsi = existing["mmsi"]
+        update_fields = {}
+        for field in ["ship_name", "gross_tonnage", "flag_country", "build_year", "class_society", "ship_type_text"]:
+            if data.get(field) is not None:
+                update_fields[field] = data[field]
+
+        if update_fields:
+            set_clauses = [f"{k} = :{k}" for k in update_fields]
+            set_clauses.append("updated_at = NOW()")
+            update_fields["mmsi"] = mmsi
+            await session.execute(
+                text(f"UPDATE vessel_profiles SET {', '.join(set_clauses)} WHERE mmsi = :mmsi"),
+                update_fields,
+            )
+        return mmsi, False
+
+    # Create new vessel with synthetic MMSI
+    synthetic_mmsi = -imo
+    profile_data = {
+        "mmsi": synthetic_mmsi,
+        "imo": imo,
+        "ship_name": data.get("ship_name"),
+        "ship_type": None,
+        "ship_type_text": data.get("ship_type_text"),
+        "flag_country": data.get("flag_country"),
+        "call_sign": None,
+        "length": None,
+        "width": None,
+        "draught": None,
+        "destination": None,
+        "eta": None,
+        "last_position_time": None,
+        "last_lat": None,
+        "last_lon": None,
+        "risk_score": 0,
+        "risk_tier": "green",
+        "sanctions_status": None,
+        "pi_tier": None,
+        "pi_details": None,
+        "owner": data.get("registered_owner"),
+        "operator": None,
+        "insurer": None,
+        "class_society": data.get("class_society"),
+        "build_year": data.get("build_year"),
+        "dwt": None,
+        "gross_tonnage": data.get("gross_tonnage"),
+        "group_owner": None,
+        "registered_owner": data.get("registered_owner"),
+        "technical_manager": None,
+        "ownership_data": None,
+        "classification_data": None,
+        "insurance_data": None,
+        "enrichment_status": None,
+        "enriched_at": None,
+    }
+    await upsert_vessel_profile(session, profile_data)
+
+    # Mark as imo_only
+    await session.execute(
+        text("UPDATE vessel_profiles SET imo_only = true WHERE mmsi = :mmsi"),
+        {"mmsi": synthetic_mmsi},
+    )
+
+    return synthetic_mmsi, True

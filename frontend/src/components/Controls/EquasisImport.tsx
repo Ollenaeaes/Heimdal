@@ -2,12 +2,20 @@ import { useState, useRef, useCallback } from 'react';
 import { useVesselStore } from '../../hooks/useVesselStore';
 
 export interface EquasisUploadResponse {
-  mmsi: number;
-  imo: number;
-  ship_name: string;
-  created: boolean;
-  equasis_data_id: number;
-  summary: Record<string, unknown>;
+  document_type?: 'ship_folder' | 'company_folder';
+  mmsi?: number;
+  imo?: number;
+  ship_name?: string;
+  created?: boolean;
+  equasis_data_id?: number;
+  summary?: Record<string, unknown>;
+  // Company folder fields
+  company_imo?: string;
+  company_name?: string;
+  fleet_size?: number;
+  vessels_created?: number;
+  vessels_updated?: number;
+  network_edges_created?: number;
 }
 
 export const ACCEPTED_FILE_TYPE = '.pdf';
@@ -21,6 +29,9 @@ export function buildUploadFormData(file: File): FormData {
 
 /** Format a user-facing success message based on the upload response. */
 export function formatSuccessMessage(res: EquasisUploadResponse): string {
+  if (res.document_type === 'company_folder') {
+    return `Fleet discovered: ${res.company_name} — ${res.fleet_size} vessels, ${res.vessels_created} new, ${res.network_edges_created} ownership edges`;
+  }
   if (res.created) {
     return `New vessel added: ${res.ship_name} (IMO ${res.imo})`;
   }
@@ -35,7 +46,7 @@ export function EquasisImport() {
 
   const showToast = useCallback((type: 'success' | 'error', message: string) => {
     setToast({ type, message });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 5000);
   }, []);
 
   const handleUpload = useCallback(async (file: File) => {
@@ -52,7 +63,10 @@ export function EquasisImport() {
       }
       const data: EquasisUploadResponse = await res.json();
       showToast('success', formatSuccessMessage(data));
-      selectVessel(data.mmsi);
+      // Select the vessel for ship folder, or first fleet vessel for company folder
+      if (data.mmsi) {
+        selectVessel(data.mmsi);
+      }
     } catch (e) {
       showToast('error', e instanceof Error ? e.message : 'Upload failed');
     } finally {

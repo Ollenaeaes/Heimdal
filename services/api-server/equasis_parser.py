@@ -1,6 +1,6 @@
-"""Parser for Equasis Ship Folder PDFs.
+"""Parser for Equasis Ship Folder and Company Folder PDFs.
 
-Extracts structured data from Equasis Ship Folder PDFs using pdfplumber.
+Extracts structured data from Equasis PDFs using pdfplumber.
 """
 
 import io
@@ -43,15 +43,30 @@ def parse_equasis_pdf(pdf_bytes: bytes) -> dict:
 
     all_text = "\n".join(page_texts)
 
-    if "Equasis" not in all_text or "Ship folder" not in all_text:
-        raise ValueError("Not a valid Equasis Ship Folder PDF")
+    if "Equasis" not in all_text:
+        raise ValueError("Not a valid Equasis PDF")
 
+    # Detect document type
+    is_company_folder = "Company folder" in all_text
+    is_ship_folder = "Ship folder" in all_text
+
+    if is_company_folder:
+        return parse_company_folder(all_text, pdf)
+    elif is_ship_folder:
+        return _parse_ship_folder(all_text)
+    else:
+        raise ValueError("Not a valid Equasis PDF: missing 'Ship folder' or 'Company folder' header")
+
+
+def _parse_ship_folder(all_text: str) -> dict:
+    """Parse a Ship Folder PDF from its extracted text."""
     # Remove footer lines
     clean_text = re.sub(r"Equasis - Ship folder.*?Page \d+/\d+", "", all_text)
 
     edition_date = _extract_edition_date(all_text)
 
     result = {
+        "document_type": "ship_folder",
         "ship_particulars": _parse_ship_particulars(clean_text),
         "management": _parse_management(clean_text),
         "classification_status": _parse_classification_status(clean_text),
@@ -928,3 +943,343 @@ def _parse_p_and_i(text: str) -> list:
         })
 
     return entries
+
+
+# ===================================================================
+# Company Folder Parser
+# ===================================================================
+
+
+def parse_company_folder(all_text: str, pdf) -> dict:
+    """Parse an Equasis Company Folder PDF.
+
+    Returns dict with keys:
+    - document_type: "company_folder"
+    - company_particulars: dict with company_imo, company_name, address, last_update
+    - documents_of_compliance: list of dicts
+    - inspection_synthesis: list of dicts with role, ships_in_company, inspections, detentions, etc.
+    - fleet: list of dicts with imo, ship_name, gross_tonnage, ship_type, year_of_build, current_flag, current_class, acting_as
+    - edition_date: str or None
+    """
+    # Remove footer lines
+    clean_text = re.sub(r"Equasis - Company folder.*?Page \d+/\d+", "", all_text)
+    edition_date = _extract_company_edition_date(all_text)
+
+    # Extract tables from all pages for fleet parsing
+    all_tables = []
+    for page in pdf.pages:
+        tables = page.extract_tables()
+        if tables:
+            all_tables.extend(tables)
+
+    result = {
+        "document_type": "company_folder",
+        "company_particulars": _parse_company_particulars(clean_text),
+        "documents_of_compliance": _parse_documents_of_compliance(clean_text),
+        "inspection_synthesis": _parse_inspection_synthesis(clean_text),
+        "fleet": _parse_fleet_from_tables(all_tables, clean_text),
+        "edition_date": edition_date,
+    }
+
+    return result
+
+
+def _extract_company_edition_date(text: str) -> Optional[str]:
+    match = re.search(r"Edition date (\d{2}/\d{2}/\d{4})", text)
+    return match.group(1) if match else None
+
+
+def _parse_company_particulars(text: str) -> dict:
+    result = {}
+
+    m = re.search(r"IMO number\s*:\s*(\d+)", text)
+    result["company_imo"] = m.group(1) if m else None
+
+    m = re.search(r"Name of company\s*:\s*(.+?)(?:\n|$)", text)
+    result["company_name"] = m.group(1).strip() if m else None
+
+    m = re.search(r"Address\s*:\s*(.+?)(?:Last update|$)", text, re.DOTALL)
+    if m:
+        addr = m.group(1).strip()
+        # Clean up multi-line address
+        addr = re.sub(r"\s+", " ", addr).strip()
+        result["address"] = addr
+    else:
+        result["address"] = None
+
+    m = re.search(r"Last update\s*:\s*(\d{2}/\d{2}/\d{4})", text)
+    result["last_update"] = m.group(1) if m else None
+
+    return result
+
+
+def _parse_documents_of_compliance(text: str) -> list:
+    """Parse the Documents of Compliance section."""
+    section = _extract_section(text, r"Documents of compliance", r"Synthesis of inspections|Company fleet")
+    if not section:
+        return []
+
+    lines = section.strip().split("\n")
+    # Skip header lines
+    header_end = 0
+    for i, line in enumerate(lines):
+        if "Reason" in line:
+            header_end = i + 1
+            break
+
+    entries = []
+    data_lines = lines[header_end:]
+    current_lines = []
+    for line in data_lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Heuristic: new entry starts with a country name (capitalized word)
+        if current_lines and re.match(r"^[A-Z][a-z]", stripped):
+            entries.append(_parse_doc_compliance_entry(current_lines))
+            current_lines = [stripped]
+        else:
+            current_lines.append(stripped)
+    if current_lines:
+        entries.append(_parse_doc_compliance_entry(current_lines))
+
+    return entries
+
+
+def _parse_doc_compliance_entry(lines: list) -> dict:
+    full_text = " ".join(lines)
+    date_match = re.search(r"(\d{2}/\d{2}/\d{4})", full_text)
+
+    statuses = ["Delivered", "Withdrawn", "Suspended"]
+    status = None
+    reason = None
+    for s in statuses:
+        if s in full_text:
+            status = s
+            idx = full_text.index(s) + len(s)
+            after = full_text[idx:].strip()
+            after = re.sub(r"\d{2}/\d{2}/\d{4}", "", after).strip()
+            if after:
+                reason = after
+            break
+
+    return {
+        "flag": lines[0].split()[0] if lines else None,
+        "ship_type": None,  # Complex to parse from interleaved text
+        "classification_society": None,
+        "status": status,
+        "date_of_status": date_match.group(1) if date_match else None,
+        "reason": reason,
+    }
+
+
+def _parse_inspection_synthesis(text: str) -> list:
+    """Parse the Synthesis of Inspections section."""
+    section = _extract_section(text, r"Synthesis of inspections", r"Company fleet|Fleet")
+    if not section:
+        return []
+
+    lines = section.strip().split("\n")
+    # Skip headers
+    header_end = 0
+    for i, line in enumerate(lines):
+        if "detention" in line.lower() and i > 0:
+            header_end = i + 1
+            break
+
+    entries = []
+    data_lines = lines[header_end:]
+
+    role_patterns = [
+        "Registered owner",
+        "ISM Manager",
+        "Ship manager",
+    ]
+
+    for line in data_lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        for rp in role_patterns:
+            if rp in stripped:
+                numbers = re.findall(r"\b(\d+)\b", stripped)
+                entry = {"role": rp}
+                if len(numbers) >= 5:
+                    entry["ships_in_company"] = int(numbers[0])
+                    entry["inspections_company"] = int(numbers[1])
+                    entry["detentions_company"] = int(numbers[2])
+                    entry["inspections_all"] = int(numbers[3])
+                    entry["detentions_all"] = int(numbers[4])
+                elif len(numbers) >= 1:
+                    entry["ships_in_company"] = int(numbers[0])
+                entries.append(entry)
+                break
+
+    return entries
+
+
+def _parse_fleet_from_tables(tables: list, text: str) -> list:
+    """Parse fleet vessels from pdfplumber-extracted tables.
+
+    Falls back to text-based parsing if table extraction fails.
+    """
+    fleet = []
+    seen_imos = set()
+
+    # Try table-based extraction first
+    for table in tables:
+        if not table or len(table) < 2:
+            continue
+
+        # Check if this is a fleet table by looking at headers
+        header = table[0]
+        if not header:
+            continue
+        header_text = " ".join(str(cell or "") for cell in header).lower()
+        if "imo" not in header_text or "ship" not in header_text:
+            continue
+
+        # Parse data rows
+        for row in table[1:]:
+            if not row or len(row) < 5:
+                continue
+
+            cells = [str(cell or "").strip() for cell in row]
+
+            # Find IMO (7-digit number)
+            imo = None
+            for cell in cells:
+                m = re.search(r"\b(\d{7})\b", cell)
+                if m:
+                    imo = int(m.group(1))
+                    break
+
+            if not imo or imo in seen_imos:
+                continue
+            seen_imos.add(imo)
+
+            vessel = _parse_fleet_row(cells, header)
+            vessel["imo"] = imo
+            fleet.append(vessel)
+
+    # If table extraction found vessels, return them
+    if fleet:
+        return fleet
+
+    # Fallback: text-based extraction
+    return _parse_fleet_from_text(text)
+
+
+def _parse_fleet_row(cells: list, header: list) -> dict:
+    """Parse a single fleet table row into a vessel dict."""
+    vessel: dict = {}
+
+    # Map header columns to values
+    header_lower = [str(h or "").strip().lower() for h in header]
+
+    for i, h in enumerate(header_lower):
+        if i >= len(cells):
+            break
+        val = cells[i].strip()
+        if not val:
+            continue
+
+        if "ship" in h and "type" not in h:
+            vessel["ship_name"] = val
+        elif "gross" in h or "tonnage" in h:
+            m = re.search(r"(\d+)", val)
+            vessel["gross_tonnage"] = int(m.group(1)) if m else None
+        elif "ship type" in h or ("type" in h and "ship" not in h):
+            vessel["ship_type"] = val
+        elif "year" in h or "build" in h:
+            m = re.search(r"(\d{4})", val)
+            vessel["year_of_build"] = int(m.group(1)) if m else None
+        elif "flag" in h:
+            vessel["current_flag"] = val
+        elif "class" in h:
+            vessel["current_class"] = val
+        elif "acting" in h:
+            vessel["acting_as"] = val
+
+    return vessel
+
+
+def _parse_fleet_from_text(text: str) -> list:
+    """Fallback: parse fleet from raw text using IMO number patterns."""
+    fleet = []
+    seen_imos = set()
+
+    # Find the Fleet section
+    fleet_match = re.search(r"Fleet\n", text)
+    if not fleet_match:
+        return fleet
+
+    fleet_text = text[fleet_match.end():]
+
+    # Find all 7-digit IMO numbers
+    imo_positions = list(re.finditer(r"\b(\d{7})\b", fleet_text))
+
+    for i, m in enumerate(imo_positions):
+        imo = int(m.group(1))
+        if imo in seen_imos:
+            continue
+        seen_imos.add(imo)
+
+        # Get text between this IMO and the next
+        start = m.start()
+        end = imo_positions[i + 1].start() if i + 1 < len(imo_positions) else len(fleet_text)
+        block = fleet_text[start:end]
+
+        vessel = {"imo": imo}
+
+        # Extract ship name (ALL CAPS word(s) after IMO)
+        name_match = re.search(r"\d{7}\s+([A-Z][A-Z\s]+?)(?:\s+\d|\n)", block)
+        if name_match:
+            vessel["ship_name"] = name_match.group(1).strip()
+
+        # Gross tonnage
+        gt_match = re.search(r"(\d{4,6})\s+(?:Crude|Oil|Chemical|Bulk|Container|General)", block)
+        if gt_match:
+            vessel["gross_tonnage"] = int(gt_match.group(1))
+
+        # Ship type
+        type_match = re.search(r"(Crude Oil Tanker|Oil Products Tanker|Chemical/?\s*Oil Products Tanker|Bulk Carrier|Container Ship|General Cargo)", block, re.IGNORECASE)
+        if type_match:
+            vessel["ship_type"] = type_match.group(1).strip()
+
+        # Year of build
+        year_match = re.search(r"\b(19\d{2}|20[0-2]\d)\b", block)
+        if year_match:
+            vessel["year_of_build"] = int(year_match.group(1))
+
+        # Current flag
+        flag_match = re.search(r"(Russia|Panama|Liberia|Marshall Islands|Cameroon|Gabon|Palau|Togo|Malta|Cyprus|Greece|China|India|Turkey|Singapore)", block, re.IGNORECASE)
+        if flag_match:
+            vessel["current_flag"] = flag_match.group(1)
+
+        # Current class (abbreviations)
+        class_match = re.search(r"\b(IRS|RMRS|BV|DNV|LR|ABS|NK|RINA|KR|CCS|PRS|CRS|HR|NV)\b", block)
+        if class_match:
+            # Collect all class abbreviations
+            classes = re.findall(r"\b(IRS|RMRS|BV|DNV|LR|ABS|NK|RINA|KR|CCS|PRS|CRS|HR|NV)\b", block)
+            vessel["current_class"] = " ".join(classes[:3])  # Cap at 3
+
+        # Acting as (roles)
+        roles = []
+        for role_pattern in [r"Registered\s+owner", r"ISM Manager", r"Ship manager/?\s*Commercial\s*manager"]:
+            rm = re.search(role_pattern, block, re.IGNORECASE)
+            if rm:
+                # Find associated date
+                after = block[rm.end():]
+                date_m = re.search(r"\(since\s+(\d{2}/\d{2}/\d{4})\)", after)
+                roles.append({
+                    "role": rm.group(0).strip(),
+                    "since": date_m.group(1) if date_m else None,
+                })
+        if roles:
+            vessel["acting_as"] = roles
+
+        fleet.append(vessel)
+
+    return fleet

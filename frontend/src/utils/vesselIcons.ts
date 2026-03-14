@@ -5,15 +5,19 @@ const ICON_SIZE = 24;
 
 /**
  * Marker visual properties per risk tier.
- * Used by VesselMarkers for billboard rendering.
+ * Per visual theme spec: progressive disclosure with zoom-dependent opacity.
+ *
+ * Green: subdued at all zoom levels (0.2 overview → 0.7 port zoom)
+ * Yellow: visible at all zoom levels (0.8)
+ * Red: always full opacity, 1.5x scale
  */
 export const MARKER_STYLE: Record<
   RiskTier,
-  { opacity: number; scale: number }
+  { opacity: number; opacityFar: number; scale: number }
 > = {
-  green: { opacity: 0.6, scale: 0.6 },
-  yellow: { opacity: 0.9, scale: 0.8 },
-  red: { opacity: 1.0, scale: 1.0 },
+  green: { opacity: 0.7, opacityFar: 0.2, scale: 0.5 },
+  yellow: { opacity: 0.8, opacityFar: 0.8, scale: 0.7 },
+  red: { opacity: 1.0, opacityFar: 1.0, scale: 0.85 },
 };
 
 /**
@@ -27,7 +31,7 @@ export function cogToRotation(cogDeg: number | null): number {
 
 /**
  * Draw a clean, minimal vessel chevron on a canvas and return the data URL.
- * No glow rings — just the shape with a thin outline.
+ * No glow, no pulsing — just the shape with a thin outline.
  * Points upward (north) so billboard rotation aligns with COG.
  */
 function drawVesselIcon(color: string): string {

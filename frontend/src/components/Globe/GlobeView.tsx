@@ -11,6 +11,7 @@ import { VesselMarkers } from './VesselMarkers';
 import { TrackTrail } from './TrackTrail';
 import { GfwEventMarkers } from './GfwEventMarkers';
 import { SarMarkers } from './SarMarkers';
+import { HoverDatablock } from './HoverDatablock';
 import { INITIAL_LON, INITIAL_LAT, INITIAL_ALT, setCesiumViewer } from './cesiumViewer';
 
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
@@ -38,36 +39,37 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeVi
 
         const { scene } = viewer;
 
-        // Dark ops-centre aesthetic — dark sky/space but real satellite terrain
-        scene.backgroundColor = Color.fromCssColorString('#070B12');
-        scene.globe.baseColor = Color.fromCssColorString('#0B1120');
+        // Intelligence workstation aesthetic — standard satellite imagery
+        // Dark sky/space for UI contrast, but map is NOT darkened
+        scene.backgroundColor = Color.fromCssColorString('#0F172A');
+        scene.globe.baseColor = Color.fromCssColorString('#1E293B');
         scene.globe.showGroundAtmosphere = false;
         scene.fog.enabled = true;
         scene.fog.density = 0.0001;
-        scene.skyAtmosphere.brightnessShift = -0.5;
-        scene.skyAtmosphere.saturationShift = -0.5;
+        scene.skyAtmosphere.brightnessShift = -0.3;
+        scene.skyAtmosphere.saturationShift = -0.3;
 
         // No dynamic lighting — consistent look regardless of time
         scene.globe.enableLighting = false;
 
-        // Remove default imagery and replace with satellite
+        // Remove default imagery and replace with standard satellite
         scene.globe.imageryLayers.removeAll();
 
-        // Satellite imagery base — real terrain, coastlines, ports visible
+        // Standard satellite imagery — NO colour manipulation
+        // The map is ground truth: ports, coastlines, terminals visible
         IonImageryProvider.fromAssetId(2)
           .then((provider) => {
             if (!viewer.isDestroyed()) {
               const satLayer = scene.globe.imageryLayers.addImageryProvider(provider);
-              // Darken & desaturate for military ops-centre look
-              // Terrain stays visible but muted — CMO-style
-              satLayer.brightness = 0.55;
-              satLayer.contrast = 1.3;
-              satLayer.saturation = 0.35;
-              satLayer.gamma = 0.9;
+              // Standard satellite — no darkening, no desaturation
+              satLayer.brightness = 1.0;
+              satLayer.contrast = 1.0;
+              satLayer.saturation = 1.0;
+              satLayer.gamma = 1.0;
             }
           })
           .catch(() => {
-            // No Ion token — fall back to dark base color
+            // No Ion token — fall back to base color
           });
 
         viewer.camera.flyTo({
@@ -85,26 +87,29 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false }: GlobeVi
   }, []);
 
   return (
-    <ResiumViewer
-      ref={viewerRef as React.RefObject<never>}
-      full
-      animation={false}
-      timeline={false}
-      baseLayerPicker={false}
-      geocoder={false}
-      homeButton={false}
-      sceneModePicker={false}
-      navigationHelpButton={false}
-      infoBox={false}
-      selectionIndicator={false}
-      fullscreenButton={false}
-      shouldAnimate
-    >
-      <VesselMarkers />
-      <TrackTrail />
-      <GfwEventMarkers visible={showGfwEvents} />
-      <SarMarkers visible={showSarDetections} />
-    </ResiumViewer>
+    <>
+      <ResiumViewer
+        ref={viewerRef as React.RefObject<never>}
+        full
+        animation={false}
+        timeline={false}
+        baseLayerPicker={false}
+        geocoder={false}
+        homeButton={false}
+        sceneModePicker={false}
+        navigationHelpButton={false}
+        infoBox={false}
+        selectionIndicator={false}
+        fullscreenButton={false}
+        shouldAnimate
+      >
+        <VesselMarkers />
+        <TrackTrail />
+        <GfwEventMarkers visible={showGfwEvents} />
+        <SarMarkers visible={showSarDetections} />
+      </ResiumViewer>
+      <HoverDatablock />
+    </>
   );
 }
 

@@ -549,6 +549,61 @@ _NAME_TO_ALPHA2: dict[str, str] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# IACS member classification societies
+# ---------------------------------------------------------------------------
+IACS_MEMBERS: frozenset[str] = frozenset({
+    "Bureau Veritas",
+    "China Classification Society",
+    "Croatian Register of Shipping",
+    "DNV",
+    "Indian Register of Shipping",
+    "Korean Register of Shipping",
+    "Lloyd's Register",
+    "Nippon Kaiji Kyokai",  # ClassNK
+    "Polish Register of Shipping",
+    "Registro Italiano Navale",  # RINA
+    "American Bureau of Shipping",
+})
+
+# Equasis classification society abbreviation → full name
+SOCIETY_ABBREVIATIONS: dict[str, str] = {
+    "IRS": "Indian Register of Shipping",
+    "RMRS": "Russian Maritime Register of Shipping",
+    "BV": "Bureau Veritas",
+    "DNV": "DNV",
+    "LR": "Lloyd's Register",
+    "ABS": "American Bureau of Shipping",
+    "NK": "Nippon Kaiji Kyokai",
+    "RINA": "Registro Italiano Navale",
+    "KR": "Korean Register of Shipping",
+    "CCS": "China Classification Society",
+    "PRS": "Polish Register of Shipping",
+    "CRS": "Croatian Register of Shipping",
+    "HR": "Croatian Register of Shipping",
+    "NV": "DNV",
+    "GL": "DNV",
+    "RI": "Registro Italiano Navale",
+    "NKK": "Nippon Kaiji Kyokai",
+}
+
+
+def is_iacs_member(society: str | None) -> bool:
+    """Check if a classification society is an IACS member."""
+    if not society:
+        return False
+    society = society.strip()
+    if society in IACS_MEMBERS:
+        return True
+    full_name = SOCIETY_ABBREVIATIONS.get(society.upper())
+    if full_name and full_name in IACS_MEMBERS:
+        return True
+    for member in IACS_MEMBERS:
+        if member.lower() in society.lower() or society.lower() in member.lower():
+            return True
+    return False
+
+
 def normalize_flag(flag: str | None) -> str | None:
     """Normalize a flag code or country name to ISO alpha-2 uppercase.
 

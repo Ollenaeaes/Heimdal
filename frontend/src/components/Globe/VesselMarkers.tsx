@@ -1,8 +1,7 @@
-import { useRef, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Entity, BillboardGraphics } from 'resium';
 import {
   Cartesian3,
-  CallbackProperty,
   NearFarScalar,
   type Viewer as CesiumViewer,
 } from 'cesium';
@@ -75,6 +74,7 @@ export function filterVessels(
     result.push(vessel);
   }
 
+  // Sort: green drawn first (behind), red on top
   const tierOrder: Record<string, number> = { green: 0, yellow: 1, red: 2 };
   result.sort((a, b) => (tierOrder[a.riskTier] ?? 0) - (tierOrder[b.riskTier] ?? 0));
 
@@ -86,6 +86,7 @@ const FLY_TO_ALT = 50_000;
 
 /**
  * Inner component that has access to the Cesium viewer context.
+ * No animations — the visual theme spec explicitly prohibits pulsing.
  */
 function VesselMarkersInner() {
   const { viewer } = useCesium();
@@ -94,20 +95,6 @@ function VesselMarkersInner() {
   const selectVessel = useVesselStore((s) => s.selectVessel);
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
   const watchedMmsis = useWatchlistStore((s) => s.watchedMmsis);
-
-  // Slow breathing pulse for red vessels — 3 second cycle, subtle scale change
-  const pulseRef = useRef(0);
-  const redPulseScale = useMemo(
-    () =>
-      new CallbackProperty(() => {
-        // ~3 second full cycle at 60fps: 2*PI / (60*3) ≈ 0.035
-        pulseRef.current = (pulseRef.current + 0.035) % (2 * Math.PI);
-        // Subtle: oscillate between 0.95x and 1.05x of base scale
-        const pulse = 1.0 + 0.05 * Math.sin(pulseRef.current);
-        return MARKER_STYLE.red.scale * pulse;
-      }, false),
-    [],
-  );
 
   const handleClick = useCallback(
     (mmsi: number, lat: number, lon: number) => {
@@ -128,21 +115,21 @@ function VesselMarkersInner() {
     <>
       {visibleVessels.map((v) => {
         const style = MARKER_STYLE[v.riskTier];
-        const isRed = v.riskTier === 'red';
         const position = Cartesian3.fromDegrees(v.lon, v.lat);
         return (
           <Entity
             key={v.mmsi}
+            id={`vessel-${v.mmsi}`}
             position={position}
             onClick={() => handleClick(v.mmsi, v.lat, v.lon)}
           >
             <BillboardGraphics
               image={getVesselIcon(v.riskTier)}
-              scale={isRed ? (redPulseScale as unknown as number) : style.scale}
+              scale={style.scale}
               color={undefined}
               rotation={cogToRotation(v.cog)}
               translucencyByDistance={
-                new NearFarScalar(1.0e3, style.opacity, 1.5e7, style.opacity * 0.5)
+                new NearFarScalar(1.0e3, style.opacity, 1.5e7, style.opacityFar)
               }
             />
           </Entity>
