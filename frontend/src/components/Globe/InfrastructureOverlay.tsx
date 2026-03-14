@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { CustomDataSource, Entity, PolylineGraphics, PointGraphics, LabelGraphics } from 'resium';
-import { Cartesian3, Color, Cartesian2, LabelStyle, VerticalOrigin, NearFarScalar } from 'cesium';
+import { useEffect, useMemo, useRef } from 'react';
+import { Cartesian3, Color, GeoJsonDataSource, Entity as CesiumEntity } from 'cesium';
 import { useQuery } from '@tanstack/react-query';
+import { getCesiumViewer } from './cesiumViewer';
 
 export interface InfrastructureOverlayProps {
   visible: boolean;
@@ -23,34 +23,12 @@ export const ROUTE_TYPE_LABELS: Record<string, string> = {
   oil_pipeline: 'Oil Pipeline',
 };
 
-interface RouteFeature {
-  type: 'Feature';
-  geometry: {
-    type: string;
-    coordinates: number[][];
-  };
-  properties: {
-    id: number;
-    name: string;
-    route_type: string;
-    operator: string | null;
-    buffer_nm: number;
-  };
-}
-
-interface InfrastructureRoutesResponse {
-  type: 'FeatureCollection';
-  features: RouteFeature[];
-}
-
 interface InfrastructureAlert {
   id: number;
   mmsi: number;
   vessel_name: string;
   risk_tier: string;
   risk_score: number;
-  lat: number;
-  lon: number;
   route_id: number;
   route_name: string;
   route_type: string;
@@ -63,10 +41,6 @@ interface InfrastructureAlert {
   details: Record<string, unknown>;
 }
 
-function getPointMarkerPixelSize(routeType: string): number {
-  return routeType.includes('cable') ? 8 : 10;
-}
-
 function formatTimeAgo(ts: string): string {
   const diff = Date.now() - new Date(ts).getTime();
   const mins = Math.floor(diff / 60000);
@@ -77,11 +51,14 @@ function formatTimeAgo(ts: string): string {
 }
 
 /**
- * Renders infrastructure routes as polylines, with alert-based halos
- * from actual infrastructure_events (not raw proximity).
+ * Renders infrastructure routes using a single GeoJsonDataSource for performance.
+ * Unflagged routes are very subtle (low opacity, thin).
+ * Flagged routes (with infrastructure_events) are highlighted red.
  */
 export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
-  const { data } = useQuery<InfrastructureRoutesResponse>({
+  const dataSourceRef = useRef<GeoJsonDataSource | null>(null);
+
+  const { data: routesData } = useQuery<{ type: string; features: any[] }>({
     queryKey: ['infrastructureRoutes'],
     queryFn: () => fetch('/api/infrastructure/routes').then((r) => r.json()),
     enabled: visible,
@@ -94,159 +71,123 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
     refetchInterval: 30_000,
   });
 
-  const features = data?.features ?? [];
-  const alerts = alertsData?.alerts ?? [];
+  const alertedRouteIds = useMemo(() => {
+    return new Set((alertsData?.alerts ?? []).map((a) => a.route_id));
+  }, [alertsData]);
 
-  // Group alerts by route_id for quick lookup
   const alertsByRoute = useMemo(() => {
     const map = new Map<number, InfrastructureAlert[]>();
-    for (const a of alerts) {
+    for (const a of (alertsData?.alerts ?? [])) {
       const existing = map.get(a.route_id) ?? [];
       existing.push(a);
       map.set(a.route_id, existing);
     }
     return map;
-  }, [alerts]);
+  }, [alertsData]);
 
-  // Set of route IDs that have active alerts
-  const alertedRouteIds = useMemo(() => {
-    return new Set(alerts.map((a) => a.route_id));
-  }, [alerts]);
+  // Load/update the GeoJSON data source
+  useEffect(() => {
+    const viewer = getCesiumViewer();
+    if (!viewer || viewer.isDestroyed() || !routesData) return;
 
-  // Extract point features from route endpoints
-  const pointFeatures = useMemo(() => {
-    if (!features.length) return [];
-    const points: Array<{
-      id: string;
-      lon: number;
-      lat: number;
-      name: string;
-      routeType: string;
-      isStart: boolean;
-    }> = [];
-    for (const f of features) {
-      const coords = f.geometry.coordinates;
-      if (coords.length >= 2) {
-        points.push({
-          id: `${f.properties.id}-start`,
-          lon: coords[0][0],
-          lat: coords[0][1],
-          name: f.properties.name,
-          routeType: f.properties.route_type,
-          isStart: true,
-        });
-        points.push({
-          id: `${f.properties.id}-end`,
-          lon: coords[coords.length - 1][0],
-          lat: coords[coords.length - 1][1],
-          name: f.properties.name,
-          routeType: f.properties.route_type,
-          isStart: false,
-        });
-      }
+    // Remove old data source
+    if (dataSourceRef.current) {
+      viewer.dataSources.remove(dataSourceRef.current, true);
+      dataSourceRef.current = null;
     }
-    return points;
-  }, [features]);
 
-  if (!visible) return null;
+    if (!visible) return;
 
-  return (
-    <>
-      <CustomDataSource name="infrastructure-routes">
-        {/* Route polylines */}
-        {features.map((f) => {
-          const coords = f.geometry.coordinates;
-          const positions = coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
-          const colorHex = ROUTE_TYPE_COLORS[f.properties.route_type] ?? '#3B82F6';
-          const hasAlert = alertedRouteIds.has(f.properties.id);
-          const color = Color.fromCssColorString(colorHex);
-          const typeLabel = ROUTE_TYPE_LABELS[f.properties.route_type] ?? f.properties.route_type;
-          const routeName = f.properties.name || 'Unknown';
+    const ds = new GeoJsonDataSource('infrastructure');
 
-          // Build description with alert info if flagged
-          const routeAlerts = alertsByRoute.get(f.properties.id) ?? [];
-          let description = `<b>${routeName}</b><br/>Type: ${typeLabel}`;
-          if (f.properties.operator) {
-            description += `<br/>Operator: ${f.properties.operator}`;
+    ds.load(routesData, {
+      stroke: Color.fromCssColorString('#3B82F6').withAlpha(0.15),
+      strokeWidth: 1,
+      clampToGround: true,
+    }).then(() => {
+      if (viewer.isDestroyed()) return;
+
+      // Style each entity based on route_type and alert status
+      const entities = ds.entities.values;
+      for (const entity of entities) {
+        const props = entity.properties;
+        if (!props) continue;
+
+        const routeType = props.route_type?.getValue?.() ?? '';
+        const routeId = props.id?.getValue?.() ?? 0;
+        const routeName = props.name?.getValue?.() ?? 'Unknown';
+        const isAlerting = alertedRouteIds.has(routeId);
+        const colorHex = ROUTE_TYPE_COLORS[routeType] ?? '#3B82F6';
+        const typeLabel = ROUTE_TYPE_LABELS[routeType] ?? routeType;
+
+        // Set entity ID for hover detection
+        entity.id = `infra-route-${routeId}`;
+        entity.name = routeName;
+
+        // Build description
+        let desc = `<b>${routeName}</b><br/>Type: ${typeLabel}`;
+        const operator = props.operator?.getValue?.();
+        if (operator) desc += `<br/>Operator: ${operator}`;
+
+        const routeAlerts = alertsByRoute.get(routeId) ?? [];
+        if (routeAlerts.length > 0) {
+          desc += `<br/><br/><b style="color:#EF4444;">Alerts (${routeAlerts.length})</b>`;
+          for (const a of routeAlerts) {
+            const status = a.active ? '<span style="color:#EF4444;">ACTIVE</span>' : `ended ${formatTimeAgo(a.exit_time!)}`;
+            desc += `<div style="margin:4px 0;padding:4px;border-left:3px solid ${a.risk_tier === 'red' ? '#EF4444' : '#EAB308'};padding-left:8px;">`;
+            desc += `<b>${a.vessel_name?.trim() || `MMSI ${a.mmsi}`}</b> (${a.risk_tier.toUpperCase()})`;
+            desc += `<br/>Entry: ${new Date(a.entry_time).toUTCString()}`;
+            desc += `<br/>Status: ${status}`;
+            if (a.duration_minutes != null) desc += `<br/>Duration: ${Math.round(a.duration_minutes)}min`;
+            if (a.min_speed != null) desc += `<br/>Min Speed: ${a.min_speed.toFixed(1)} kn`;
+            desc += `</div>`;
           }
-          if (routeAlerts.length > 0) {
-            description += `<br/><br/><b style="color:#EF4444;">Alerts (${routeAlerts.length})</b><br/>`;
-            for (const a of routeAlerts) {
-              const status = a.active ? '<span style="color:#EF4444;">ACTIVE</span>' : `ended ${formatTimeAgo(a.exit_time!)}`;
-              description += `<div style="margin:4px 0;padding:4px;border-left:3px solid ${a.risk_tier === 'red' ? '#EF4444' : '#EAB308'};padding-left:8px;">`;
-              description += `<b>${a.vessel_name?.trim() || `MMSI ${a.mmsi}`}</b> (${a.risk_tier.toUpperCase()})`;
-              description += `<br/>Entry: ${new Date(a.entry_time).toUTCString()}`;
-              description += `<br/>Status: ${status}`;
-              if (a.duration_minutes != null) {
-                description += `<br/>Duration: ${Math.round(a.duration_minutes)}min`;
-              }
-              if (a.min_speed != null) {
-                description += `<br/>Min Speed: ${a.min_speed.toFixed(1)} kn`;
-              }
-              if (a.max_alignment != null) {
-                description += `<br/>Max Alignment: ${a.max_alignment.toFixed(0)}°`;
-              }
-              description += `</div>`;
-            }
+        }
+
+        entity.description = desc as any;
+
+        // Style the polyline
+        if (entity.polyline) {
+          if (isAlerting) {
+            entity.polyline.material = Color.fromCssColorString('#EF4444').withAlpha(0.8) as any;
+            entity.polyline.width = 3 as any;
+          } else {
+            entity.polyline.material = Color.fromCssColorString(colorHex).withAlpha(0.15) as any;
+            entity.polyline.width = 1 as any;
           }
+        }
 
-          // Midpoint for label
-          const midIdx = Math.floor(coords.length / 2);
-          const midPos = Cartesian3.fromDegrees(coords[midIdx][0], coords[midIdx][1]);
+        // Hide point markers from GeoJSON (endpoints) — too many, not useful
+        if (entity.billboard) {
+          entity.billboard.show = false as any;
+        }
+        if (entity.point) {
+          entity.point.show = false as any;
+        }
+        // Hide auto-generated labels
+        if (entity.label) {
+          entity.label.show = false as any;
+        }
+      }
 
-          return (
-            <Entity
-              key={`route-${f.properties.id}`}
-              id={`infra-route-${f.properties.id}`}
-              name={routeName}
-              description={description}
-              position={midPos}
-            >
-              <PolylineGraphics
-                positions={positions}
-                width={hasAlert ? 4 : 2}
-                material={hasAlert ? Color.fromCssColorString('#EF4444').withAlpha(0.8) : color}
-              />
-              <LabelGraphics
-                text={routeName}
-                font="11px Inter, sans-serif"
-                fillColor={Color.fromCssColorString(colorHex)}
-                style={LabelStyle.FILL_AND_OUTLINE}
-                outlineColor={Color.BLACK}
-                outlineWidth={2}
-                verticalOrigin={VerticalOrigin.CENTER}
-                pixelOffset={new Cartesian2(0, -8)}
-                scaleByDistance={new NearFarScalar(5e4, 1.0, 5e6, 0)}
-                translucencyByDistance={new NearFarScalar(5e4, 1.0, 2e6, 0)}
-              />
-            </Entity>
-          );
-        })}
+      viewer.dataSources.add(ds);
+      dataSourceRef.current = ds;
+    });
 
-        {/* Point features at route endpoints */}
-        {pointFeatures.map((pt) => {
-          const position = Cartesian3.fromDegrees(pt.lon, pt.lat);
-          const colorHex = ROUTE_TYPE_COLORS[pt.routeType] ?? '#3B82F6';
-          const color = Color.fromCssColorString(colorHex);
-          const pixelSize = getPointMarkerPixelSize(pt.routeType);
-          return (
-            <Entity
-              key={pt.id}
-              id={`infra-point-${pt.id}`}
-              position={position}
-              name={`${pt.name} (${pt.isStart ? 'Landing A' : 'Landing B'})`}
-              description={`<b>${pt.name}</b><br/>Type: ${ROUTE_TYPE_LABELS[pt.routeType] ?? pt.routeType}`}
-            >
-              <PointGraphics
-                pixelSize={pixelSize}
-                color={color}
-                outlineColor={Color.WHITE}
-                outlineWidth={1}
-              />
-            </Entity>
-          );
-        })}
-      </CustomDataSource>
-    </>
-  );
+    return () => {
+      if (dataSourceRef.current && viewer && !viewer.isDestroyed()) {
+        viewer.dataSources.remove(dataSourceRef.current, true);
+        dataSourceRef.current = null;
+      }
+    };
+  }, [routesData, visible, alertedRouteIds, alertsByRoute]);
+
+  // Hide/show when visibility toggles
+  useEffect(() => {
+    if (dataSourceRef.current) {
+      dataSourceRef.current.show = visible;
+    }
+  }, [visible]);
+
+  return null; // All rendering handled via Cesium dataSources directly
 }
