@@ -4,9 +4,9 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 
 ## Current Feature
 
-**Spec:** Wave Plan — 21 specs across 9 waves (GFW Integration)
-**Branch:** feature/wave-9-enrichment-performance
-**Status:** Wave 9 in progress
+**Spec:** Wave Plan — 28 specs across 13 waves (Capability Modules)
+**Branch:** feature/wave-11-capability-backends
+**Status:** Wave 11 complete
 
 ## Stories Completed
 
@@ -232,9 +232,42 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - docs/PERFORMANCE.md updated with Memory Profiling Results section
 - Tests: 8 new tests in tests/test_memory_optimization.py
 
+### 23-infrastructure-protection-backend (all 6 stories)
+- Story 1: DB migration 011_infrastructure_tables.sql — infrastructure_routes (LINESTRING + GIST) + infrastructure_events (FK + composite index)
+- Story 2: Data loading script scripts/load_infrastructure.py + sample GeoJSON (5 Baltic Sea routes: NordBalt, EstLink 2, C-Lion1, Balticconnector, Nord Stream)
+- Story 3: infra_helpers.py — is_in_infrastructure_corridor(), compute_cable_bearing(), angle_difference(), is_in_port_approach()
+- Story 4: cable_slow_transit rule — SOG<7kt in corridor >30min (high/40pts), >60min (critical/100pts), +40pts shadow fleet escalation
+- Story 5: cable_alignment rule — COG parallel to cable bearing within 20° for >15min, hysteresis reset at 30°
+- Story 6: infra_speed_anomaly rule — >50% SOG drop vs 2h average near infrastructure (moderate/15pts)
+- Tests: 92 new tests
+- Commit: `c09df94`
+
+### 24-spoofing-detection-backend (all 8 stories)
+- Stories 1-2: DB migration 012_spoofing_tables.sql — land_mask (MULTIPOLYGON + GIST) + gnss_interference_zones (POLYGON + GIST + expires_at index)
+- Story 1b: Land mask loading script + test GeoJSON fixture (Germany + France polygons)
+- Story 3: spoof_land_position — ST_Intersects with 100m buffer exclusion, single=moderate/15pts, 3+ consecutive=critical/100pts
+- Story 4: spoof_impossible_speed — ship-type thresholds (tanker 27kn, container 37.5kn, etc.), single=high/40pts, 2+ in 24h=critical/100pts
+- Story 5: spoof_duplicate_mmsi — Redis last_pos tracking, same MMSI >10nm apart <5min = critical/100pts
+- Story 6: spoof_frozen_position — identical coords >2h (high/40pts), box pattern 2-4 pairs >1h (high/40pts)
+- Story 7: spoof_identity_mismatch — zombie vessel (critical/100pts), dimension >20% (high/40pts), flag-MID mismatch (high/40pts)
+- Story 8: gnss_clustering.py — 3+ spoof events within 20nm/1h creates convex hull zone, 24h refresh
+- Tests: 97 new tests
+- Commit: `5c3aa29`
+
+### 25-network-mapping-backend (all 7 stories)
+- Story 1: DB migration 013_network_edges.sql — network_edges table (UNIQUE on vessel_a/b + type, MMSI normalization), vessel_profiles.network_score column
+- Story 2: shared/db/network_repository.py — upsert_network_edge(), get_vessel_network(), get_connected_vessels(), get_network_cluster() (BFS max 5 hops)
+- Story 3: Encounter edge creation — from GFW encounter events, confidence=1.0
+- Story 4: Proximity edge creation — STS zone co-occurrence within ±24h, confidence=0.7
+- Story 5: Ownership edge creation — shared registered_owner or commercial_manager, case-insensitive
+- Story 6: Network scorer — BFS hop-decay (30/15/5 pts at 1/2/3+ hops from sanctioned), pattern bonus (20pts/vessel for 3+ vessel Russian+STS clusters)
+- Story 7: API endpoints — GET /api/vessels/{mmsi}/network (depth 1-3), GET /api/network/clusters
+- Tests: 59 new tests
+- Commit: `ed68a36`
+
 ## Current Story
 
-Wave 10 complete. All 8 stories for spec 22 (equasis-upload) implemented.
+Wave 11 complete. All 21 stories across specs 23, 24, 25 implemented.
 
 ## Known Issues
 
@@ -288,20 +321,18 @@ Wave 10 complete. All 8 stories for spec 22 (equasis-upload) implemented.
 
 ## Notes for Next Session
 
-- WAVE 10 COMPLETE (spec 22) on branch `feature/equasis-upload`
-- All 22 specs across 10 waves implemented
-- Backend tests passing: 426 (excluding 25 pre-existing failures)
-- Frontend tests: 388 passing (8 pre-existing failures, unchanged)
+- WAVE 11 COMPLETE (specs 23, 24, 25) on branch `feature/wave-11-capability-backends`
+- All 25 specs across 11 waves implemented
+- Backend tests passing: 680 (19 pre-existing failures unchanged)
+- 248 new Wave 11 tests (92 infra + 97 spoofing + 59 network)
+- New scoring rules: 8 (cable_slow_transit, cable_alignment, infra_speed_anomaly, spoof_land_position, spoof_impossible_speed, spoof_duplicate_mmsi, spoof_frozen_position, spoof_identity_mismatch)
+- New API endpoints: GET /api/vessels/{mmsi}/network, GET /api/network/clusters
+- External data needed: GSHHG coastline shapefile, EMODnet/HELCOM cable shapefiles (URLs in README)
 - Ready for merge to main
 
-### Wave 11-13: Capability Modules (6 new specs, draft)
-- **Spec 23** — Infrastructure Protection Backend: 6 stories (2 tables, data loading, 3 rules: cable_slow_transit, cable_alignment, infra_speed_anomaly)
-- **Spec 24** — Spoofing Detection Backend: 8 stories (2 tables, GSHHG loading, 5 rules: spoof_land_position, spoof_impossible_speed, spoof_duplicate_mmsi, spoof_frozen_position, spoof_identity_mismatch, GNSS clustering)
-- **Spec 25** — Network Mapping Backend: 7 stories (1 table, network repository, 3 edge types, network scoring, API endpoints)
+### Wave 12-13: Capability Modules Frontend (3 specs remaining)
 - **Spec 26** — Infrastructure Protection Frontend: 4 stories (cable/pipeline overlay, point features, risk halos, dashboard panel)
 - **Spec 27** — Spoofing Detection Frontend: 3 stories (spoof markers, duplicate MMSI lines, GNSS zone overlay)
 - **Spec 28** — Network Mapping Frontend: 4 stories (network score display, d3-force graph, globe network mode, vessel chain view)
-- New rules STACK with existing ais_spoofing and identity_mismatch (do not replace)
-- Wave 11 backend specs are independent and can be parallelized
-- Frontend specs (12-13) depend on their corresponding backend spec
+- Frontend specs depend on their corresponding backend spec (now complete)
 - All specs in draft status — awaiting approval
