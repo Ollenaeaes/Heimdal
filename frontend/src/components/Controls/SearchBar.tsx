@@ -145,9 +145,9 @@ export function SearchBar() {
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-lg bg-gray-800/80 text-white text-sm
-                   placeholder-gray-400 border border-gray-700 focus:border-blue-500
-                   focus:outline-none backdrop-blur-sm"
+        className="w-full px-3 py-2 rounded bg-[#111827]/80 text-white text-[0.8rem]
+                   placeholder-gray-400 border border-[#1F2937] focus:border-[#3B82F6]
+                   focus:outline-none backdrop-blur-md font-[Inter,sans-serif]"
         aria-label="Search vessels"
       />
       {term.trim() && (
@@ -158,8 +158,8 @@ export function SearchBar() {
 
       {open && results.length > 0 && (
         <ul
-          className="absolute top-full left-0 right-0 mt-1 rounded-lg bg-gray-800/95
-                     border border-gray-700 shadow-lg backdrop-blur-sm max-h-60 overflow-y-auto z-50"
+          className="absolute top-full left-0 right-0 mt-1 rounded bg-[#111827]/95
+                     border border-[#1F2937] shadow-lg backdrop-blur-md max-h-60 overflow-y-auto z-50"
           data-testid="search-results"
         >
           {results.map((r) => (
@@ -167,7 +167,7 @@ export function SearchBar() {
               <button
                 type="button"
                 onClick={() => handleSelect(r)}
-                className="w-full px-3 py-2 text-left text-sm text-white hover:bg-gray-700/60
+                className="w-full px-3 py-2 text-left text-[0.8rem] text-white hover:bg-[#1F2937]/60
                            flex items-center gap-2 transition-colors"
                 data-testid="search-result-item"
               >

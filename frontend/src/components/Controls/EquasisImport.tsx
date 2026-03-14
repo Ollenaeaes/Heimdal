@@ -83,10 +83,10 @@ export function EquasisImport() {
         data-testid="equasis-import-btn"
         disabled={status === 'uploading'}
         onClick={() => fileInputRef.current?.click()}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors border border-gray-700 ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors border border-[#1F2937] ${
           status === 'uploading'
-            ? 'bg-gray-700 text-gray-400 cursor-wait'
-            : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+            ? 'bg-[#1F2937] text-gray-400 cursor-wait'
+            : 'bg-[#111827] text-gray-300 hover:bg-[#1F2937] hover:text-white'
         }`}
       >
         <svg

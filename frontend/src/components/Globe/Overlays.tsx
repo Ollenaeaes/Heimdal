@@ -165,7 +165,7 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
   };
 
   return (
-    <div className="flex flex-col gap-2 bg-gray-900/80 p-3 rounded-lg text-white text-sm">
+    <div className="flex flex-col gap-2 bg-[#0A0E17]/80 p-3 rounded border border-[#1F2937] backdrop-blur-md text-white text-xs">
       <label className="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"
@@ -193,7 +193,7 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
         />
         Norwegian EEZ
       </label>
-      <div className="border-t border-gray-700 my-1" />
+      <div className="border-t border-[#1F2937] my-1" />
       <label className="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"

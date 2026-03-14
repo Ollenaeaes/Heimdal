@@ -3,9 +3,9 @@ import { useWatchlistStore, useWatchlistQuery } from '../../hooks/useWatchlist';
 import { useVesselStore } from '../../hooks/useVesselStore';
 
 const RISK_DOT_COLORS: Record<string, string> = {
-  green: 'bg-green-500',
-  yellow: 'bg-yellow-500',
-  red: 'bg-red-500',
+  green: 'bg-[#22C55E]',
+  yellow: 'bg-[#F59E0B]',
+  red: 'bg-[#EF4444]',
 };
 
 function formatTimeAgo(timestamp: string): string {
@@ -57,9 +57,9 @@ export function WatchlistPanel() {
         onClick={() => setIsOpen((prev) => !prev)}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
           isOpen
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
-        } border border-gray-700`}
+            ? 'bg-[#3B82F6] text-white'
+            : 'bg-[#111827] text-gray-300 hover:bg-[#1F2937] hover:text-white'
+        } border border-[#1F2937]`}
       >
         <span className="text-sm">⊙</span>
         Watchlist
@@ -73,9 +73,9 @@ export function WatchlistPanel() {
       {isOpen && (
         <div
           data-testid="watchlist-panel"
-          className="absolute top-full left-0 mt-1.5 w-72 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden"
+          className="absolute top-full left-0 mt-1.5 w-72 bg-[#111827] border border-[#1F2937] rounded shadow-xl z-50 overflow-hidden backdrop-blur-md"
         >
-          <div className="px-3 py-2 border-b border-gray-700">
+          <div className="px-3 py-2 border-b border-[#1F2937]">
             <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
               Watched Vessels
             </h3>
@@ -96,7 +96,7 @@ export function WatchlistPanel() {
                     selectVessel(v.mmsi);
                     setIsOpen(false);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-700/50 transition-colors text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#1F2937]/50 transition-colors text-left"
                 >
                   <span
                     className={`w-2 h-2 rounded-full shrink-0 ${RISK_DOT_COLORS[v.riskTier] ?? 'bg-gray-500'}`}
