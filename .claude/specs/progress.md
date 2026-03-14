@@ -5,8 +5,8 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 ## Current Feature
 
 **Spec:** Wave Plan — 28 specs across 13 waves (Capability Modules)
-**Branch:** feature/wave-11-capability-backends
-**Status:** Wave 11 complete
+**Branch:** feature/operations-centre-theme
+**Status:** Wave 12 complete
 
 ## Stories Completed
 
@@ -265,9 +265,20 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 59 new tests
 - Commit: `ed68a36`
 
+### 29-operations-centre-theme (all 7 stories)
+- Story 1: Theme Foundation — Inter + JetBrains Mono fonts, CSS @theme variables (heimdal-bg/panel/border/accent/infra/sar), updated risk colors (green=#22C55E, amber=#F59E0B, red=#EF4444), updated severity palette
+- Story 2: Globe Styling — dark navy ocean (#0A1628), fog density 0.0003, atmosphere brightness -0.4, scene background #0A0E17, Earth at Night imagery with fallback
+- Story 3: Vessel Markers — chevron/arrow shapes, green faded (0.3 opacity), yellow amber glow billboard, red pulse 1.0-1.15x at ~1Hz, selected vessel white ring, watchlist halo preserved
+- Story 4: Track Trails — risk-tier-colored at 0.6 alpha, 4-tier width tapering (0.5-2px), dashed segments for AIS gaps >10min
+- Story 5: HUD Top Bar — 40px ops-centre bar, small-caps HEIMDAL label, inline stats with monospace numbers, clickable tier filter counts, semi-transparent backdrop-blur
+- Story 6: Side Panel Restyle — sharp corners, heimdal-panel/border colors, monospace data fields, "● RED — 140pts" risk badge, severity-colored anomaly left borders, collapsible sections, inline label-value layout, text loading state
+- Story 7: Controls Restyle — all controls restyled with heimdal palette, sharp corners, backdrop-blur, accent blue active states, updated overlay toggles
+- Tests: 16 new tests
+- Commits: 8 commits on feature/operations-centre-theme branch
+
 ## Current Story
 
-Wave 11 complete. All 21 stories across specs 23, 24, 25 implemented.
+Wave 12 complete. All 7 stories of spec 29 implemented.
 
 ## Known Issues
 
@@ -321,16 +332,15 @@ Wave 11 complete. All 21 stories across specs 23, 24, 25 implemented.
 
 ## Notes for Next Session
 
-- WAVE 11 COMPLETE (specs 23, 24, 25) on branch `feature/wave-11-capability-backends`
-- All 25 specs across 11 waves implemented
-- Backend tests passing: 680 (19 pre-existing failures unchanged)
-- 248 new Wave 11 tests (92 infra + 97 spoofing + 59 network)
-- New scoring rules: 8 (cable_slow_transit, cable_alignment, infra_speed_anomaly, spoof_land_position, spoof_impossible_speed, spoof_duplicate_mmsi, spoof_frozen_position, spoof_identity_mismatch)
-- New API endpoints: GET /api/vessels/{mmsi}/network, GET /api/network/clusters
-- External data needed: GSHHG coastline shapefile, EMODnet/HELCOM cable shapefiles (URLs in README)
+- WAVE 12 COMPLETE (spec 29) on branch `feature/operations-centre-theme`
+- All 26 specs across 12 waves implemented
+- Frontend tests passing: 408 (4 pre-existing failures: window not defined in Node for Cesium)
+- 16 new Wave 12 tests
+- Full visual restyle: dark navy globe, chevron markers, HUD top bar, dense panels, ops-centre aesthetic
+- Fonts: Inter (proportional) + JetBrains Mono (monospace) via Google Fonts
 - Ready for merge to main
 
-### Wave 12-13: Capability Modules Frontend (3 specs remaining)
+### Wave 13-14: Capability Modules Frontend (3 specs remaining)
 - **Spec 26** — Infrastructure Protection Frontend: 4 stories (cable/pipeline overlay, point features, risk halos, dashboard panel)
 - **Spec 27** — Spoofing Detection Frontend: 3 stories (spoof markers, duplicate MMSI lines, GNSS zone overlay)
 - **Spec 28** — Network Mapping Frontend: 4 stories (network score display, d3-force graph, globe network mode, vessel chain view)

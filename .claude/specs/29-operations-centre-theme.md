@@ -2,7 +2,7 @@
 
 **Slug:** `operations-centre-theme`
 **Created:** 2026-03-14
-**Status:** approved
+**Status:** completed
 **Priority:** high
 
 ---
