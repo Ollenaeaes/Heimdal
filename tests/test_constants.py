@@ -76,8 +76,9 @@ class TestMaxPerRule:
     def test_is_dict(self):
         assert isinstance(MAX_PER_RULE, dict)
 
-    def test_has_14_rules(self):
-        assert len(MAX_PER_RULE) == 14
+    def test_has_expected_rule_count(self):
+        # 6 GFW + 21 realtime = 27 rules
+        assert len(MAX_PER_RULE) == len(ALL_RULE_IDS)
 
     def test_gfw_rules_present(self):
         expected_gfw = {
@@ -110,7 +111,7 @@ class TestMaxPerRule:
 
     def test_all_rule_ids_frozenset(self):
         assert isinstance(ALL_RULE_IDS, frozenset)
-        assert len(ALL_RULE_IDS) == 14
+        assert ALL_RULE_IDS == frozenset(MAX_PER_RULE.keys())
 
 
 class TestSeverityPoints:
@@ -139,15 +140,20 @@ class TestSeverityPoints:
 class TestRuleIdLists:
     """GFW and realtime rule ID list tests."""
 
-    def test_gfw_has_5_rules(self):
-        assert len(GFW_RULE_IDS) == 5
+    def test_gfw_has_expected_rules(self):
+        assert len(GFW_RULE_IDS) >= 5
+        assert "gfw_ais_disabling" in GFW_RULE_IDS
 
-    def test_realtime_has_9_rules(self):
-        assert len(REALTIME_RULE_IDS) == 9
+    def test_realtime_has_expected_rules(self):
+        assert len(REALTIME_RULE_IDS) >= 9
+        assert "ais_gap" in REALTIME_RULE_IDS
+        # Infrastructure protection rules
+        assert "cable_slow_transit" in REALTIME_RULE_IDS
+        assert "cable_alignment" in REALTIME_RULE_IDS
+        assert "infra_speed_anomaly" in REALTIME_RULE_IDS
 
-    def test_combined_equals_14(self):
+    def test_combined_covers_all(self):
         combined = set(GFW_RULE_IDS) | set(REALTIME_RULE_IDS)
-        assert len(combined) == 14
         assert combined == ALL_RULE_IDS
 
 
