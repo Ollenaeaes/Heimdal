@@ -58,7 +58,7 @@ function CollapsibleSubsection({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-gray-700 last:border-b-0" data-testid={testId}>
+    <div className="border-b border-[#1F2937] last:border-b-0" data-testid={testId}>
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center justify-between w-full text-left py-2 px-1"
@@ -103,7 +103,7 @@ function ManagementTable({ entries }: { entries: any[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-500 border-b border-gray-700">
+          <tr className="text-gray-500 border-b border-[#1F2937]">
             <th className="text-left py-1 pr-2">Role</th>
             <th className="text-left py-1 pr-2">Company</th>
             <th className="text-left py-1 pr-2">Address</th>
@@ -116,7 +116,7 @@ function ManagementTable({ entries }: { entries: any[] }) {
             return (
               <tr
                 key={i}
-                className={`border-b border-gray-800 ${isCurrent ? 'text-blue-300 font-medium' : 'text-gray-400'}`}
+                className={`border-b border-[#1F2937] ${isCurrent ? 'text-blue-300 font-medium' : 'text-gray-400'}`}
               >
                 <td className="py-1 pr-2">{entry.role ?? '\u2014'}</td>
                 <td className="py-1 pr-2">{entry.company_name ?? entry.company ?? '\u2014'}</td>
@@ -145,7 +145,7 @@ function ClassificationSection({
           <h5 className="text-xs text-gray-500 mb-1">Status</h5>
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-gray-500 border-b border-gray-700">
+              <tr className="text-gray-500 border-b border-[#1F2937]">
                 <th className="text-left py-1 pr-2">Society</th>
                 <th className="text-left py-1 pr-2">Date</th>
                 <th className="text-left py-1 pr-2">Status</th>
@@ -159,7 +159,7 @@ function ClassificationSection({
                 return (
                   <tr
                     key={i}
-                    className={`border-b border-gray-800 ${isWithdrawn ? 'text-amber-400' : 'text-gray-400'}`}
+                    className={`border-b border-[#1F2937] ${isWithdrawn ? 'text-amber-400' : 'text-gray-400'}`}
                     data-testid={isWithdrawn ? 'classification-withdrawn' : undefined}
                   >
                     <td className="py-1 pr-2">{entry.society ?? entry.society_name ?? '\u2014'}</td>
@@ -179,7 +179,7 @@ function ClassificationSection({
           <h5 className="text-xs text-gray-500 mb-1">Surveys</h5>
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-gray-500 border-b border-gray-700">
+              <tr className="text-gray-500 border-b border-[#1F2937]">
                 <th className="text-left py-1 pr-2">Society</th>
                 <th className="text-left py-1 pr-2">Survey Date</th>
                 <th className="text-left py-1">Next Survey</th>
@@ -187,7 +187,7 @@ function ClassificationSection({
             </thead>
             <tbody>
               {surveys.map((entry: any, i: number) => (
-                <tr key={i} className="border-b border-gray-800 text-gray-400">
+                <tr key={i} className="border-b border-[#1F2937] text-gray-400">
                   <td className="py-1 pr-2">{entry.society ?? entry.society_name ?? '\u2014'}</td>
                   <td className="py-1 pr-2">{entry.date ?? entry.date_of_survey ?? '\u2014'}</td>
                   <td className="py-1">{entry.next_date ?? entry.date_of_next_survey ?? '\u2014'}</td>
@@ -206,7 +206,7 @@ function SafetyCertificatesTable({ entries }: { entries: any[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-500 border-b border-gray-700">
+          <tr className="text-gray-500 border-b border-[#1F2937]">
             <th className="text-left py-1 pr-2">Society</th>
             <th className="text-left py-1 pr-2">Survey Date</th>
             <th className="text-left py-1 pr-2">Expiry</th>
@@ -216,7 +216,7 @@ function SafetyCertificatesTable({ entries }: { entries: any[] }) {
         </thead>
         <tbody>
           {entries.map((entry: any, i: number) => (
-            <tr key={i} className="border-b border-gray-800 text-gray-400">
+            <tr key={i} className="border-b border-[#1F2937] text-gray-400">
               <td className="py-1 pr-2">{entry.society ?? '\u2014'}</td>
               <td className="py-1 pr-2">{entry.date_of_survey ?? entry.survey_date ?? '\u2014'}</td>
               <td className="py-1 pr-2">{entry.date_of_expiry ?? entry.expiry ?? '\u2014'}</td>
@@ -235,7 +235,7 @@ function PscInspectionsTable({ entries }: { entries: any[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-500 border-b border-gray-700">
+          <tr className="text-gray-500 border-b border-[#1F2937]">
             <th className="text-left py-1 pr-2">Authority</th>
             <th className="text-left py-1 pr-2">Port</th>
             <th className="text-left py-1 pr-2">Date</th>
@@ -259,7 +259,7 @@ function PscInspectionsTable({ entries }: { entries: any[] }) {
             return (
               <tr
                 key={i}
-                className={`border-b border-gray-800 ${isDetention ? 'text-red-400 font-medium' : 'text-gray-400'}`}
+                className={`border-b border-[#1F2937] ${isDetention ? 'text-red-400 font-medium' : 'text-gray-400'}`}
                 data-testid={isDetention ? 'psc-detention-row' : undefined}
               >
                 <td className="py-1 pr-2">{entry.authority ?? entry.country ?? '\u2014'}</td>
@@ -345,8 +345,8 @@ export function EquasisSection({ mmsi, equasis }: EquasisSectionProps) {
 
   if (!equasis) {
     return (
-      <div className="px-4 py-3 border-b border-gray-700" data-testid="equasis-section">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
+      <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="equasis-section">
+        <h3 className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">
           Equasis Data
         </h3>
         <p className="text-xs text-gray-500" data-testid="equasis-empty">
@@ -391,7 +391,7 @@ export function EquasisSection({ mmsi, equasis }: EquasisSectionProps) {
   const companyHistory = displayData.company_history ?? [];
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700" data-testid="equasis-section">
+    <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="equasis-section">
       <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
         Equasis Data
       </h3>
@@ -409,7 +409,7 @@ export function EquasisSection({ mmsi, equasis }: EquasisSectionProps) {
             data-testid="equasis-previous-uploads"
             value={selectedUploadId ?? latestUpload?.id ?? ''}
             onChange={(e) => handleUploadSelect(Number(e.target.value))}
-            className="bg-gray-800 text-gray-300 text-xs rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-none"
+            className="bg-gray-800 text-gray-300 text-xs rounded px-2 py-1 border border-[#1F2937] focus:border-blue-500 focus:outline-none"
           >
             {equasis.uploads.map((upload) => (
               <option key={upload.id} value={upload.id}>

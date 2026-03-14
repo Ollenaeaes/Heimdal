@@ -55,7 +55,7 @@ export function RiskSection({ vessel }: RiskSectionProps) {
   const deduplicated = deduplicateByRule(unresolvedAnomalies);
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700" data-testid="risk-section">
+    <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="risk-section">
       {/* Score bar */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
@@ -139,8 +139,9 @@ function AnomalyCard({ anomaly }: { anomaly: AnomalyEvent }) {
 
   return (
     <div
-      className="rounded-md border border-gray-700 bg-gray-800 p-2 cursor-pointer select-none"
+      className="border-l-4 bg-[#111827] border border-[#1F2937] p-2 rounded-r cursor-pointer select-none"
       onClick={() => setExpanded(!expanded)}
+      style={{ borderLeftColor: severityColor }}
       data-testid="anomaly-card"
     >
       <div className="flex items-center justify-between mb-1">

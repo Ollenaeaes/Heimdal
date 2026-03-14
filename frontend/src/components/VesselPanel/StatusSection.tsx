@@ -32,24 +32,26 @@ export function StatusSection({ vessel, mmsi }: StatusSectionProps) {
       : undefined;
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700" data-testid="status-section">
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
+    <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="status-section">
+      <h3 className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">
         Status
       </h3>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <FieldRow label="Position" value={positionStr} testId="field-position" fullWidth />
-        <FieldRow label="Speed (SOG)" value={formatSpeed(sog)} testId="field-sog" />
-        <FieldRow label="Course (COG)" value={formatCourse(cog)} testId="field-cog" />
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+        <FieldRow label="Position" value={positionStr} testId="field-position" fullWidth mono />
+        <FieldRow label="Speed (SOG)" value={formatSpeed(sog)} testId="field-sog" mono />
+        <FieldRow label="Course (COG)" value={formatCourse(cog)} testId="field-cog" mono />
         <FieldRow
           label="Heading"
           value={heading !== null && heading !== undefined ? `${heading}°` : '—'}
           testId="field-heading"
+          mono
         />
         <FieldRow
           label="Draught"
           value={vessel.draught !== undefined && vessel.draught !== null ? `${vessel.draught} m` : undefined}
           testId="field-draught"
+          mono
         />
         <FieldRow label="Destination" value={destination} testId="field-destination" />
         <FieldRow
@@ -60,7 +62,7 @@ export function StatusSection({ vessel, mmsi }: StatusSectionProps) {
       </div>
 
       {timestamp && (
-        <div className="mt-2 text-xs text-gray-500" data-testid="last-updated">
+        <div className="mt-1 text-xs text-gray-500 font-mono" data-testid="last-updated">
           Updated {formatTimestamp(timestamp)}
         </div>
       )}
@@ -73,16 +75,18 @@ function FieldRow({
   value,
   testId,
   fullWidth,
+  mono,
 }: {
   label: string;
   value: string | undefined;
   testId?: string;
   fullWidth?: boolean;
+  mono?: boolean;
 }) {
   return (
     <div className={fullWidth ? 'col-span-2' : undefined} data-testid={testId}>
       <dt className="text-gray-500 text-xs">{label}</dt>
-      <dd className="text-gray-300">{value ?? '—'}</dd>
+      <dd className={`text-gray-300 ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</dd>
     </div>
   );
 }
