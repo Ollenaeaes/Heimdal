@@ -28,9 +28,10 @@ export function cogToRotation(cogDeg: number | null): number {
 }
 
 /**
- * Draw a triangular vessel shape on a canvas and return the data URL.
- * The triangle points upward (north) so that billboard rotation aligns
- * naturally with COG. High-risk vessels get a glow ring for visibility.
+ * Draw a directional chevron/arrow vessel shape on a canvas and return the
+ * data URL. The chevron points upward (north) so that billboard rotation
+ * aligns naturally with COG. Yellow and red vessels get a glow ring for
+ * visibility.
  */
 function drawVesselIcon(color: string, glow: boolean): string {
   const size = glow ? ICON_SIZE_GLOW : ICON_SIZE;
@@ -40,7 +41,7 @@ function drawVesselIcon(color: string, glow: boolean): string {
   const ctx = canvas.getContext('2d')!;
 
   const cx = size / 2;
-  // Offset so the triangle is centered in the larger glow canvas
+  // Offset so the chevron is centered in the larger glow canvas
   const pad = glow ? (ICON_SIZE_GLOW - ICON_SIZE) / 2 : 0;
 
   if (glow) {
@@ -54,12 +55,15 @@ function drawVesselIcon(color: string, glow: boolean): string {
     ctx.stroke();
   }
 
-  // Arrow / triangular ship shape pointing up
+  // Sharper chevron / military-style arrow pointing up
+  const w = ICON_SIZE; // reference width
   ctx.beginPath();
-  ctx.moveTo(cx, pad + 2); // top (bow)
-  ctx.lineTo(pad + ICON_SIZE - 4, pad + ICON_SIZE - 4); // bottom-right
-  ctx.lineTo(cx, pad + ICON_SIZE - 8); // notch
-  ctx.lineTo(pad + 4, pad + ICON_SIZE - 4); // bottom-left
+  ctx.moveTo(cx, pad + 1);                         // sharp bow point
+  ctx.lineTo(pad + w - 5, pad + w * 0.65);         // right wing
+  ctx.lineTo(pad + w - 7, pad + w * 0.6);          // right wing inner
+  ctx.lineTo(cx, pad + w * 0.45);                   // stern notch center
+  ctx.lineTo(pad + 7, pad + w * 0.6);              // left wing inner
+  ctx.lineTo(pad + 5, pad + w * 0.65);             // left wing
   ctx.closePath();
 
   ctx.fillStyle = color;
