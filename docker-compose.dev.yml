@@ -1,0 +1,73 @@
+# =============================================================================
+# Heimdal Platform — Docker Compose (Local Development)
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.dev.yml up
+#
+# No ais-fetcher — use scripts/sync-data.sh to pull raw data from prod.
+# Relaxed resource limits for development machines.
+# =============================================================================
+
+services:
+
+  postgres:
+    build: ./db
+    environment:
+      POSTGRES_USER: heimdal
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-heimdal_dev}
+      POSTGRES_DB: heimdal
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heimdal -d heimdal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api-server:
+    build:
+      context: .
+      dockerfile: services/api-server/Dockerfile
+      args:
+        VITE_CESIUM_ION_TOKEN: ${CESIUM_ION_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request,urllib.error;\ntry: urllib.request.urlopen(\"http://localhost:8000/api/health\")\nexcept urllib.error.HTTPError: pass'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+
+  batch-pipeline:
+    build: ./services/batch-pipeline
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      GFW_API_TOKEN: ${GFW_API_TOKEN}
+      OPENSANCTIONS_DATA_PATH: /data/opensanctions
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - ./services/scoring:/app/scoring_src:ro
+      - ./services/enrichment:/app/enrichment_src:ro
+      - ./services/ais-ingest:/app/ingest_src:ro
+      - ./data/opensanctions:/data/opensanctions:ro
+      - rawdata_dev:/data/raw
+    profiles:
+      - batch
+
+volumes:
+  pgdata_dev:
+  rawdata_dev:

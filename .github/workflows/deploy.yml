@@ -1,0 +1,28 @@
+name: Deploy to Oracle
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USER }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          script: |
+            cd ~/Heimdal
+            git pull origin main
+
+            # Rebuild and restart always-on services
+            docker compose up -d --build ais-fetcher api-server postgres
+
+            # Run batch-pipeline once after deploy to pick up any pending data
+            docker compose --profile batch run --rm batch-pipeline
+
+            echo "Deploy complete at $(date)"
