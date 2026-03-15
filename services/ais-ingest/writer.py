@@ -165,8 +165,8 @@ class BatchWriter:
             logger.exception("Database flush failed (%d positions, %d vessels)", len(positions), len(vessels))
             return  # skip Redis publish — nothing was persisted
 
-        # Publish positions to Redis for WebSocket clients
-        if positions:
+        # Publish positions to Redis for WebSocket clients (if Redis available)
+        if positions and self.redis:
             latest: dict[int, tuple] = {}
             for p in positions:
                 latest[p[1]] = p  # p[1] = mmsi
@@ -190,8 +190,8 @@ class BatchWriter:
                     logger.warning("Redis publish failed for MMSI %d", p[1])
                     break  # don't spam logs if Redis is down
 
-            if self.metrics:
-                try:
-                    await self.metrics.record_batch(len(positions), mmsis)
-                except Exception:
-                    logger.warning("Metrics recording failed")
+        if positions and self.metrics:
+            try:
+                await self.metrics.record_batch(len(positions), mmsis)
+            except Exception:
+                logger.warning("Metrics recording failed")

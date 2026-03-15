@@ -227,6 +227,30 @@ gfw:
         - [24.00, 35.00]
         - [24.00, 34.00]
 
+# -- Raw AIS Storage ----------------------------------------------------------
+# Raw AIS messages are written to disk as gzipped JSONL files.  These are the
+# durable source of truth — independent of the database.
+raw_storage:
+  base_path: /data/raw
+  rotation_interval: 3600    # new file every hour
+  compress: true             # gzip JSONL
+
+# -- Batch Pipeline -----------------------------------------------------------
+# The batch-pipeline service replaces real-time scoring and enrichment.
+# It runs on a cron schedule, reading raw JSONL files and processing them.
+batch_pipeline:
+  schedule_interval: 7200    # run every 2 hours
+  load_batch_size: 10000     # positions per INSERT batch
+  score_batch_size: 100      # vessels per scoring batch
+
+# -- Cold Storage -------------------------------------------------------------
+# Compresses old JSONL to Parquet for long-term archival.
+cold_storage:
+  age_days: 30               # compress to Parquet after 30 days
+  format: parquet
+  compression: snappy
+  retain_jsonl_days: 7       # keep JSONL for 7 days after Parquet creation
+
 # -- Data Retention -----------------------------------------------------------
 retention:
   # Number of days to keep raw AIS positions before archiving/deleting.

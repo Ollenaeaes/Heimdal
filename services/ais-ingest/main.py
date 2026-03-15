@@ -20,6 +20,7 @@ from shared.models.ais_message import PositionReport, ShipStaticData
 # we import without the services.ais_ingest prefix.
 from parser import parse_message, parse_vessel_extras
 from dedup import Deduplicator
+from file_writer import RawFileWriter
 from metrics import MetricsPublisher
 from writer import BatchWriter
 from websocket import AISWebSocket
@@ -30,12 +31,18 @@ logger = logging.getLogger("ais-ingest")
 async def main():
     setup_logging("ais-ingest")
 
-    # Initialize Redis
-    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    # Initialize raw file writer (always runs — durable source of truth)
+    raw_writer = RawFileWriter(base_path=settings.raw_storage.base_path)
+    await raw_writer.start()
 
-    # Initialize components
-    dedup = Deduplicator(redis)
-    metrics = MetricsPublisher(redis)
+    # Initialize Redis (optional — skip if no URL configured)
+    redis = None
+    dedup = None
+    metrics = None
+    if settings.redis_url:
+        redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+        dedup = Deduplicator(redis)
+        metrics = MetricsPublisher(redis)
 
     # Convert SQLAlchemy URL to asyncpg DSN
     dsn = settings.database_url.get_secret_value().replace("+asyncpg", "")
@@ -58,6 +65,12 @@ async def main():
                 msg_count["total"], msg_count["parsed"], msg_count["written"],
             )
 
+        # Always write raw message to JSONL files
+        try:
+            await raw_writer.write_message(raw)
+        except Exception:
+            logger.exception("Raw file write failed")
+
         result = parse_message(raw)
         if result is None:
             return
@@ -76,7 +89,7 @@ async def main():
             msg_count["written"] += 1
 
         elif isinstance(result, PositionReport):
-            if await dedup.is_duplicate(result.mmsi, result.timestamp):
+            if dedup and await dedup.is_duplicate(result.mmsi, result.timestamp):
                 return
             await writer.add_position(result)
             msg_count["written"] += 1
@@ -90,7 +103,9 @@ async def main():
     finally:
         await ws.stop()
         await writer.stop()
-        await redis.close()
+        await raw_writer.stop()
+        if redis:
+            await redis.close()
 
 
 if __name__ == "__main__":
