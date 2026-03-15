@@ -23,11 +23,14 @@ from pathlib import Path
 sys.path.insert(0, "/app")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-# Allow importing scoring and enrichment modules
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scoring"))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "enrichment"))
-# Allow importing ais-ingest parser
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ais-ingest"))
+# In Docker, scoring/enrichment/ingest sources are volume-mounted.
+# In local dev, they're relative to this file.
+_scoring_paths = ["/app/scoring_src", str(Path(__file__).resolve().parent.parent / "scoring")]
+_enrichment_paths = ["/app/enrichment_src", str(Path(__file__).resolve().parent.parent / "enrichment")]
+_ingest_paths = ["/app/ingest_src", str(Path(__file__).resolve().parent.parent / "ais-ingest")]
+for p in _scoring_paths + _enrichment_paths + _ingest_paths:
+    if Path(p).is_dir() and p not in sys.path:
+        sys.path.insert(0, p)
 
 import asyncpg
 

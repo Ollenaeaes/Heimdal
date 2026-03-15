@@ -253,8 +253,8 @@ cold_storage:
 
 # -- Data Retention -----------------------------------------------------------
 retention:
-  # Number of days to keep raw AIS positions before archiving/deleting.
-  positions_days: 90
+  # Number of days to keep positions in the database (raw files are the permanent archive).
+  positions_days: 30
 
   # Enable TimescaleDB compression on older position chunks.
   compression: true

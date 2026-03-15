@@ -1,10 +1,13 @@
 # =============================================================================
-# Heimdal Platform — Docker Compose Orchestration
+# Heimdal Platform — Docker Compose (Production: Oracle Free Tier)
 # =============================================================================
 # Usage:
 #   cp .env.example .env   # fill in your API keys
-#   make up                 # start all services
-#   make help               # see all available commands
+#   docker compose up -d   # start all services
+#
+# Architecture:
+#   3 always-on: ais-fetcher, postgres, api-server
+#   2 scheduled: batch-pipeline (every 2h), cold-archiver (daily)
 # =============================================================================
 
 services:
@@ -28,79 +31,53 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-  redis:
-    image: redis:7-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    command: >
+      postgres
+      -c shared_buffers=2560MB
+      -c effective_cache_size=7680MB
+      -c work_mem=32MB
+      -c maintenance_work_mem=512MB
+      -c max_connections=30
+      -c max_wal_size=1GB
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 10G
 
   # ---------------------------------------------------------------------------
-  # Backend Services
+  # Always-on Services
   # ---------------------------------------------------------------------------
 
-  ais-ingest:
-    build: ./services/ais-ingest
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+  ais-fetcher:
+    build: ./services/ais-fetcher
+    restart: unless-stopped
     environment:
       AISSTREAM_API_KEY: ${AIS_API_KEY}
-      AIS_SHIP_TYPES: ${AIS_SHIP_TYPES:-}
-      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
-      REDIS_URL: "redis://redis:6379/0"
+      RAW_STORAGE_PATH: /data/raw
     volumes:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
       - rawdata:/data/raw
-
-  scoring:
-    build: ./services/scoring
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
-      REDIS_URL: "redis://redis:6379/0"
-    volumes:
-      - ./shared:/app/shared:ro
-      - ./config.yaml:/app/config.yaml:ro
-
-  enrichment:
-    build: ./services/enrichment
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
-      REDIS_URL: "redis://redis:6379/0"
-      GFW_API_TOKEN: ${GFW_API_TOKEN}
-      OPENSANCTIONS_DATA_PATH: /data/opensanctions
-    volumes:
-      - ./shared:/app/shared:ro
-      - ./config.yaml:/app/config.yaml:ro
-      - ./data/opensanctions:/data/opensanctions:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   api-server:
-    build: ./services/api-server
+    build:
+      context: .
+      dockerfile: services/api-server/Dockerfile
+      args:
+        VITE_CESIUM_ION_TOKEN: ${CESIUM_ION_TOKEN}
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
       DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
-      REDIS_URL: "redis://redis:6379/0"
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import urllib.request,urllib.error;\ntry: urllib.request.urlopen(\"http://localhost:8000/api/health\")\nexcept urllib.error.HTTPError: pass'"]
       interval: 5s
@@ -109,21 +86,59 @@ services:
     volumes:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
 
   # ---------------------------------------------------------------------------
-  # Frontend
+  # Scheduled Services (run via host cron or docker compose run)
   # ---------------------------------------------------------------------------
 
-  frontend:
-    build:
-      context: ./frontend
-      args:
-        VITE_CESIUM_ION_TOKEN: ${CESIUM_ION_TOKEN}
+  batch-pipeline:
+    build: ./services/batch-pipeline
     depends_on:
-      api-server:
+      postgres:
         condition: service_healthy
-    ports:
-      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      GFW_API_TOKEN: ${GFW_API_TOKEN}
+      OPENSANCTIONS_DATA_PATH: /data/opensanctions
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - ./services/scoring:/app/scoring_src:ro
+      - ./services/enrichment:/app/enrichment_src:ro
+      - ./services/ais-ingest:/app/ingest_src:ro
+      - ./data/opensanctions:/data/opensanctions:ro
+      - rawdata:/data/raw
+    profiles:
+      - batch
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 8G
+
+  cold-archiver:
+    build: ./services/cold-archiver
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - rawdata:/data/raw
+    profiles:
+      - batch
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 2G
 
 # =============================================================================
 # Persistent Volumes

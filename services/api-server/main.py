@@ -11,9 +11,11 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-import redis.asyncio as aioredis
+from pathlib import Path
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from shared.config import settings
@@ -32,16 +34,22 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     logger.info("Database engine initialised: %s", engine.url.database)
 
-    # Startup: connect to Redis
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
-    app.state.redis = redis_client
-    logger.info("Redis connected: %s", settings.redis_url)
+    # Startup: connect to Redis (optional)
+    if settings.redis_url:
+        import redis.asyncio as aioredis
+        redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+        app.state.redis = redis_client
+        logger.info("Redis connected: %s", settings.redis_url)
+    else:
+        app.state.redis = None
+        logger.info("Running without Redis (batch mode)")
 
     yield
 
     # Shutdown: close Redis
-    await redis_client.close()
-    logger.info("Redis connection closed")
+    if app.state.redis:
+        await app.state.redis.close()
+        logger.info("Redis connection closed")
 
     # Shutdown: dispose database engine
     await dispose_engine()
@@ -101,8 +109,7 @@ def create_app() -> FastAPI:
     from routes.network import router as network_router
     from routes.infrastructure import router as infrastructure_router
     from routes.gnss_zones import router as gnss_zones_router
-    from routes.ws_alerts import router as ws_alerts_router
-    from routes.ws_positions import router as ws_positions_router
+    from routes.positions_poll import router as positions_poll_router
 
     app.include_router(health_router)
     app.include_router(vessels_router)
@@ -115,8 +122,20 @@ def create_app() -> FastAPI:
     app.include_router(network_router)
     app.include_router(infrastructure_router)
     app.include_router(gnss_zones_router)
-    app.include_router(ws_alerts_router)
-    app.include_router(ws_positions_router)
+    app.include_router(positions_poll_router)
+
+    # WebSocket routes — only include if Redis is available
+    if settings.redis_url:
+        from routes.ws_alerts import router as ws_alerts_router
+        from routes.ws_positions import router as ws_positions_router
+        app.include_router(ws_alerts_router)
+        app.include_router(ws_positions_router)
+
+    # Serve frontend static files if the build directory exists
+    static_dir = Path("/app/static")
+    if static_dir.is_dir():
+        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
+        logger.info("Serving frontend static files from %s", static_dir)
 
     return app
 
