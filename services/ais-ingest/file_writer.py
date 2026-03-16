@@ -91,6 +91,7 @@ class RawFileWriter:
             # Flush periodically to avoid data loss
             if self._write_count % 1000 == 0:
                 handle.flush()
+                os.fsync(handle.fileobj.fileno())
 
     def _get_or_create_handle(
         self, file_type: str, hour_key: str, now: datetime
