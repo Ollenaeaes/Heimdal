@@ -84,6 +84,17 @@ All specs live in `.claude/specs/`. Progress tracking lives in `.claude/specs/pr
 > For deeper context, add CLAUDE.md files in subdirectories.
 > Example: `src/api/CLAUDE.md` describes API patterns, `src/models/CLAUDE.md` describes data models.
 
+### Production Database Rules
+
+**All schema changes in production MUST be done via SQL migration files and applied with `psql -f`, NEVER by rebuilding the postgres container.**
+
+- The prod postgres container must NEVER be recreated. It holds irreplaceable data (equasis imports, manual enrichment, watchlists, scoring history).
+- Schema migrations go in `db/migrations/` and are applied manually: `docker compose exec postgres psql -U heimdal -d heimdal -f /docker-entrypoint-initdb.d/migrations/NNN_name.sql`
+- When deploying other services, ALWAYS use `--no-deps` to avoid touching postgres: `docker compose up -d --no-deps --build <service>`
+- Never run bare `docker compose up -d --build` — it may recreate postgres as a side effect.
+- The pgdata volume mounts to `/home/postgres/pgdata` (timescaledb-ha), NOT `/var/lib/postgresql/data`.
+- Before any risky operation, dump first: `docker compose exec postgres pg_dump -U heimdal -Fc heimdal > /data/raw/backup.dump`
+
 ### Domain Terminology
 
 > **CUSTOMIZE THIS SECTION** with project-specific terms the AI might not understand.

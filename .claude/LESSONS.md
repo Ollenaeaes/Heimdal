@@ -17,6 +17,12 @@ This file is read at the start of every session. It captures mistakes, patterns,
 - (2026-03-12) Never use f-strings for SQL table names, even with hardcoded values. Use pre-built `text()` objects instead. The `# noqa: S608` comment hides the problem, doesn't fix it.
 - (2026-03-12) For bbox parameters, always validate and return HTTP 400 on invalid input. Never silently return unfiltered results — the client thinks filtering is applied when it isn't.
 
+## Production Database
+
+- (2026-03-16) **NEVER rebuild or recreate the prod postgres container.** All schema changes must be SQL migrations applied via `psql -f`. Rebuilding wipes all data — equasis imports, manual enrichment, watchlists, and scoring history are irreplaceable. Use `--no-deps` when deploying other services.
+- (2026-03-16) **The timescaledb-ha image uses `/home/postgres/pgdata` as PGDATA**, not `/var/lib/postgresql/data`. The volume mount must point to `/home/postgres/pgdata` or data is stored in the container's ephemeral filesystem and lost on recreation.
+- (2026-03-16) **Always dump before any infra change:** `docker compose exec postgres pg_dump -U heimdal -Fc heimdal > /data/raw/backup.dump`. The `/data/raw/` path is a host bind mount that survives container operations.
+
 ## Mistakes to Avoid
 
 - (2026-03-12) When parallel subagents all modify `main.py` (adding router imports), verify the final state after all complete — concurrent edits can conflict or duplicate lines.
