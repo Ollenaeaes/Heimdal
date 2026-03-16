@@ -52,24 +52,26 @@ async def health(request: Request, response: Response):
 
     # --- Redis check ---
     redis_ok = False
-    try:
-        pong = await redis.ping()
-        redis_ok = bool(pong)
-    except Exception:
-        logger.warning("Redis health check failed", exc_info=True)
+    if redis is not None:
+        try:
+            pong = await redis.ping()
+            redis_ok = bool(pong)
+        except Exception:
+            logger.warning("Redis health check failed", exc_info=True)
 
     # --- AIS websocket state (inferred from last_message_at) ---
     last_position_ts: str | None = None
     ais_connected = False
-    try:
-        last_position_ts = await redis.get(_LAST_MESSAGE_KEY)
-        if last_position_ts:
-            last_dt = datetime.fromisoformat(last_position_ts)
-            age_seconds = (datetime.now(timezone.utc) - last_dt).total_seconds()
-            # Consider AIS connected if we received a message in the last 120s
-            ais_connected = age_seconds < 120
-    except Exception:
-        logger.warning("Failed to read AIS metrics from Redis", exc_info=True)
+    if redis is not None:
+        try:
+            last_position_ts = await redis.get(_LAST_MESSAGE_KEY)
+            if last_position_ts:
+                last_dt = datetime.fromisoformat(last_position_ts)
+                age_seconds = (datetime.now(timezone.utc) - last_dt).total_seconds()
+                # Consider AIS connected if we received a message in the last 120s
+                ais_connected = age_seconds < 120
+        except Exception:
+            logger.warning("Failed to read AIS metrics from Redis", exc_info=True)
 
     # --- Vessel & anomaly counts from DB ---
     vessel_count = 0
@@ -141,8 +143,9 @@ async def health(request: Request, response: Response):
     # Background service heartbeats are informational — reported in the
     # response body so the frontend can show warnings, but don't make the
     # API itself appear unavailable.
-    core_healthy = db_ok and redis_ok
-    all_healthy = core_healthy and not any_service_degraded
+    # DB is required; Redis is optional in batch mode
+    core_healthy = db_ok
+    all_healthy = core_healthy and redis_ok and not any_service_degraded
     if not core_healthy:
         response.status_code = 503
 
@@ -215,12 +218,13 @@ async def stats(request: Request):
 
     # --- Ingestion metrics from Redis ---
     ingest_rate: float | None = None
-    try:
-        raw_rate = await redis.get(_RATE_KEY)
-        if raw_rate is not None:
-            ingest_rate = float(raw_rate)
-    except Exception:
-        logger.warning("Failed to read ingestion rate from Redis", exc_info=True)
+    if redis is not None:
+        try:
+            raw_rate = await redis.get(_RATE_KEY)
+            if raw_rate is not None:
+                ingest_rate = float(raw_rate)
+        except Exception:
+            logger.warning("Failed to read ingestion rate from Redis", exc_info=True)
 
     # --- Storage usage estimate (fast reltuples estimate, not exact COUNT) ---
     storage_estimate: dict[str, int] = {}
