@@ -2,15 +2,19 @@
 
 Uses the GFW API token directly as a Bearer token on every request.
 Enforces configurable rate limits, retries on transient errors, and
-handles paginated responses automatically.
+handles paginated responses automatically.  Tracks daily/monthly API
+usage against GFW quota limits (persisted to a JSON file on disk).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json as json_mod
 import logging
 import sys
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -41,6 +45,88 @@ class GFWAPIError(Exception):
     def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.status_code = status_code
+
+
+class GFWQuotaExceeded(Exception):
+    """Raised when the daily or monthly API quota would be exceeded."""
+
+
+class _QuotaTracker:
+    """Tracks daily and monthly GFW API call counts in a persistent JSON file.
+
+    File format::
+
+        {
+          "daily": {"date": "2026-03-16", "count": 123},
+          "monthly": {"month": "2026-03", "count": 4567}
+        }
+    """
+
+    def __init__(
+        self,
+        path: str,
+        daily_limit: int,
+        monthly_limit: int,
+    ):
+        self._path = Path(path)
+        self._daily_limit = daily_limit
+        self._monthly_limit = monthly_limit
+        self._data: dict[str, Any] = self._load()
+
+    def _load(self) -> dict[str, Any]:
+        try:
+            return json_mod.loads(self._path.read_text())
+        except (FileNotFoundError, json_mod.JSONDecodeError, OSError):
+            return {"daily": {"date": "", "count": 0}, "monthly": {"month": "", "count": 0}}
+
+    def _save(self) -> None:
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.write_text(json_mod.dumps(self._data))
+        except OSError:
+            logger.warning("Failed to persist GFW quota file to %s", self._path)
+
+    def _roll_windows(self) -> None:
+        """Reset counters if the date/month has changed."""
+        now = datetime.now(timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+        month = now.strftime("%Y-%m")
+
+        if self._data["daily"].get("date") != today:
+            self._data["daily"] = {"date": today, "count": 0}
+        if self._data["monthly"].get("month") != month:
+            self._data["monthly"] = {"month": month, "count": 0}
+
+    def check_quota(self) -> None:
+        """Raise GFWQuotaExceeded if we'd exceed the daily or monthly limit."""
+        self._roll_windows()
+        d = self._data["daily"]["count"]
+        m = self._data["monthly"]["count"]
+        if d >= self._daily_limit:
+            raise GFWQuotaExceeded(
+                f"GFW daily quota reached: {d}/{self._daily_limit} requests"
+            )
+        if m >= self._monthly_limit:
+            raise GFWQuotaExceeded(
+                f"GFW monthly quota reached: {m}/{self._monthly_limit} requests"
+            )
+
+    def record_call(self) -> None:
+        """Increment both daily and monthly counters and persist."""
+        self._roll_windows()
+        self._data["daily"]["count"] += 1
+        self._data["monthly"]["count"] += 1
+        self._save()
+
+    def get_usage(self) -> dict[str, Any]:
+        """Return current usage stats."""
+        self._roll_windows()
+        return {
+            "daily_calls": self._data["daily"]["count"],
+            "daily_limit": self._daily_limit,
+            "monthly_calls": self._data["monthly"]["count"],
+            "monthly_limit": self._monthly_limit,
+        }
 
 
 class GFWClient:
@@ -83,6 +169,13 @@ class GFWClient:
         self._total_call_duration_ms: float = 0.0
         self._retry_count: int = 0
 
+        # Persistent daily/monthly quota tracker
+        self._quota = _QuotaTracker(
+            path=settings.gfw.quota_file_path,
+            daily_limit=settings.gfw.daily_request_limit,
+            monthly_limit=settings.gfw.monthly_request_limit,
+        )
+
     async def __aenter__(self) -> GFWClient:
         self._http = httpx.AsyncClient(
             base_url=self._base_url,
@@ -112,12 +205,14 @@ class GFWClient:
             if self._call_count > 0
             else 0.0
         )
-        return {
+        stats = {
             "api_calls_made": self._call_count,
             "total_call_duration_ms": round(self._total_call_duration_ms, 1),
             "avg_call_duration_ms": round(avg_ms, 1),
             "rate_limit_retries": self._retry_count,
         }
+        stats.update(self._quota.get_usage())
+        return stats
 
     # ------------------------------------------------------------------
     # Rate limiting
@@ -187,6 +282,9 @@ class GFWClient:
         if not self._http:
             raise RuntimeError("Client not initialized. Use 'async with GFWClient() as client:'")
 
+        # Check daily/monthly quota before making the request
+        self._quota.check_quota()
+
         backoff = INITIAL_BACKOFF
 
         for attempt in range(MAX_RETRIES + 1):
@@ -206,6 +304,7 @@ class GFWClient:
                 # Track stats
                 self._call_count += 1
                 self._total_call_duration_ms += duration_ms
+                self._quota.record_call()
 
                 if response.status_code in RETRYABLE_STATUS_CODES:
                     if attempt < MAX_RETRIES:

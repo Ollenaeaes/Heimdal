@@ -386,31 +386,45 @@ async def enrich_batch(
     if not gfw_enabled:
         logger.info("GFW enrichment disabled, skipping steps 1-3")
     else:
+        from gfw_client import GFWQuotaExceeded
+
+        gfw_quota_hit = False
+
         # Step 1: GFW Events
         try:
             count = await _events_fn(gfw_client, session, mmsis, redis_client=redis_client)
             gfw_events_count = count
             logger.info("GFW Events: fetched %d events for %d vessels", count, len(mmsis))
+        except GFWQuotaExceeded as e:
+            logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
+            gfw_quota_hit = True
         except Exception:
             logger.exception("GFW Events pipeline failed for batch")
 
         # Step 2: GFW SAR
-        if aois:
+        if aois and not gfw_quota_hit:
             try:
                 count = await _sar_fn(gfw_client, session, aois)
                 sar_detections_count = count
                 logger.info("GFW SAR: fetched %d detections", count)
+            except GFWQuotaExceeded as e:
+                logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
+                gfw_quota_hit = True
             except Exception:
                 logger.exception("GFW SAR pipeline failed for batch")
 
         # Step 3: GFW Vessel Identity
-        for mmsi in mmsis:
-            try:
-                await _vessel_fn(
-                    gfw_client, session, mmsi, redis_client=redis_client
-                )
-            except Exception:
-                logger.warning("GFW Vessel Identity failed for MMSI %d", mmsi, exc_info=True)
+        if not gfw_quota_hit:
+            for mmsi in mmsis:
+                try:
+                    await _vessel_fn(
+                        gfw_client, session, mmsi, redis_client=redis_client
+                    )
+                except GFWQuotaExceeded as e:
+                    logger.warning("GFW quota exceeded at vessel identity step: %s", e)
+                    break
+                except Exception:
+                    logger.warning("GFW Vessel Identity failed for MMSI %d", mmsi, exc_info=True)
 
     # Track vessels that failed critical enrichment — don't mark as enriched
     failed_mmsis: set[int] = set()
@@ -789,7 +803,8 @@ async def run_loop(
 
             logger.info(
                 "Enrichment cycle complete in %.1fs: %d vessels, %d events, %d SAR"
-                " | API calls: %d, avg %.0fms, retries: %d",
+                " | API calls: %d, avg %.0fms, retries: %d"
+                " | quota: %d/%d daily, %d/%d monthly",
                 elapsed,
                 result["total_vessels"],
                 result["gfw_events_count"],
@@ -797,6 +812,10 @@ async def run_loop(
                 summary_extra.get("api_calls_made", 0),
                 summary_extra.get("avg_call_duration_ms", 0),
                 summary_extra.get("rate_limit_retries", 0),
+                summary_extra.get("daily_calls", 0),
+                summary_extra.get("daily_limit", 0),
+                summary_extra.get("monthly_calls", 0),
+                summary_extra.get("monthly_limit", 0),
                 extra=summary_extra,
             )
         except Exception:

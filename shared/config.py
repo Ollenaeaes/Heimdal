@@ -61,6 +61,10 @@ class GfwConfig(BaseSettings):
     events_lookback_days: int = 30
     sar_lookback_days: int = 14
     vessel_cache_ttl_hours: int = 24
+    # API quota limits (90% of GFW limits: 50K daily, 1.55M monthly)
+    daily_request_limit: int = 45000
+    monthly_request_limit: int = 1395000
+    quota_file_path: str = "/data/raw/.gfw_api_usage.json"
 
 
 class RetentionConfig(BaseSettings):

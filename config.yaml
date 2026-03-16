@@ -123,7 +123,7 @@ enrichment:
 
 # -- Global Fishing Watch API --------------------------------------------------
 gfw:
-  enabled: false  # Disabled — hit API rate limit. Re-enable when quota resets.
+  enabled: true
   base_url: "https://gateway.api.globalfishingwatch.org"
 
   # Max requests per second to GFW APIs.
