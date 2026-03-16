@@ -10,6 +10,7 @@ const BG_COLOR = '#0F172A';
 const LAND_COLOR = '#1E293B';
 const RED_DOT = '#EF4444';
 const YELLOW_DOT = '#EAB308';
+const BLACKLISTED_DOT = '#9333EA';
 const VIEW_RECT_COLOR = 'rgba(255, 255, 255, 0.7)';
 
 /**
@@ -80,7 +81,7 @@ export default function Minimap() {
     for (const v of vessels.values()) {
       if (v.riskTier === 'green') continue;
       const [vx, vy] = lonLatToCanvas(v.lon, v.lat);
-      ctx.fillStyle = v.riskTier === 'red' ? RED_DOT : YELLOW_DOT;
+      ctx.fillStyle = v.riskTier === 'blacklisted' ? BLACKLISTED_DOT : v.riskTier === 'red' ? RED_DOT : YELLOW_DOT;
       ctx.fillRect(vx - 1, vy - 1, 2, 2);
     }
 

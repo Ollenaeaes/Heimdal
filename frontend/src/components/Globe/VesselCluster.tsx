@@ -26,9 +26,10 @@ const RISK_TIER_PRIORITY: Record<RiskTier, number> = {
   green: 0,
   yellow: 1,
   red: 2,
+  blacklisted: 3,
 };
 
-const RISK_TIERS_BY_PRIORITY: RiskTier[] = ['green', 'yellow', 'red'];
+const RISK_TIERS_BY_PRIORITY: RiskTier[] = ['green', 'yellow', 'red', 'blacklisted'];
 
 /**
  * Given an array of risk tiers, return the highest-severity tier.
@@ -168,7 +169,7 @@ export function VesselCluster() {
     >
       {visibleVessels.map((v) => {
         const style = MARKER_STYLE[v.riskTier];
-        const isRed = v.riskTier === 'red';
+        const isRed = v.riskTier === 'red' || v.riskTier === 'blacklisted';
         const position = Cartesian3.fromDegrees(v.lon, v.lat);
 
         return (

@@ -1,7 +1,7 @@
-import { Entity, PolygonGraphics } from 'resium';
-import { Cartesian3, Color, MaterialProperty } from 'cesium';
+import { useEffect, useRef } from 'react';
+import { Color, HeatmapVisualizerCompat } from 'cesium';
 import { useQuery } from '@tanstack/react-query';
-import type { GnssZone } from '../../types/api';
+import { getCesiumViewer } from './cesiumViewer';
 
 export interface GnssZoneOverlayProps {
   visible: boolean;
@@ -10,72 +10,84 @@ export interface GnssZoneOverlayProps {
 /** Base color for GNSS interference zones. */
 const GNSS_BASE_COLOR = '#FF4444';
 
-/**
- * Compute opacity for a GNSS zone based on affected vessel count.
- * 3 vessels = 0.15, 10+ vessels = 0.5, linear interpolation between.
- */
 export function computeGnssOpacity(affectedCount: number): number {
   if (affectedCount <= 3) return 0.15;
   if (affectedCount >= 10) return 0.5;
-  // Linear interpolation between 3 and 10
   return 0.15 + ((affectedCount - 3) / (10 - 3)) * (0.5 - 0.15);
 }
 
-interface GnssFeature {
-  properties: {
-    id: number;
-    detected_at: string;
-    expires_at: string;
-    affected_count: number;
-    details: Record<string, unknown>;
-  };
-  geometry: {
-    type: string;
-    coordinates: number[][][];
-  };
-}
-
-interface GnssGeoJson {
-  type: string;
-  features: GnssFeature[];
+interface SpoofingPoint {
+  lat: number;
+  lon: number;
+  mmsi: number;
+  rule: string;
+  severity: string;
+  ship_name: string | null;
+  time: string | null;
 }
 
 /**
- * Renders active GNSS interference zones as semi-transparent red-orange polygons.
- * Opacity scales with affected_count.
+ * Renders GNSS spoofing events as colored point markers on the globe.
+ * Points are colored by severity and clustered visually.
  */
 export function GnssZoneOverlay({ visible }: GnssZoneOverlayProps) {
-  const { data } = useQuery<GnssGeoJson>({
-    queryKey: ['gnssZones'],
-    queryFn: () => fetch('/api/gnss-zones').then((r) => r.json()),
+  const entitiesRef = useRef<any[]>([]);
+
+  const { data } = useQuery<{ points: SpoofingPoint[]; count: number }>({
+    queryKey: ['gnssSpoofingEvents'],
+    queryFn: () => fetch('/api/gnss-spoofing-events').then((r) => r.json()),
     refetchInterval: 60_000,
     enabled: visible,
   });
 
-  if (!visible || !data?.features) return null;
+  useEffect(() => {
+    const viewer = getCesiumViewer();
+    if (!viewer || viewer.isDestroyed()) return;
 
-  return (
-    <>
-      {data.features.map((feature) => {
-        const coords = feature.geometry.coordinates[0];
-        if (!coords) return null;
+    // Clean up previous entities
+    for (const entity of entitiesRef.current) {
+      viewer.entities.remove(entity);
+    }
+    entitiesRef.current = [];
 
-        const hierarchy = coords.map(([lon, lat]) => Cartesian3.fromDegrees(lon, lat));
-        const opacity = computeGnssOpacity(feature.properties.affected_count);
-        const fillColor = Color.fromCssColorString(GNSS_BASE_COLOR).withAlpha(opacity);
+    if (!visible || !data?.points?.length) return;
 
-        return (
-          <Entity key={`gnss-zone-${feature.properties.id}`}>
-            <PolygonGraphics
-              hierarchy={hierarchy}
-              material={fillColor as unknown as MaterialProperty}
-              outline
-              outlineColor={Color.fromCssColorString(GNSS_BASE_COLOR)}
-              outlineWidth={2}
-            />
-          </Entity>
-        );
-      })}
-    </>
-  );
+    const { Cartesian3, Entity, PointGraphics: _PG } = require('cesium');
+
+    for (const pt of data.points) {
+      const color = pt.severity === 'critical'
+        ? Color.fromCssColorString('#EF4444').withAlpha(0.7)
+        : pt.severity === 'high'
+        ? Color.fromCssColorString('#F97316').withAlpha(0.6)
+        : Color.fromCssColorString('#EAB308').withAlpha(0.5);
+
+      const entity = viewer.entities.add({
+        position: Cartesian3.fromDegrees(pt.lon, pt.lat),
+        point: {
+          pixelSize: 8,
+          color,
+          outlineColor: Color.fromCssColorString('#FF4444').withAlpha(0.3),
+          outlineWidth: 4,
+        },
+        name: `spoofing-${pt.mmsi}`,
+        description: `<b>Spoofing Event</b><br/>`
+          + `Vessel: ${pt.ship_name?.trim() || `MMSI ${pt.mmsi}`}<br/>`
+          + `Rule: ${pt.rule.replace(/_/g, ' ')}<br/>`
+          + `Severity: ${pt.severity}<br/>`
+          + (pt.time ? `Time: ${new Date(pt.time).toUTCString()}` : ''),
+      });
+      entitiesRef.current.push(entity);
+    }
+
+    return () => {
+      if (viewer && !viewer.isDestroyed()) {
+        for (const entity of entitiesRef.current) {
+          viewer.entities.remove(entity);
+        }
+        entitiesRef.current = [];
+      }
+    };
+  }, [visible, data]);
+
+  return null;
 }

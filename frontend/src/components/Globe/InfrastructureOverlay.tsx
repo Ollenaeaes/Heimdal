@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Cartesian3, Color, GeoJsonDataSource, Entity as CesiumEntity } from 'cesium';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Cartesian3, Color, GeoJsonDataSource, Entity as CesiumEntity, Math as CesiumMath } from 'cesium';
 import { useQuery } from '@tanstack/react-query';
 import { getCesiumViewer } from './cesiumViewer';
 
@@ -57,11 +57,53 @@ function formatTimeAgo(ts: string): string {
  */
 export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
   const dataSourceRef = useRef<GeoJsonDataSource | null>(null);
+  const [bbox, setBbox] = useState({ west: -180, south: -90, east: 180, north: 90 });
+
+  // Track camera viewport — only fetch cables in view
+  useEffect(() => {
+    if (!visible) return;
+    const viewer = getCesiumViewer();
+    if (!viewer || viewer.isDestroyed()) return;
+    const updateBbox = () => {
+      try {
+        const rect = viewer.camera.computeViewRectangle();
+        if (rect) {
+          const dLon = (rect.east - rect.west) * 0.1;
+          const dLat = (rect.north - rect.south) * 0.1;
+          setBbox({
+            west: CesiumMath.toDegrees(rect.west - dLon),
+            south: CesiumMath.toDegrees(rect.south - dLat),
+            east: CesiumMath.toDegrees(rect.east + dLon),
+            north: CesiumMath.toDegrees(rect.north + dLat),
+          });
+        }
+      } catch { /* viewer destroyed */ }
+    };
+    updateBbox();
+    const removeListener = viewer.camera.moveEnd.addEventListener(updateBbox);
+    return () => removeListener();
+  }, [visible]);
+
+  const simplify = useMemo(() => {
+    const span = bbox.east - bbox.west;
+    if (span > 180) return 0.5;
+    if (span > 60) return 0.1;
+    if (span > 20) return 0.02;
+    return 0;
+  }, [bbox]);
 
   const { data: routesData } = useQuery<{ type: string; features: any[] }>({
-    queryKey: ['infrastructureRoutes'],
-    queryFn: () => fetch('/api/infrastructure/routes').then((r) => r.json()),
+    queryKey: ['infrastructureRoutes', bbox.west, bbox.south, bbox.east, bbox.north, simplify],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        west: bbox.west.toFixed(2), south: bbox.south.toFixed(2),
+        east: bbox.east.toFixed(2), north: bbox.north.toFixed(2),
+        simplify: simplify.toString(),
+      });
+      return fetch(`/api/infrastructure/routes?${params}`).then((r) => r.json());
+    },
     enabled: visible,
+    staleTime: 60_000,
   });
 
   const { data: alertsData } = useQuery<{ alerts: InfrastructureAlert[] }>({
@@ -133,7 +175,7 @@ export function InfrastructureOverlay({ visible }: InfrastructureOverlayProps) {
           desc += `<br/><br/><b style="color:#EF4444;">Alerts (${routeAlerts.length})</b>`;
           for (const a of routeAlerts) {
             const status = a.active ? '<span style="color:#EF4444;">ACTIVE</span>' : `ended ${formatTimeAgo(a.exit_time!)}`;
-            desc += `<div style="margin:4px 0;padding:4px;border-left:3px solid ${a.risk_tier === 'red' ? '#EF4444' : '#EAB308'};padding-left:8px;">`;
+            desc += `<div style="margin:4px 0;padding:4px;border-left:3px solid ${a.risk_tier === 'blacklisted' ? '#9333EA' : a.risk_tier === 'red' ? '#EF4444' : '#EAB308'};padding-left:8px;">`;
             desc += `<b>${a.vessel_name?.trim() || `MMSI ${a.mmsi}`}</b> (${a.risk_tier.toUpperCase()})`;
             desc += `<br/>Entry: ${new Date(a.entry_time).toUTCString()}`;
             desc += `<br/>Status: ${status}`;

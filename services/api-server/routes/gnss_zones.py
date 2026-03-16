@@ -61,3 +61,61 @@ async def get_gnss_zones():
         "type": "FeatureCollection",
         "features": features,
     }
+
+
+@router.get("/gnss-spoofing-events")
+async def get_spoofing_events():
+    """Return recent spoofing event locations for heatmap rendering.
+
+    Aggregates lat/lon from spoofing anomaly details (last 7 days).
+    Returns points with intensity based on event count per grid cell.
+    """
+    session_factory = get_session()
+    async with session_factory() as session:
+        # Get spoofing events with lat/lon from details or from vessel positions
+        result = await session.execute(
+            text("""
+                SELECT ae.mmsi, ae.rule_id, ae.points, ae.severity,
+                    ae.created_at,
+                    COALESCE(
+                        (ae.details->>'lat')::float,
+                        (ae.details->>'latest_land_lat')::float,
+                        vp.last_lat
+                    ) AS lat,
+                    COALESCE(
+                        (ae.details->>'lon')::float,
+                        (ae.details->>'latest_land_lon')::float,
+                        vp.last_lon
+                    ) AS lon,
+                    vp.ship_name
+                FROM anomaly_events ae
+                JOIN vessel_profiles vp ON vp.mmsi = ae.mmsi
+                WHERE ae.rule_id IN (
+                    'spoof_land_position', 'spoof_impossible_speed',
+                    'spoof_frozen_position', 'spoof_duplicate_mmsi',
+                    'spoof_identity_mismatch', 'ais_spoofing'
+                )
+                AND ae.created_at > NOW() - INTERVAL '7 days'
+                ORDER BY ae.created_at DESC
+                LIMIT 5000
+            """)
+        )
+        rows = result.mappings().all()
+
+    points = []
+    for row in rows:
+        lat = row["lat"]
+        lon = row["lon"]
+        if lat is None or lon is None:
+            continue
+        points.append({
+            "lat": lat,
+            "lon": lon,
+            "mmsi": row["mmsi"],
+            "rule": row["rule_id"],
+            "severity": row["severity"],
+            "ship_name": row["ship_name"],
+            "time": row["created_at"].isoformat() if row["created_at"] else None,
+        })
+
+    return {"points": points, "count": len(points)}

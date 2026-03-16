@@ -150,8 +150,8 @@ describe('Risk tier badge colors', () => {
     expect(getRiskColor('red')).toBe('#EF4444');
   });
 
-  it('RISK_COLORS has all three tiers', () => {
-    expect(Object.keys(RISK_COLORS)).toEqual(['green', 'yellow', 'red']);
+  it('RISK_COLORS has all four tiers', () => {
+    expect(Object.keys(RISK_COLORS)).toEqual(['green', 'yellow', 'red', 'blacklisted']);
   });
 });
 

@@ -2,6 +2,7 @@ export const RISK_COLORS = {
   green: '#22C55E',
   yellow: '#F59E0B',
   red: '#EF4444',
+  blacklisted: '#9333EA',
 } as const;
 
 export type RiskTier = keyof typeof RISK_COLORS;

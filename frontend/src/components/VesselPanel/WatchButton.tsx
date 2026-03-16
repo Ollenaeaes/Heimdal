@@ -30,8 +30,8 @@ export function WatchButton({ mmsi }: WatchButtonProps) {
       } disabled:opacity-50`}
       aria-label={isWatched ? 'Unwatch vessel' : 'Watch vessel'}
     >
-      <span className="text-sm">{isWatched ? '⊙' : '⊙'}</span>
-      {isWatched ? 'Unwatch' : 'Watch'}
+      <span className="text-sm">{isWatched ? '\u25C9' : '\u25CB'}</span>
+      {isWatched ? 'Watching' : 'Watch'}
     </button>
   );
 }

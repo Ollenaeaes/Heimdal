@@ -116,7 +116,7 @@ describe('StatsBar', () => {
   it('stats response shape contains expected fields', () => {
     // Validates the expected shape by creating a mock and checking it type-checks
     const mockStats = {
-      risk_tiers: { green: 1200, yellow: 50, red: 10 },
+      risk_tiers: { green: 1200, yellow: 50, red: 10, blacklisted: 2 },
       anomalies: { total_active: 35, by_severity: { high: 10, medium: 15, low: 10 } },
       dark_ships: 5,
       ingestion_rate: 42.5,

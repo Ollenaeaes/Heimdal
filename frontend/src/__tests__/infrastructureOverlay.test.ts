@@ -157,7 +157,7 @@ describe('Risk halo filtering logic', () => {
       { mmsi: 211000001, lat: 60.4, lon: 5.2, riskTier: 'yellow', riskScore: 55 },
     ];
     const riskyVessels = vessels.filter(
-      (v) => v.riskTier === 'yellow' || v.riskTier === 'red',
+      (v) => v.riskTier === 'yellow' || v.riskTier === 'red' || v.riskTier === 'blacklisted',
     );
     expect(riskyVessels).toHaveLength(1);
     expect(riskyVessels[0].riskTier).toBe('yellow');
@@ -168,7 +168,7 @@ describe('Risk halo filtering logic', () => {
       { mmsi: 273456789, lat: 60.42, lon: 5.3, riskTier: 'red', riskScore: 85 },
     ];
     const riskyVessels = vessels.filter(
-      (v) => v.riskTier === 'yellow' || v.riskTier === 'red',
+      (v) => v.riskTier === 'yellow' || v.riskTier === 'red' || v.riskTier === 'blacklisted',
     );
     expect(riskyVessels).toHaveLength(1);
     expect(riskyVessels[0].riskTier).toBe('red');
@@ -179,7 +179,7 @@ describe('Risk halo filtering logic', () => {
       { mmsi: 311000001, lat: 60.41, lon: 5.25, riskTier: 'green', riskScore: 5 },
     ];
     const riskyVessels = vessels.filter(
-      (v) => v.riskTier === 'yellow' || v.riskTier === 'red',
+      (v) => v.riskTier === 'yellow' || v.riskTier === 'red' || v.riskTier === 'blacklisted',
     );
     expect(riskyVessels).toHaveLength(0);
   });
@@ -192,7 +192,7 @@ describe('Risk halo filtering logic', () => {
       { mmsi: 400, lat: 60.43, lon: 5.35, riskTier: 'green', riskScore: 10 },
     ];
     const riskyVessels = vessels.filter(
-      (v) => v.riskTier === 'yellow' || v.riskTier === 'red',
+      (v) => v.riskTier === 'yellow' || v.riskTier === 'red' || v.riskTier === 'blacklisted',
     );
     expect(riskyVessels).toHaveLength(2);
     expect(riskyVessels.map((v) => v.mmsi)).toEqual([200, 300]);

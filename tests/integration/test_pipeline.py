@@ -61,7 +61,7 @@ class TestIngestToApiPipeline:
             vessel = body["items"][0]
             assert "risk_score" in vessel
             assert "risk_tier" in vessel
-            assert vessel["risk_tier"] in ("green", "yellow", "red")
+            assert vessel["risk_tier"] in ("green", "yellow", "red", "blacklisted")
 
     def test_anomalies_endpoint_returns_structured_response(self):
         """GET /api/anomalies returns anomaly events with scoring data."""

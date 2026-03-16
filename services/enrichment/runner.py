@@ -41,7 +41,7 @@ ENRICHMENT_CHANNEL = "heimdal:enrichment_complete"
 TRIGGER_KEY = "heimdal:enrichment_triggered"
 
 # Tiers that trigger immediate enrichment on transition
-TRIGGER_TIERS = {"yellow", "red"}
+TRIGGER_TIERS = {"yellow", "red", "blacklisted"}
 
 # Default debounce window for tier-change triggered enrichment (hours)
 DEFAULT_DEBOUNCE_HOURS = 1
@@ -114,15 +114,17 @@ async def get_vessels_needing_enrichment(
     green_hours: float = 6,
     yellow_hours: float = 2,
     red_hours: float = 1,
+    blacklisted_hours: float = 0.5,
 ) -> list[int]:
     """Get MMSIs needing enrichment, prioritized by risk tier.
 
     Each risk tier has its own enrichment interval:
+      - blacklisted: every ``blacklisted_hours`` (default 0.5h)
       - red: every ``red_hours`` (default 1h)
       - yellow: every ``yellow_hours`` (default 2h)
       - green: every ``green_hours`` (default 6h)
 
-    Returns vessels sorted by priority: red first, then yellow, then green.
+    Returns vessels sorted by priority: blacklisted first, then red, yellow, green.
 
     Args:
         session: An async SQLAlchemy session.
@@ -130,6 +132,7 @@ async def get_vessels_needing_enrichment(
         green_hours: Hours between enrichments for green vessels.
         yellow_hours: Hours between enrichments for yellow vessels.
         red_hours: Hours between enrichments for red vessels.
+        blacklisted_hours: Hours between enrichments for blacklisted vessels.
 
     Returns:
         List of MMSIs needing enrichment, ordered by risk tier priority.
@@ -143,13 +146,14 @@ async def get_vessels_needing_enrichment(
 
     # Tier-specific intervals in seconds
     intervals = {
+        "blacklisted": blacklisted_hours * 3600,
         "red": red_hours * 3600,
         "yellow": yellow_hours * 3600,
         "green": green_hours * 3600,
     }
 
     # Priority ordering
-    tier_priority = {"red": 0, "yellow": 1, "green": 2}
+    tier_priority = {"blacklisted": 0, "red": 1, "yellow": 2, "green": 3}
 
     now = datetime.now(timezone.utc).timestamp()
     needing: list[tuple[int, str]] = []
@@ -622,6 +626,7 @@ async def run_cycle(
     green_hours = freq.green_hours
     yellow_hours = freq.yellow_hours
     red_hours = freq.red_hours
+    blacklisted_hours = freq.blacklisted_hours
 
     # Get vessels needing enrichment, prioritized by risk tier
     unenriched = await get_vessels_needing_enrichment(
@@ -630,6 +635,7 @@ async def run_cycle(
         green_hours=green_hours,
         yellow_hours=yellow_hours,
         red_hours=red_hours,
+        blacklisted_hours=blacklisted_hours,
     )
     logger.info("Found %d vessels needing enrichment (adaptive frequency)", len(unenriched))
 

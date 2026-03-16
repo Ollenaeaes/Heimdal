@@ -46,6 +46,18 @@ class SpoofLandPositionRule(ScoringRule):
         if not recent_positions:
             return None
 
+        # Stationary vessels in ports/rivers often overlap land polygons.
+        # Skip if: nav status is Moored/At Anchor, OR vessel is stationary
+        # (SOG ≤ 0.5 kn). Real GPS spoofing shows a moving vessel reporting
+        # impossible land positions, not a stationary one in a berth.
+        latest = max(recent_positions, key=lambda p: p.get("timestamp", ""))
+        nav_status = latest.get("nav_status")
+        sog = latest.get("sog")
+        if nav_status in (1, 5):
+            return RuleResult(fired=False, rule_id=self.rule_id)
+        if sog is not None and sog <= 0.5:
+            return RuleResult(fired=False, rule_id=self.rule_id)
+
         # Check if land_mask table has data
         has_land_data = await self._has_land_mask_data()
         if not has_land_data:

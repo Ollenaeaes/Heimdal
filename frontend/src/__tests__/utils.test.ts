@@ -22,8 +22,8 @@ describe('riskColors', () => {
     expect(getRiskColor('red')).toBe('#EF4444');
   });
 
-  it('RISK_COLORS has exactly 3 tiers', () => {
-    expect(Object.keys(RISK_COLORS)).toEqual(['green', 'yellow', 'red']);
+  it('RISK_COLORS has exactly 4 tiers', () => {
+    expect(Object.keys(RISK_COLORS)).toEqual(['green', 'yellow', 'red', 'blacklisted']);
   });
 });
 

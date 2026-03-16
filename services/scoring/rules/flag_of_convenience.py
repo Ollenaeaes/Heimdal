@@ -49,13 +49,14 @@ class FlagOfConvenienceRule(ScoringRule):
         if not flag:
             return None
 
-        # Fraudulent registries = high risk (20 points)
+        # Fraudulent registries = moderate risk (10 points)
+        # Flag alone is circumstantial — needs corroboration from other rules
         if flag in FRAUDULENT_REGISTRY_FLAGS:
             return RuleResult(
                 fired=True,
                 rule_id=self.rule_id,
-                severity="high",
-                points=20.0,
+                severity="moderate",
+                points=10.0,
                 details={
                     "flag": flag,
                     "mmsi_mid": mmsi // 1000000,

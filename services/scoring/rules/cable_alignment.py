@@ -45,6 +45,9 @@ class CableAlignmentRule(ScoringRule):
     def rule_category(self) -> str:
         return "realtime"
 
+    # Service vessel types excluded from cable rules
+    _SERVICE_VESSEL_TYPES = {31, 32, 33, 50, 51, 52, 53, 55, 56, 57, 58, 59}
+
     async def evaluate(
         self,
         mmsi: int,
@@ -55,6 +58,11 @@ class CableAlignmentRule(ScoringRule):
     ) -> Optional[RuleResult]:
         if not recent_positions:
             return None
+
+        # Skip service vessels (tugs, pilots, SAR, cable layers)
+        ship_type = (profile or {}).get("ship_type")
+        if ship_type in self._SERVICE_VESSEL_TYPES:
+            return RuleResult(fired=False, rule_id=self.rule_id)
 
         # Get latest position
         sorted_pos = sorted(

@@ -18,35 +18,37 @@ SEVERITY_POINTS: dict[str, int] = {
 # 5 GFW-sourced + 13 real-time = 18+ rules
 # ---------------------------------------------------------------------------
 MAX_PER_RULE: dict[str, int] = {
-    # GFW-sourced rules — cap at max single firing
+    # GFW-sourced rules — confirmed behavioral evidence
     "gfw_ais_disabling": 100,
     "gfw_encounter": 100,
     "gfw_loitering": 40,
     "gfw_port_visit": 40,
     "gfw_dark_sar": 40,
-    # Real-time rules — cap at max single firing
-    "ais_gap": 40,
-    "sts_proximity": 40,
-    "destination_spoof": 40,
+    # Real-time rules — vessel-level risk indicators
+    "ais_gap": 20,
+    "sts_proximity": 15,
+    "destination_spoof": 15,
     "draft_change": 40,
     "flag_hopping": 40,
     "sanctions_match": 100,
-    "vessel_age": 40,
+    "vessel_age": 10,
     "speed_anomaly": 10,
     "identity_mismatch": 100,
-    "flag_of_convenience": 40,
-    "ais_spoofing": 100,
+    "flag_of_convenience": 10,
+    "ais_spoofing": 0,          # informational — feeds GNSS/Spoofing layer only
     "ownership_risk": 60,
     "insurance_class_risk": 60,
-    # AIS spoofing detection rules
-    "spoof_land_position": 100,
-    "spoof_impossible_speed": 100,
-    "spoof_duplicate_mmsi": 100,
-    "spoof_frozen_position": 40,
-    "spoof_identity_mismatch": 100,
+    # AIS spoofing detection rules — informational only (0 points).
+    # These are environmental/regional events, not vessel-level risk.
+    # A spoofed vessel is a victim, not a suspect.
+    "spoof_land_position": 0,
+    "spoof_impossible_speed": 0,
+    "spoof_duplicate_mmsi": 0,
+    "spoof_frozen_position": 0,
+    "spoof_identity_mismatch": 0,
     # GFW-sourced enrichment rule
     "voyage_pattern": 80,
-    # Infrastructure protection rules
+    # Infrastructure protection rules — actual threat indicators
     "cable_slow_transit": 140,
     "cable_alignment": 100,
     "infra_speed_anomaly": 15,

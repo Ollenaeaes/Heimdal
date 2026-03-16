@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from sqlalchemy import text
 
 from shared.db.connection import get_session
@@ -20,21 +20,40 @@ router = APIRouter(prefix="/api", tags=["infrastructure"])
 
 
 @router.get("/infrastructure/routes")
-async def get_infrastructure_routes():
+async def get_infrastructure_routes(
+    west: float = Query(-180),
+    south: float = Query(-90),
+    east: float = Query(180),
+    north: float = Query(90),
+    simplify: float = Query(0, description="Geometry simplification tolerance in degrees (0 = full detail)"),
+):
     """Return infrastructure routes as GeoJSON FeatureCollection.
 
-    Each feature is a LineString with properties: id, name, route_type,
-    operator, buffer_nm.
+    Supports bbox filtering via west/south/east/north query params so the
+    frontend only loads cables visible in the current viewport.
+    Optional simplify parameter reduces geometry complexity for zoomed-out views.
     """
     session_factory = get_session()
+
+    # Use simplified geometry when tolerance is set
+    if simplify > 0:
+        geom_expr = f"ST_AsGeoJSON(ST_SimplifyPreserveTopology(geometry::geometry, {simplify}))"
+    else:
+        geom_expr = "ST_AsGeoJSON(geometry::geometry)"
+
     async with session_factory() as session:
         result = await session.execute(
             text(
-                "SELECT id, name, route_type, operator, buffer_nm, "
-                "ST_AsGeoJSON(geometry::geometry) AS geojson "
-                "FROM infrastructure_routes "
-                "ORDER BY name"
-            )
+                f"SELECT id, name, route_type, operator, buffer_nm, "
+                f"{geom_expr} AS geojson "
+                f"FROM infrastructure_routes "
+                f"WHERE ST_Intersects("
+                f"  geometry::geometry, "
+                f"  ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
+                f") "
+                f"ORDER BY name"
+            ),
+            {"west": west, "south": south, "east": east, "north": north},
         )
         rows = result.mappings().all()
 
@@ -42,7 +61,10 @@ async def get_infrastructure_routes():
 
         features = []
         for row in rows:
-            geom = json.loads(row["geojson"])
+            geojson = row["geojson"]
+            if not geojson:
+                continue
+            geom = json.loads(geojson)
             features.append(
                 {
                     "type": "Feature",

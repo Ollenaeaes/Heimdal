@@ -377,7 +377,7 @@ class ScoringEngine:
             extra={"mmsi": mmsi, "query_duration_ms": round(query_ms, 2), "anomaly_count": len(all_anomalies)},
         )
         new_score = aggregate_score(all_anomalies)
-        new_tier = calculate_tier(new_score)
+        new_tier = calculate_tier(new_score, anomalies=all_anomalies)
 
         old_tier = (profile or {}).get("risk_tier", "green") or "green"
 

@@ -2,6 +2,7 @@
 
 Provides:
 - GET    /api/watchlist          — list all watchlisted vessels
+- GET    /api/watchlist/{mmsi}   — check if a vessel is on the watchlist
 - POST   /api/watchlist/{mmsi}   — add a vessel to the watchlist
 - DELETE /api/watchlist/{mmsi}   — remove a vessel from the watchlist
 """
@@ -29,13 +30,15 @@ class WatchlistAddBody(BaseModel):
 
 @router.get("")
 async def list_watchlist():
-    """Return all watchlisted vessels with their notes."""
+    """Return all watchlisted vessels joined with vessel profile data."""
     session_factory = get_session()
     async with session_factory() as session:
         result = await session.execute(
             text(
                 "SELECT w.mmsi, w.reason, w.added_at, "
-                "vp.ship_name, vp.flag_country, vp.risk_tier "
+                "vp.ship_name, vp.flag_country, vp.risk_tier, "
+                "vp.risk_score, vp.last_lat, vp.last_lon, "
+                "vp.last_position_time "
                 "FROM watchlist w "
                 "LEFT JOIN vessel_profiles vp ON w.mmsi = vp.mmsi "
                 "ORDER BY w.added_at DESC"
@@ -43,6 +46,27 @@ async def list_watchlist():
         )
         rows = [dict(r) for r in result.mappings().all()]
     return {"items": rows, "total": len(rows)}
+
+
+@router.get("/{mmsi}")
+async def check_watchlist(mmsi: int):
+    """Check if a vessel is on the watchlist. Returns 200 with data or 404."""
+    session_factory = get_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            text(
+                "SELECT w.mmsi, w.reason, w.added_at, "
+                "vp.ship_name, vp.risk_tier "
+                "FROM watchlist w "
+                "LEFT JOIN vessel_profiles vp ON w.mmsi = vp.mmsi "
+                "WHERE w.mmsi = :mmsi"
+            ),
+            {"mmsi": mmsi},
+        )
+        row = result.mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Vessel not on watchlist")
+    return dict(row)
 
 
 @router.post("/{mmsi}", status_code=201)

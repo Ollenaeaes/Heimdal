@@ -43,20 +43,37 @@ export function NetworkOverlay({ visible }: NetworkOverlayProps) {
     }
 
     const lineArr = data.edges
-      .filter((e) => e.lat != null && e.lon != null)
       .map((edge, i) => {
-        // Draw line from selected vessel to encounter location
         const selectedVessel = vessels.get(selectedMmsi!);
         if (!selectedVessel) return null;
 
+        // Find the other vessel in this edge
+        const otherMmsi = edge.vessel_a_mmsi === selectedMmsi ? edge.vessel_b_mmsi : edge.vessel_a_mmsi;
+        const otherVessel = vessels.get(otherMmsi);
+
+        // For encounter edges with location, draw to that location
+        // For ownership/other edges, draw between vessel positions
+        let endLon: number | undefined;
+        let endLat: number | undefined;
+
+        if (edge.lat != null && edge.lon != null) {
+          endLat = edge.lat;
+          endLon = edge.lon;
+        } else if (otherVessel) {
+          endLat = otherVessel.lat;
+          endLon = otherVessel.lon;
+        }
+
+        if (endLat == null || endLon == null) return null;
+
         const positions = [
           Cartesian3.fromDegrees(selectedVessel.lon, selectedVessel.lat),
-          Cartesian3.fromDegrees(edge.lon!, edge.lat!),
+          Cartesian3.fromDegrees(endLon, endLat),
         ];
 
         const colorHex = EDGE_TYPE_COLORS[edge.edge_type] ?? '#FFFFFF';
         const color = Color.fromCssColorString(colorHex);
-        const dashed = edge.edge_type === 'proximity';
+        const dashed = edge.edge_type === 'proximity' || edge.edge_type === 'ownership';
 
         return {
           id: `net-line-${i}`,

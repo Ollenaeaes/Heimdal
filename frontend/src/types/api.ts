@@ -79,7 +79,7 @@ export interface VesselDetail {
   heading?: number | null;
   navStatus?: number | null;
   riskScore: number;
-  riskTier: 'green' | 'yellow' | 'red';
+  riskTier: 'green' | 'yellow' | 'red' | 'blacklisted';
   networkScore?: number;
   owner?: string;
   operator?: string;

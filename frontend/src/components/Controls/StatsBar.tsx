@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 export interface StatsResponse {
-  risk_tiers: { green: number; yellow: number; red: number };
+  risk_tiers: { green: number; yellow: number; red: number; blacklisted: number };
   anomalies: { total_active: number; by_severity: Record<string, number> };
   dark_ships: number;
   ingestion_rate: number;
@@ -17,7 +17,7 @@ async function fetchStats(): Promise<StatsResponse> {
   const raw = await res.json();
   // Map actual API shape to expected frontend shape
   return {
-    risk_tiers: raw.vessels_by_risk_tier ?? raw.risk_tiers ?? { green: 0, yellow: 0, red: 0 },
+    risk_tiers: raw.vessels_by_risk_tier ?? raw.risk_tiers ?? { green: 0, yellow: 0, red: 0, blacklisted: 0 },
     anomalies: raw.anomalies ?? { total_active: 0, by_severity: raw.active_anomalies_by_severity ?? {} },
     dark_ships: raw.dark_ship_candidates ?? raw.dark_ships ?? 0,
     ingestion_rate: raw.ingestion_rate ?? 0,
@@ -58,7 +58,7 @@ export function StatsBar() {
     );
   }
 
-  const totalRisk = data.risk_tiers.green + data.risk_tiers.yellow + data.risk_tiers.red;
+  const totalRisk = data.risk_tiers.green + data.risk_tiers.yellow + data.risk_tiers.red + data.risk_tiers.blacklisted;
 
   return (
     <div data-testid="stats-bar" className="relative">
@@ -88,6 +88,12 @@ export function StatsBar() {
           value={data.risk_tiers.red.toLocaleString()}
           testId="stat-red"
           dotColor="bg-red-500"
+        />
+        <Chip
+          label="Blacklisted"
+          value={data.risk_tiers.blacklisted.toLocaleString()}
+          testId="stat-blacklisted"
+          dotColor="bg-purple-600"
         />
         <Chip
           label="Anomalies"
@@ -133,6 +139,13 @@ export function StatsBar() {
               percent={calcPercent(data.risk_tiers.red, totalRisk)}
               color="#EF4444"
               testId="bar-red"
+            />
+            <BarRow
+              label="Blacklisted"
+              value={data.risk_tiers.blacklisted}
+              percent={calcPercent(data.risk_tiers.blacklisted, totalRisk)}
+              color="#9333EA"
+              testId="bar-blacklisted"
             />
           </div>
 

@@ -92,16 +92,21 @@ class OwnershipRiskRule(ScoringRule):
             # No enrichment data — check if basic ownership fields exist.
             # If registered_owner or operator is populated, ownership is
             # known (just not from the enrichment pipeline).  Only flag
-            # opaque ownership when enrichment has been attempted
-            # (enriched_at is set) and still found nothing.
+            # opaque ownership when ownership-specific enrichment has been
+            # attempted (GFW identity or Equasis) and still found nothing.
+            # Note: enriched_at alone is NOT sufficient — it's set when any
+            # enrichment runs (e.g. sanctions-only).
             has_basic_owner = bool(
                 profile.get("registered_owner")
                 or profile.get("operator")
                 or profile.get("owner")
             )
-            enrichment_attempted = profile.get("enriched_at") is not None
+            ownership_enrichment_attempted = bool(
+                profile.get("equasis_data")
+                or profile.get("gfw_identity_data")
+            )
 
-            if not has_basic_owner and enrichment_attempted:
+            if not has_basic_owner and ownership_enrichment_attempted:
                 factors.append({
                     "factor": "opaque_ownership",
                     "severity": "moderate",

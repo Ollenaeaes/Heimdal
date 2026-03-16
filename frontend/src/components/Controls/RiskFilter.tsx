@@ -1,13 +1,13 @@
 import { useVesselStore } from '../../hooks/useVesselStore';
 import { RISK_COLORS } from '../../utils/riskColors';
 
-const TIERS = ['green', 'yellow', 'red'] as const;
+const TIERS = ['green', 'yellow', 'red', 'blacklisted'] as const;
 
 /** Compute vessel counts per risk tier from the vessels Map. */
 export function computeTierCounts(
   vessels: Map<number, { riskTier: string }>
 ): Record<string, number> {
-  const counts: Record<string, number> = { green: 0, yellow: 0, red: 0 };
+  const counts: Record<string, number> = { green: 0, yellow: 0, red: 0, blacklisted: 0 };
   for (const v of vessels.values()) {
     if (v.riskTier in counts) {
       counts[v.riskTier]++;

@@ -280,6 +280,7 @@ describe('NetworkGraph', () => {
       green: '#22C55E',
       yellow: '#EAB308',
       red: '#EF4444',
+      blacklisted: '#9333EA',
     };
 
     const data = makeNetworkApiResponse();

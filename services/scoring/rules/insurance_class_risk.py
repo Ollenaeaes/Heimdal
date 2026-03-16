@@ -139,11 +139,13 @@ class InsuranceClassRiskRule(ScoringRule):
 
         # Has any data source populated insurance/classification info?
         # If not, we can't fairly penalise for missing data.
+        # Note: enriched_at alone is NOT sufficient — it's set when any
+        # enrichment runs (e.g. sanctions-only). We need evidence that
+        # insurance/classification data was actually looked up.
         pi_details = profile.get("pi_details")
         has_pi_details = isinstance(pi_details, dict) and bool(pi_details)
         has_data = bool(
-            profile.get("enriched_at")
-            or profile.get("equasis_data")
+            profile.get("equasis_data")
             or class_society
             or profile.get("insurer")
             or has_pi_details

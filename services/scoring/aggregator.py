@@ -3,7 +3,7 @@
 This module provides three capabilities:
 
 1. **Score aggregation** — sum unresolved anomaly points with per-rule caps.
-2. **Tier calculation** — map aggregate score to green/yellow/red.
+2. **Tier calculation** — map aggregate score to green/yellow/red, or blacklisted for confirmed sanctions.
 3. **Dedup** — when a GFW-sourced anomaly overlaps a real-time anomaly for
    the same vessel and time window, suppress (resolve) the real-time anomaly.
 """
@@ -39,11 +39,45 @@ DEDUP_WINDOW_HOURS: int = 6
 # ---------------------------------------------------------------------------
 
 
-def calculate_tier(score: float) -> str:
+def calculate_tier(
+    score: float,
+    anomalies: Sequence[dict[str, Any]] | None = None,
+) -> str:
     """Return risk tier for a given score.
 
     Uses thresholds from ``settings.scoring``.
+
+    If *anomalies* are provided and the vessel has an active
+    ``sanctions_match`` anomaly with ``matched_field`` in ('imo', 'mmsi')
+    and confidence >= 0.9, returns ``'blacklisted'`` regardless of score.
     """
+    # Check for confirmed sanctions match → blacklisted (not score-based).
+    # Only actual sanctions programs qualify — MoU detentions, PSC records,
+    # and other non-sanctions datasets are informational, not blacklist-worthy.
+    _SANCTIONS_PROGRAMS = frozenset({
+        "sanctions", "ua_war_sanctions", "eu_sanctions_map",
+        "eu_journal_sanctions", "gb_fcdo_sanctions",
+        "ca_dfatd_sema_sanctions", "ch_seco_sanctions",
+        "us_sam_exclusions", "kp_rusi_reports",
+        "us_ofac_sdn", "eu_fsf", "gb_hmt_sanctions", "un_sc_sanctions",
+    })
+    if anomalies:
+        for anomaly in anomalies:
+            if anomaly.get("resolved", False):
+                continue
+            if anomaly.get("rule_id") != "sanctions_match":
+                continue
+            details = anomaly.get("details", {})
+            if isinstance(details, str):
+                details = json.loads(details)
+            if not isinstance(details, dict):
+                continue
+            matched_field = details.get("matched_field", "")
+            confidence = float(details.get("confidence", 0))
+            program = details.get("program", "")
+            if matched_field in ("imo", "mmsi") and confidence >= 0.9 and program in _SANCTIONS_PROGRAMS:
+                return "blacklisted"
+
     if score >= settings.scoring.red_threshold:
         return "red"
     if score >= settings.scoring.yellow_threshold:

@@ -85,8 +85,8 @@ class ScoringDebouncer:
         self._pending[mmsi] = handle
 
     def update_red_mmsis(self, mmsi: int, tier: str) -> None:
-        """Update the set of red-tier MMSIs for debounce interval selection."""
-        if tier == "red":
+        """Update the set of red/blacklisted-tier MMSIs for debounce interval selection."""
+        if tier in ("red", "blacklisted"):
             self._red_mmsis.add(mmsi)
         else:
             self._red_mmsis.discard(mmsi)

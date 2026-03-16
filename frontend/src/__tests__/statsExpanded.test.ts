@@ -57,7 +57,7 @@ describe('StatsResponse type — gfw_events field', () => {
 
     // Verify the type works at runtime by constructing a valid response
     const response: import('../components/Controls/StatsBar').StatsResponse = {
-      risk_tiers: { green: 120, yellow: 45, red: 35 },
+      risk_tiers: { green: 120, yellow: 45, red: 35, blacklisted: 3 },
       anomalies: { total_active: 23, by_severity: { critical: 3, high: 8, moderate: 7, low: 5 } },
       dark_ships: 12,
       ingestion_rate: 450,
@@ -78,7 +78,7 @@ describe('StatsResponse type — gfw_events field', () => {
 
   it('StatsResponse works without gfw_events field', () => {
     const response: import('../components/Controls/StatsBar').StatsResponse = {
-      risk_tiers: { green: 100, yellow: 50, red: 25 },
+      risk_tiers: { green: 100, yellow: 50, red: 25, blacklisted: 1 },
       anomalies: { total_active: 10, by_severity: { high: 5, low: 5 } },
       dark_ships: 8,
       ingestion_rate: 300,

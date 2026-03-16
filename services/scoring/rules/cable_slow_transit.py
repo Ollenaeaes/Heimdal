@@ -65,9 +65,15 @@ class CableSlowTransitRule(ScoringRule):
         if not recent_positions:
             return None
 
-        # Skip cable-laying vessels
+        # Skip cable-laying vessels, pilot boats, tugs, SAR, and other
+        # service vessels that routinely operate near cables.
+        # AIS ship types: 30=fishing, 31-32=towing, 33=dredging/cable,
+        # 50=pilot, 51=SAR, 52=tug, 53=port tender, 55=law enforcement
         ship_type = (profile or {}).get("ship_type")
         if ship_type == _CABLE_LAYER_SHIP_TYPE:
+            return RuleResult(fired=False, rule_id=self.rule_id)
+        _SERVICE_VESSEL_TYPES = {31, 32, 50, 51, 52, 53, 55, 56, 57, 58, 59}
+        if ship_type in _SERVICE_VESSEL_TYPES:
             return RuleResult(fired=False, rule_id=self.rule_id)
 
         # Get latest position
@@ -91,6 +97,12 @@ class CableSlowTransitRule(ScoringRule):
 
         # Check port approach exclusion
         if await self._check_port_approach(lat, lon):
+            await self._clear_redis_state(mmsi)
+            return RuleResult(fired=False, rule_id=self.rule_id)
+
+        # Stationary vessels (SOG ≤ 0.5 kn) are anchored/moored, not transiting.
+        # Only moving-but-slow vessels are suspicious in cable corridors.
+        if sog <= 0.5:
             await self._clear_redis_state(mmsi)
             return RuleResult(fired=False, rule_id=self.rule_id)
 

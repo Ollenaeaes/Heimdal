@@ -94,7 +94,7 @@ export function filterVessels(
   }
 
   // Sort: green drawn first (behind), red on top
-  const tierOrder: Record<string, number> = { green: 0, yellow: 1, red: 2 };
+  const tierOrder: Record<string, number> = { green: 0, yellow: 1, red: 2, blacklisted: 3 };
   result.sort((a, b) => (tierOrder[a.riskTier] ?? 0) - (tierOrder[b.riskTier] ?? 0));
 
   return result;

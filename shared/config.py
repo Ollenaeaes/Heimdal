@@ -22,13 +22,14 @@ from pydantic_settings import BaseSettings
 class ScoringDebounceConfig(BaseSettings):
     default_seconds: float = 60.0
     red_tier_seconds: float = 30.0
+    blacklisted_tier_seconds: float = 15.0
     max_batch_size: int = 50
     max_concurrent: int = 10
 
 
 class ScoringConfig(BaseSettings):
-    yellow_threshold: float = 50.0
-    red_threshold: float = 100.0
+    yellow_threshold: float = 30.0
+    red_threshold: float = 80.0
     debounce: ScoringDebounceConfig = Field(default_factory=ScoringDebounceConfig)
 
 
@@ -43,6 +44,7 @@ class EnrichmentFrequencyConfig(BaseSettings):
     green_hours: float = 6.0
     yellow_hours: float = 2.0
     red_hours: float = 1.0
+    blacklisted_hours: float = 0.5
 
 
 class EnrichmentConfig(BaseSettings):

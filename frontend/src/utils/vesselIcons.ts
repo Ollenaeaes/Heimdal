@@ -18,6 +18,7 @@ export const MARKER_STYLE: Record<
   green: { opacity: 0.7, opacityFar: 0.2, scale: 0.5 },
   yellow: { opacity: 0.8, opacityFar: 0.8, scale: 0.7 },
   red: { opacity: 1.0, opacityFar: 1.0, scale: 0.85 },
+  blacklisted: { opacity: 1.0, opacityFar: 1.0, scale: 0.95 },
 };
 
 /**

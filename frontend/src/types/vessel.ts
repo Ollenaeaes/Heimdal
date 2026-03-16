@@ -6,7 +6,7 @@ export interface VesselState {
   cog: number | null;
   heading: number | null;
   navStatus?: number | null;
-  riskTier: 'green' | 'yellow' | 'red';
+  riskTier: 'green' | 'yellow' | 'red' | 'blacklisted';
   riskScore: number;
   name?: string;
   timestamp: string; // ISO 8601

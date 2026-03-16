@@ -77,12 +77,12 @@ describe('RiskFilter — computeTierCounts', () => {
       [6, { riskTier: 'red' }],
     ]);
     const counts = computeTierCounts(vessels);
-    expect(counts).toEqual({ green: 2, yellow: 1, red: 3 });
+    expect(counts).toEqual({ green: 2, yellow: 1, red: 3, blacklisted: 0 });
   });
 
   it('returns zeroes for empty vessel map', () => {
     const counts = computeTierCounts(new Map());
-    expect(counts).toEqual({ green: 0, yellow: 0, red: 0 });
+    expect(counts).toEqual({ green: 0, yellow: 0, red: 0, blacklisted: 0 });
   });
 });
 

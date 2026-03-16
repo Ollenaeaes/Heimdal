@@ -28,7 +28,7 @@ describe('Theme Foundation', () => {
     expect(getRiskColor('green')).toBe('#22C55E');
     expect(getRiskColor('yellow')).toBe('#F59E0B');
     expect(getRiskColor('red')).toBe('#EF4444');
-    expect(Object.keys(RISK_COLORS)).toEqual(['green', 'yellow', 'red']);
+    expect(Object.keys(RISK_COLORS)).toEqual(['green', 'yellow', 'red', 'blacklisted']);
   });
 
   it('severityColors exports updated palette', async () => {

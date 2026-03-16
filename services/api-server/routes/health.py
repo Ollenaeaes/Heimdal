@@ -137,12 +137,17 @@ async def health(request: Request, response: Response):
                 any_service_degraded = True
 
     # --- Determine overall status ---
-    all_healthy = db_ok and redis_ok and not any_service_degraded
-    if not all_healthy:
+    # 503 only when core infrastructure (DB/Redis) is unreachable.
+    # Background service heartbeats are informational — reported in the
+    # response body so the frontend can show warnings, but don't make the
+    # API itself appear unavailable.
+    core_healthy = db_ok and redis_ok
+    all_healthy = core_healthy and not any_service_degraded
+    if not core_healthy:
         response.status_code = 503
 
     return {
-        "status": "ok" if all_healthy else "degraded",
+        "status": "ok" if all_healthy else "degraded" if core_healthy else "unhealthy",
         "database": db_ok,
         "redis": redis_ok,
         "services": services_status,
@@ -160,7 +165,7 @@ async def stats(request: Request):
     session_factory = get_session()
 
     # --- Vessel counts by risk tier ---
-    tier_counts = {"green": 0, "yellow": 0, "red": 0}
+    tier_counts = {"green": 0, "yellow": 0, "red": 0, "blacklisted": 0}
     total_vessels = 0
     try:
         async with session_factory() as session:
