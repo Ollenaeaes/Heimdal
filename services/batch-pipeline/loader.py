@@ -176,17 +176,21 @@ async def load_positions_to_db(
                 if mmsi not in latest_positions or row[0] > latest_positions[mmsi][0]:
                     latest_positions[mmsi] = row
 
-            for row in latest_positions.values():
-                await conn.execute(
-                    """UPDATE vessel_profiles
-                       SET last_position_time = $1,
-                           last_lat = $2,
-                           last_lon = $3,
-                           updated_at = NOW()
-                       WHERE mmsi = $4
-                         AND (last_position_time IS NULL OR last_position_time < $1)""",
-                    row[0], row[3], row[2], row[1],
-                )
+            await conn.executemany(
+                """INSERT INTO vessel_profiles (mmsi, last_position_time, last_lat, last_lon, updated_at)
+                   VALUES ($1, $2, $3, $4, NOW())
+                   ON CONFLICT (mmsi) DO UPDATE SET
+                     last_position_time = EXCLUDED.last_position_time,
+                     last_lat = EXCLUDED.last_lat,
+                     last_lon = EXCLUDED.last_lon,
+                     updated_at = NOW()
+                   WHERE vessel_profiles.last_position_time IS NULL
+                      OR vessel_profiles.last_position_time < EXCLUDED.last_position_time""",
+                [
+                    (row[1], row[0], row[3], row[2])  # mmsi, timestamp, lat, lon
+                    for row in latest_positions.values()
+                ],
+            )
 
         # Upsert vessel profiles
         for mmsi, data in vessel_updates.items():

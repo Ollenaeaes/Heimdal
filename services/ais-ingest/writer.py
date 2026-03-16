@@ -129,19 +129,26 @@ class BatchWriter:
                         positions,
                     )
 
-                    for pos_tuple in positions:
-                        await conn.execute(
-                            """UPDATE vessel_profiles
-                               SET last_position_time = $1,
-                                   last_lat = $2,
-                                   last_lon = $3,
-                                   updated_at = NOW()
-                               WHERE mmsi = $4""",
-                            pos_tuple[0],  # timestamp
-                            pos_tuple[3],  # latitude (y)
-                            pos_tuple[2],  # longitude (x)
-                            pos_tuple[1],  # mmsi
-                        )
+                    # Deduplicate to latest position per MMSI
+                    latest: dict[int, tuple] = {}
+                    for p in positions:
+                        mmsi = p[1]
+                        if mmsi not in latest or p[0] > latest[mmsi][0]:
+                            latest[mmsi] = p
+
+                    await conn.executemany(
+                        """INSERT INTO vessel_profiles (mmsi, last_position_time, last_lat, last_lon, updated_at)
+                           VALUES ($1, $2, $3, $4, NOW())
+                           ON CONFLICT (mmsi) DO UPDATE SET
+                             last_position_time = EXCLUDED.last_position_time,
+                             last_lat = EXCLUDED.last_lat,
+                             last_lon = EXCLUDED.last_lon,
+                             updated_at = NOW()""",
+                        [
+                            (p[1], p[0], p[3], p[2])  # mmsi, timestamp, lat, lon
+                            for p in latest.values()
+                        ],
+                    )
 
                 for mmsi, data in vessels.items():
                     data["mmsi"] = mmsi
