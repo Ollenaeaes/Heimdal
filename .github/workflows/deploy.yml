@@ -1,8 +1,8 @@
-name: Deploy to Oracle
+name: Deploy to Production
 
 on:
   push:
-    branches: [main]
+    branches: [prod]
   workflow_dispatch:
 
 jobs:
@@ -12,17 +12,45 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.ORACLE_HOST }}
-          username: ${{ secrets.ORACLE_USER }}
-          key: ${{ secrets.ORACLE_SSH_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script_stop: true
           script: |
+            set -euo pipefail
             cd ~/Heimdal
-            git pull origin main
 
-            # Rebuild and restart always-on services
+            echo "=== Pulling latest code ==="
+            git fetch origin prod
+            git checkout prod
+            git pull origin prod
+
+            echo "=== Rebuilding services ==="
+            # Never use -v flag — raw AIS data must be preserved
             docker compose up -d --build ais-fetcher api-server postgres
 
-            # Run batch-pipeline once after deploy to pick up any pending data
-            docker compose --profile batch run --rm batch-pipeline
+            echo "=== Waiting for services to be healthy ==="
+            sleep 10
 
-            echo "Deploy complete at $(date)"
+            echo "=== Health check ==="
+            curl -sf http://localhost:8000/api/health || {
+              echo "HEALTH CHECK FAILED"
+              docker compose logs --tail 20 api-server
+              exit 1
+            }
+
+            echo "=== Running batch pipeline ==="
+            docker compose --profile batch run --rm batch-pipeline || true
+
+            echo "=== Deploy complete at $(date) ==="
+            docker compose ps
+
+      - name: Verify site is live
+        run: |
+          sleep 5
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://heimdalwatch.cloud/api/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "Site health check failed with status $STATUS"
+            exit 1
+          fi
+          echo "Site is live at https://heimdalwatch.cloud"

@@ -1,5 +1,5 @@
 # =============================================================================
-# Heimdal Platform — Docker Compose (Production: Oracle Free Tier)
+# Heimdal Platform — Docker Compose (Production)
 # =============================================================================
 # Usage:
 #   cp .env.example .env   # fill in your API keys
@@ -8,6 +8,9 @@
 # Architecture:
 #   3 always-on: ais-fetcher, postgres, api-server
 #   2 scheduled: batch-pipeline (every 2h), cold-archiver (daily)
+#
+# IMPORTANT: Raw AIS data uses a host bind mount (/data/raw) so it survives
+# docker compose down -v, container rebuilds, and volume pruning.
 # =============================================================================
 
 services:
@@ -33,17 +36,17 @@ services:
       retries: 5
     command: >
       postgres
-      -c shared_buffers=2560MB
-      -c effective_cache_size=7680MB
-      -c work_mem=32MB
-      -c maintenance_work_mem=512MB
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=256MB
       -c max_connections=30
       -c max_wal_size=1GB
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 10G
+          cpus: '1.0'
+          memory: 4G
 
   # ---------------------------------------------------------------------------
   # Always-on Services
@@ -58,7 +61,7 @@ services:
     volumes:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
-      - rawdata:/data/raw
+      - /data/raw:/data/raw
     deploy:
       resources:
         limits:
@@ -112,14 +115,14 @@ services:
       - ./services/enrichment:/app/enrichment_src:ro
       - ./services/ais-ingest:/app/ingest_src:ro
       - ./data/opensanctions:/data/opensanctions:ro
-      - rawdata:/data/raw
+      - /data/raw:/data/raw
     profiles:
       - batch
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 8G
+          cpus: '1.0'
+          memory: 3G
 
   cold-archiver:
     build: ./services/cold-archiver
@@ -131,7 +134,7 @@ services:
     volumes:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
-      - rawdata:/data/raw
+      - /data/raw:/data/raw
     profiles:
       - batch
     deploy:
@@ -145,4 +148,3 @@ services:
 # =============================================================================
 volumes:
   pgdata:
-  rawdata:
