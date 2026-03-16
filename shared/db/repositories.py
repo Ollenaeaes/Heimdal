@@ -90,11 +90,40 @@ async def upsert_vessel_profile(session: AsyncSession, data: dict[str, Any]) -> 
 async def update_vessel_sanctions(
     session: AsyncSession, mmsi: int, sanctions_status: str
 ) -> None:
-    """Update only the sanctions_status column for a vessel profile."""
+    """Update sanctions_status and risk_tier for a vessel profile.
+
+    If any match has a high-confidence identifier (IMO/MMSI, confidence >= 0.9)
+    from a known sanctions program, the vessel is set to 'blacklisted'.
+    """
+    import json as _json
+
+    _SANCTIONS_PROGRAMS = frozenset({
+        "sanctions", "ua_war_sanctions", "eu_sanctions_map",
+        "eu_journal_sanctions", "gb_fcdo_sanctions",
+        "ca_dfatd_sema_sanctions", "ch_seco_sanctions",
+        "us_sam_exclusions", "kp_rusi_reports",
+        "us_ofac_sdn", "eu_fsf", "gb_hmt_sanctions", "un_sc_sanctions",
+    })
+
+    # Determine if this is a confirmed sanctions match
+    tier_update = ""
+    try:
+        data = _json.loads(sanctions_status)
+        for match in data.get("matches", []):
+            if (
+                match.get("matched_field") in ("imo", "mmsi")
+                and float(match.get("confidence", 0)) >= 0.9
+                and match.get("program", "") in _SANCTIONS_PROGRAMS
+            ):
+                tier_update = ", risk_tier = 'blacklisted'"
+                break
+    except (ValueError, TypeError, KeyError):
+        pass
+
     await session.execute(
         text(
             "UPDATE vessel_profiles "
-            "SET sanctions_status = :sanctions_status, updated_at = NOW() "
+            f"SET sanctions_status = :sanctions_status{tier_update}, updated_at = NOW() "
             "WHERE mmsi = :mmsi"
         ),
         {"mmsi": mmsi, "sanctions_status": sanctions_status},
