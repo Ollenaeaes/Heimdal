@@ -28,7 +28,7 @@ services:
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/home/postgres/pgdata
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U heimdal -d heimdal"]
       interval: 5s
@@ -52,22 +52,6 @@ services:
   # Always-on Services
   # ---------------------------------------------------------------------------
 
-  ais-fetcher:
-    build: ./services/ais-fetcher
-    restart: unless-stopped
-    environment:
-      AISSTREAM_API_KEY: ${AIS_API_KEY}
-      RAW_STORAGE_PATH: /data/raw
-    volumes:
-      - ./shared:/app/shared:ro
-      - ./config.yaml:/app/config.yaml:ro
-      - /data/raw:/data/raw
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-
   ais-ingest:
     build: ./services/ais-ingest
     restart: unless-stopped
@@ -80,6 +64,7 @@ services:
     volumes:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
+      - /data/raw:/data/raw
     deploy:
       resources:
         limits:
