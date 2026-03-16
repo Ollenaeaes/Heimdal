@@ -96,6 +96,9 @@ def read_jsonl_file(filepath: Path) -> list[dict]:
                     messages.append(msg)
                 except (json.JSONDecodeError, ValueError):
                     logger.warning("Invalid JSON at %s:%d", filepath, line_num)
+    except EOFError:
+        # File is still being written by ais-fetcher — return what we got so far
+        logger.info("File %s is still being written, read %d messages so far", filepath, len(messages))
     except (gzip.BadGzipFile, OSError) as e:
         logger.error("Failed to read %s: %s", filepath, e)
     return messages
