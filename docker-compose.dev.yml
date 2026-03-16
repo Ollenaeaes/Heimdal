@@ -64,10 +64,9 @@ services:
       - ./services/enrichment:/app/enrichment_src:ro
       - ./services/ais-ingest:/app/ingest_src:ro
       - ./data/opensanctions:/data/opensanctions:ro
-      - rawdata_dev:/data/raw
+      - ./data/raw:/data/raw
     profiles:
       - batch
 
 volumes:
   pgdata_dev:
-  rawdata_dev:

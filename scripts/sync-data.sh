@@ -18,8 +18,8 @@
 set -euo pipefail
 
 DAYS=${1:-3}
-ORACLE_HOST="${ORACLE_HOST:?Set ORACLE_HOST to your Oracle instance IP/hostname}"
-ORACLE_USER="${ORACLE_USER:-opc}"
+ORACLE_HOST="${ORACLE_HOST:-76.13.248.226}"
+ORACLE_USER="${ORACLE_USER:-root}"
 REMOTE_PATH="${REMOTE_PATH:-/data/raw/ais}"
 LOCAL_PATH="${LOCAL_PATH:-./data/raw/ais}"
 

@@ -50,6 +50,25 @@ test: ## Run the test suite inside the api-server container
 shell-api: ## Open a bash shell in the api-server container
 	docker compose exec api-server bash
 
+# -- Local Dev (with prod data) ------------------------------------------------
+
+dev-up: ## Start local dev stack (no AIS fetcher — use sync-data first)
+	docker compose -f docker-compose.dev.yml up -d
+
+dev-down: ## Stop local dev stack
+	docker compose -f docker-compose.dev.yml down
+
+sync-data: ## Sync raw AIS data from production (default: last 3 days)
+	bash scripts/sync-data.sh $(DAYS)
+
+dev-load: ## Run batch pipeline locally to load synced data
+	docker compose -f docker-compose.dev.yml --profile batch run --rm batch-pipeline
+
+dev-logs: ## Tail local dev logs
+	docker compose -f docker-compose.dev.yml logs -f
+
+DAYS ?= 3
+
 # -- Oracle Cloud (OCI) -------------------------------------------------------
 
 OCI_STATE := .oci-state.json
@@ -90,4 +109,5 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: up down reset logs logs-ingest logs-scoring migrate shell-db fetch-sanctions test shell-api help \
+        dev-up dev-down sync-data dev-load dev-logs \
         oci-check oci-provision oci-setup oci-deploy oci-deploy-full oci-ssh oci-logs oci-status oci-ip
