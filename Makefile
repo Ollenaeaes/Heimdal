@@ -55,6 +55,9 @@ shell-api: ## Open a bash shell in the api-server container
 dev-up: ## Start local dev stack (no AIS fetcher — use sync-data first)
 	docker compose -f docker-compose.dev.yml up -d
 
+dev-rebuild: ## Rebuild and restart only the api-server (preserves DB)
+	docker compose -f docker-compose.dev.yml up -d --build --no-deps api-server
+
 dev-down: ## Stop local dev stack
 	docker compose -f docker-compose.dev.yml down
 

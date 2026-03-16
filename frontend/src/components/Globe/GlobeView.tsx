@@ -115,11 +115,11 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfra
         <GfwEventMarkers visible={showGfwEvents} />
         <SarMarkers visible={showSarDetections} />
         <InfrastructureOverlay visible={showInfrastructure} />
-        <GnssZoneOverlay visible={showGnssZones} />
         <DuplicateMmsiLines visible={showGnssZones} />
         <NetworkOverlay visible={showNetwork} />
       </ResiumViewer>
       <HoverDatablock />
+      <GnssZoneOverlay visible={showGnssZones} />
     </>
   );
 }

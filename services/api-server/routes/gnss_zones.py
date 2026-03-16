@@ -64,15 +64,27 @@ async def get_gnss_zones():
 
 
 @router.get("/gnss-spoofing-events")
-async def get_spoofing_events():
-    """Return recent spoofing event locations for heatmap rendering.
+async def get_spoofing_events(start: str | None = None, end: str | None = None):
+    """Return spoofing event locations for heatmap rendering.
 
-    Aggregates lat/lon from spoofing anomaly details (last 7 days).
-    Returns points with intensity based on event count per grid cell.
+    Query params:
+      start: ISO datetime for window start (default: 7 days ago)
+      end:   ISO datetime for window end (default: now)
     """
+    from datetime import timezone, timedelta
+
+    if end:
+        end_dt = datetime.fromisoformat(end)
+    else:
+        end_dt = datetime.now(timezone.utc)
+
+    if start:
+        start_dt = datetime.fromisoformat(start)
+    else:
+        start_dt = end_dt - timedelta(days=7)
+
     session_factory = get_session()
     async with session_factory() as session:
-        # Get spoofing events with lat/lon from details or from vessel positions
         result = await session.execute(
             text("""
                 SELECT ae.mmsi, ae.rule_id, ae.points, ae.severity,
@@ -95,10 +107,11 @@ async def get_spoofing_events():
                     'spoof_frozen_position', 'spoof_duplicate_mmsi',
                     'spoof_identity_mismatch', 'ais_spoofing'
                 )
-                AND ae.created_at > NOW() - INTERVAL '7 days'
+                AND ae.created_at >= :start AND ae.created_at <= :end_dt
                 ORDER BY ae.created_at DESC
-                LIMIT 5000
-            """)
+                LIMIT 10000
+            """),
+            {"start": start_dt, "end_dt": end_dt},
         )
         rows = result.mappings().all()
 
@@ -118,4 +131,9 @@ async def get_spoofing_events():
             "time": row["created_at"].isoformat() if row["created_at"] else None,
         })
 
-    return {"points": points, "count": len(points)}
+    return {
+        "points": points,
+        "count": len(points),
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat(),
+    }
