@@ -373,3 +373,5 @@ Wave 14 complete. All 3 specs across waves 13-14 implemented.
 - **Spec 26** — Infrastructure Protection Frontend: 4 stories ✓
 - **Spec 27** — Spoofing Detection Frontend: 3 stories ✓
 - **Spec 28** — Network Mapping Frontend: 4 stories ✓
+
+- New approved spec: **30-lookback-and-export** — Multi-vessel temporal lookback with bottom timeline bar, track export (JSON/CSV from hot+cold storage), collapsible panel sections. 7 stories across 5 groups. Ready for implementation.
