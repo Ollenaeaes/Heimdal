@@ -31,3 +31,4 @@ data/temp/
 *.dbf
 *.prj
 *.cst
+.oci-state.json

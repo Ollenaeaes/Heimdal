@@ -50,7 +50,44 @@ test: ## Run the test suite inside the api-server container
 shell-api: ## Open a bash shell in the api-server container
 	docker compose exec api-server bash
 
+# -- Oracle Cloud (OCI) -------------------------------------------------------
+
+OCI_STATE := .oci-state.json
+OCI_IP = $(shell python3 -c "import json; print(json.load(open('$(OCI_STATE)')).get('public_ip',''))" 2>/dev/null)
+OCI_USER ?= root
+
+oci-check: ## Verify OCI CLI is configured and authenticated
+	@oci iam region list --output table --query 'data[?name==`eu-stockholm-1`]' && echo "OCI CLI: OK"
+
+oci-provision: ## Provision Oracle Free Tier ARM VM (VCN, subnet, instance)
+	bash scripts/oci-provision.sh
+
+oci-setup: ## Install Docker & deps on the Oracle VM (run once after provision)
+	ssh -o StrictHostKeyChecking=no $(OCI_USER)@$(OCI_IP) 'bash -s' < scripts/setup-oracle.sh
+
+oci-deploy: ## Deploy AIS fetcher to Oracle VM
+	bash scripts/oci-deploy.sh
+
+oci-deploy-full: ## Deploy all services (postgres + ais-fetcher + api-server)
+	ssh -o StrictHostKeyChecking=no $(OCI_USER)@$(OCI_IP) \
+		"cd ~/Heimdal && git pull origin main && docker compose up -d --build"
+
+oci-ssh: ## SSH into the Oracle VM
+	ssh $(OCI_USER)@$(OCI_IP)
+
+oci-logs: ## Tail AIS fetcher logs on Oracle VM
+	ssh -o StrictHostKeyChecking=no $(OCI_USER)@$(OCI_IP) \
+		"cd ~/Heimdal && docker compose logs -f ais-fetcher"
+
+oci-status: ## Show running containers on Oracle VM
+	ssh -o StrictHostKeyChecking=no $(OCI_USER)@$(OCI_IP) \
+		"cd ~/Heimdal && docker compose ps"
+
+oci-ip: ## Print the Oracle VM public IP
+	@echo $(OCI_IP)
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-.PHONY: up down reset logs logs-ingest logs-scoring migrate shell-db fetch-sanctions test shell-api help
+.PHONY: up down reset logs logs-ingest logs-scoring migrate shell-db fetch-sanctions test shell-api help \
+        oci-check oci-provision oci-setup oci-deploy oci-deploy-full oci-ssh oci-logs oci-status oci-ip
