@@ -13,6 +13,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -96,7 +97,7 @@ def read_jsonl_file(filepath: Path) -> list[dict]:
                     messages.append(msg)
                 except (json.JSONDecodeError, ValueError):
                     logger.warning("Invalid JSON at %s:%d", filepath, line_num)
-    except EOFError:
+    except (EOFError, zlib.error):
         # File is still being written by ais-fetcher — return what we got so far
         logger.info("File %s is still being written, read %d messages so far", filepath, len(messages))
     except (gzip.BadGzipFile, OSError) as e:
