@@ -28,8 +28,8 @@ const DEFAULT_OVERLAYS: OverlayToggleState = {
   showNetwork: false,
 };
 
-/** Refresh interval for snapshot — re-fetch every 2 minutes to pick up batch-loaded data. */
-const SNAPSHOT_REFETCH_MS = 120_000;
+/** Refresh interval for snapshot — keep in sync with STATS_REFETCH_INTERVAL (30s). */
+const SNAPSHOT_REFETCH_MS = 30_000;
 
 /** Seed the vessel store from the REST API and re-fetch periodically. */
 function useVesselSnapshot() {
