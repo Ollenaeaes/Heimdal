@@ -88,6 +88,30 @@ async def stage_load(pool: asyncpg.Pool) -> set[int]:
     # Mark files as loaded
     mark_files_loaded(loaded_files)
 
+    # Backfill last_lat/last_lon for profiles that were created after positions were loaded
+    if all_mmsis:
+        async with pool.acquire() as conn:
+            updated = await conn.execute("""
+                UPDATE vessel_profiles vp
+                SET last_lat = sub.lat,
+                    last_lon = sub.lon,
+                    last_position_time = sub.ts,
+                    updated_at = NOW()
+                FROM (
+                    SELECT DISTINCT ON (mmsi)
+                        mmsi,
+                        ST_Y(position::geometry) AS lat,
+                        ST_X(position::geometry) AS lon,
+                        timestamp AS ts
+                    FROM vessel_positions
+                    WHERE mmsi = ANY($1::int[])
+                    ORDER BY mmsi, timestamp DESC
+                ) sub
+                WHERE vp.mmsi = sub.mmsi
+                  AND (vp.last_position_time IS NULL OR vp.last_position_time < sub.ts)
+            """, list(all_mmsis))
+            logger.info("Backfilled last positions: %s", updated)
+
     elapsed = time.monotonic() - start
     logger.info(
         "LOAD complete: %d files, %d positions, %d vessels in %.1fs",
