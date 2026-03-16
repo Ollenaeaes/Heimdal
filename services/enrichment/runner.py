@@ -180,9 +180,11 @@ async def mark_enriched(redis_client: Any, mmsis: list[int]) -> None:
     """Record enrichment timestamps for the given MMSIs in Redis.
 
     Args:
-        redis_client: An async Redis client.
+        redis_client: An async Redis client (or None to skip).
         mmsis: List of MMSIs that were just enriched.
     """
+    if redis_client is None:
+        return
     now = str(datetime.now(timezone.utc).timestamp())
     for mmsi in mmsis:
         await redis_client.hset(ENRICHED_KEY, str(mmsi), now)
@@ -197,11 +199,19 @@ async def publish_enrichment_complete(
     """Publish enrichment_complete event to Redis.
 
     Args:
-        redis_client: An async Redis client.
+        redis_client: An async Redis client (or None to skip).
         mmsis: List of enriched MMSIs.
         gfw_events_count: Total GFW events fetched in this cycle.
         sar_detections_count: Total SAR detections fetched in this cycle.
     """
+    if redis_client is None:
+        logger.info(
+            "Enrichment complete (no Redis): %d vessels, %d events, %d SAR detections",
+            len(mmsis),
+            gfw_events_count,
+            sar_detections_count,
+        )
+        return
     payload = json.dumps({
         "mmsis": mmsis,
         "gfw_events_count": gfw_events_count,

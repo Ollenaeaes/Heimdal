@@ -68,6 +68,25 @@ class RetentionConfig(BaseSettings):
     compression_days: int = 30
 
 
+class RawStorageConfig(BaseSettings):
+    base_path: str = "/data/raw"
+    rotation_interval: int = 3600  # new file every hour
+    compress: bool = True
+
+
+class BatchPipelineConfig(BaseSettings):
+    schedule_interval: int = 7200  # run every 2 hours
+    load_batch_size: int = 10000
+    score_batch_size: int = 100
+
+
+class ColdStorageConfig(BaseSettings):
+    age_days: int = 30
+    format: str = "parquet"
+    compression: str = "snappy"
+    retain_jsonl_days: int = 7  # keep JSONL for 7 days after Parquet creation
+
+
 class FrontendConfig(BaseSettings):
     initial_camera_lat: float = 20.0
     initial_camera_lon: float = 30.0
@@ -93,7 +112,7 @@ class Settings(BaseSettings):
         default=SecretStr("postgresql+asyncpg://heimdal:heimdal@localhost:5432/heimdal"),
         description="Async SQLAlchemy database URL",
     )
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = ""
     aisstream_api_key: str = ""
     gfw_api_token: str = ""
 
@@ -104,6 +123,9 @@ class Settings(BaseSettings):
     gfw: GfwConfig = Field(default_factory=GfwConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     frontend: FrontendConfig = Field(default_factory=FrontendConfig)
+    raw_storage: RawStorageConfig = Field(default_factory=RawStorageConfig)
+    batch_pipeline: BatchPipelineConfig = Field(default_factory=BatchPipelineConfig)
+    cold_storage: ColdStorageConfig = Field(default_factory=ColdStorageConfig)
 
     model_config = {
         "env_file": ".env",
@@ -143,6 +165,9 @@ def _merge_yaml(settings: Settings, yaml_data: dict[str, Any]) -> Settings:
         "gfw": "gfw",
         "retention": "retention",
         "frontend": "frontend",
+        "raw_storage": "raw_storage",
+        "batch_pipeline": "batch_pipeline",
+        "cold_storage": "cold_storage",
     }
     for yaml_key, attr_name in section_map.items():
         section = yaml_data.get(yaml_key)

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, HealthIndicator, WatchlistPanel, EquasisImport, STATS_REFETCH_INTERVAL } from './components/Controls';
 import type { StatsResponse } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
-import { useWebSocket } from './hooks/useWebSocket';
+import { usePositionPolling } from './hooks/usePositionPolling';
 import { useOverlays } from './hooks/useOverlays';
 import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Globe/Overlays';
@@ -62,7 +62,7 @@ function useVesselSnapshot() {
 
 function AppInner() {
   useWatchlistAlerts();
-  useWebSocket();
+  usePositionPolling();
   useVesselSnapshot();
   const [overlays, setOverlays] = useState<OverlayToggleState>(DEFAULT_OVERLAYS);
   const [layerPanelOpen, setLayerPanelOpen] = useState(true);
