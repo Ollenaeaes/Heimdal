@@ -216,15 +216,20 @@ async def stats(request: Request):
     except Exception:
         logger.warning("Failed to query dark ship count", exc_info=True)
 
-    # --- Ingestion metrics from Redis ---
+    # --- Ingestion rate from DB (positions in the last 2 hours) ---
     ingest_rate: float | None = None
-    if redis is not None:
-        try:
-            raw_rate = await redis.get(_RATE_KEY)
-            if raw_rate is not None:
-                ingest_rate = float(raw_rate)
-        except Exception:
-            logger.warning("Failed to read ingestion rate from Redis", exc_info=True)
+    try:
+        async with session_factory() as session:
+            result = await session.execute(
+                text(
+                    "SELECT COUNT(*) FROM vessel_positions "
+                    "WHERE timestamp > NOW() - INTERVAL '2 hours'"
+                )
+            )
+            recent_positions = result.scalar() or 0
+            ingest_rate = round(recent_positions / 7200.0, 1)
+    except Exception:
+        logger.warning("Failed to compute ingestion rate from DB", exc_info=True)
 
     # --- Storage usage estimate (fast reltuples estimate, not exact COUNT) ---
     storage_estimate: dict[str, int] = {}
