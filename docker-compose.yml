@@ -6,7 +6,7 @@
 #   docker compose up -d   # start all services
 #
 # Architecture:
-#   3 always-on: ais-fetcher, postgres, api-server
+#   4 always-on: ais-fetcher, ais-ingest, postgres, api-server
 #   2 scheduled: batch-pipeline (every 2h), cold-archiver (daily)
 #
 # IMPORTANT: Raw AIS data uses a host bind mount (/data/raw) so it survives
@@ -62,6 +62,24 @@ services:
       - ./shared:/app/shared:ro
       - ./config.yaml:/app/config.yaml:ro
       - /data/raw:/data/raw
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  ais-ingest:
+    build: ./services/ais-ingest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AISSTREAM_API_KEY: ${AIS_API_KEY}
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
     deploy:
       resources:
         limits:
