@@ -279,9 +279,15 @@ def _load_aois() -> list[dict]:
     return []
 
 
-async def run_pipeline() -> None:
-    """Execute the full batch pipeline."""
-    logger.info("Starting batch pipeline run")
+async def run_pipeline(load_only: bool = False) -> None:
+    """Execute the batch pipeline.
+
+    Args:
+        load_only: If True, only run the LOAD stage (fast, for frequent position updates).
+                   If False, run all stages (LOAD + SCORE + ENRICH).
+    """
+    mode = "load-only" if load_only else "full"
+    logger.info("Starting batch pipeline run (mode=%s)", mode)
     pipeline_start = time.monotonic()
 
     dsn = settings.database_url.get_secret_value().replace("+asyncpg", "")
@@ -291,22 +297,24 @@ async def run_pipeline() -> None:
         # Stage 1: Load raw files into DB
         mmsis = await stage_load(pool)
 
-        # Stage 2: Score vessels with new data
-        await stage_score(mmsis)
+        if not load_only:
+            # Stage 2: Score vessels with new data
+            await stage_score(mmsis)
 
-        # Stage 3: Enrich vessels that need it
-        await stage_enrich(mmsis)
+            # Stage 3: Enrich vessels that need it
+            await stage_enrich(mmsis)
 
     finally:
         await pool.close()
 
     elapsed = time.monotonic() - pipeline_start
-    logger.info("Batch pipeline complete in %.1fs", elapsed)
+    logger.info("Batch pipeline complete (mode=%s) in %.1fs", mode, elapsed)
 
 
 async def main() -> None:
     setup_logging("batch-pipeline")
-    await run_pipeline()
+    load_only = "--load-only" in sys.argv
+    await run_pipeline(load_only=load_only)
 
 
 if __name__ == "__main__":

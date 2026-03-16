@@ -39,25 +39,33 @@ async def get_recent_positions(
 
     session_factory = get_session()
     async with session_factory() as session:
+        # Use vessel_profiles.updated_at to catch batch-loaded data
+        # (batch pipeline updates updated_at when loading positions,
+        # while pos.timestamp reflects the original AIS timestamp)
         result = await session.execute(
             text("""
-                SELECT DISTINCT ON (vp.mmsi)
-                    vp.mmsi,
-                    ST_Y(pos.position::geometry) as lat,
-                    ST_X(pos.position::geometry) as lon,
-                    pos.sog,
-                    pos.cog,
-                    pos.heading,
-                    pos.nav_status,
-                    pos.timestamp,
-                    vp.risk_tier,
-                    vp.risk_score,
-                    vp.ship_name,
-                    vp.ship_type
-                FROM vessel_positions pos
-                JOIN vessel_profiles vp ON vp.mmsi = pos.mmsi
-                WHERE pos.timestamp > :since
-                ORDER BY vp.mmsi, pos.timestamp DESC
+                SELECT vp.mmsi,
+                       vp.last_lat AS lat,
+                       vp.last_lon AS lon,
+                       lp.sog,
+                       lp.cog,
+                       lp.heading,
+                       lp.nav_status,
+                       vp.last_position_time AS timestamp,
+                       vp.risk_tier,
+                       vp.risk_score,
+                       vp.ship_name,
+                       vp.ship_type
+                FROM vessel_profiles vp
+                LEFT JOIN LATERAL (
+                    SELECT sog, cog, heading, nav_status
+                    FROM vessel_positions
+                    WHERE mmsi = vp.mmsi
+                    ORDER BY timestamp DESC LIMIT 1
+                ) lp ON true
+                WHERE vp.updated_at > :since
+                  AND vp.last_lat IS NOT NULL
+                  AND vp.last_lon IS NOT NULL
                 LIMIT :limit
             """),
             {"since": since_dt, "limit": limit},

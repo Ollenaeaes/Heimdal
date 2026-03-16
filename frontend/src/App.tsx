@@ -28,35 +28,42 @@ const DEFAULT_OVERLAYS: OverlayToggleState = {
   showNetwork: false,
 };
 
-/** Seed the vessel store from the REST API so the globe has data immediately. */
+/** Refresh interval for snapshot — re-fetch every 2 minutes to pick up batch-loaded data. */
+const SNAPSHOT_REFETCH_MS = 120_000;
+
+/** Seed the vessel store from the REST API and re-fetch periodically. */
 function useVesselSnapshot() {
   const updatePositions = useVesselStore((s) => s.updatePositions);
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/vessels/snapshot')
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then((data: Array<Record<string, unknown>>) => {
-        if (cancelled) return;
-        const vessels: VesselState[] = data.map((d) => ({
-          mmsi: d.mmsi as number,
-          lat: d.lat as number,
-          lon: d.lon as number,
-          sog: (d.sog as number) ?? null,
-          cog: (d.cog as number) ?? null,
-          heading: null,
-          riskTier: (d.risk_tier as VesselState['riskTier']) ?? 'green',
-          riskScore: (d.risk_score as number) ?? 0,
-          name: d.name as string | undefined,
-          shipType: d.ship_type as number | undefined,
-          timestamp: new Date().toISOString(),
-        }));
-        updatePositions(vessels);
-      })
-      .catch(() => {
-        // Snapshot failed — WebSocket will populate the store instead
-      });
-    return () => { cancelled = true; };
+
+    function fetchSnapshot() {
+      fetch('/api/vessels/snapshot')
+        .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+        .then((data: Array<Record<string, unknown>>) => {
+          if (cancelled) return;
+          const vessels: VesselState[] = data.map((d) => ({
+            mmsi: d.mmsi as number,
+            lat: d.lat as number,
+            lon: d.lon as number,
+            sog: (d.sog as number) ?? null,
+            cog: (d.cog as number) ?? null,
+            heading: null,
+            riskTier: (d.risk_tier as VesselState['riskTier']) ?? 'green',
+            riskScore: (d.risk_score as number) ?? 0,
+            name: d.name as string | undefined,
+            shipType: d.ship_type as number | undefined,
+            timestamp: new Date().toISOString(),
+          }));
+          updatePositions(vessels);
+        })
+        .catch(() => {});
+    }
+
+    fetchSnapshot();
+    const timer = setInterval(fetchSnapshot, SNAPSHOT_REFETCH_MS);
+    return () => { cancelled = true; clearInterval(timer); };
   }, [updatePositions]);
 }
 
