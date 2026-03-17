@@ -7,4 +7,7 @@ export { VesselMarkers } from './VesselMarkers';
 export { TrackTrails } from './TrackTrails';
 export { SarMarkers } from './SarMarkers';
 export { GfwEventMarkers } from './GfwEventMarkers';
-export { ReplayOverlay } from './ReplayOverlay';
+export { LookbackOverlay } from './LookbackOverlay';
+export { TimelineBar } from './TimelineBar';
+export { AreaLookbackDrawing, AreaLookbackButton } from './AreaLookbackTool';
+export { AreaLookbackPanel } from './AreaLookbackPanel';
