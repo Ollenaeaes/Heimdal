@@ -26,7 +26,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import text
 
-from shared.config import get_settings
+from shared.config import load_settings
 from shared.db.connection import get_session
 
 logger = logging.getLogger("api-server.vessels")
@@ -470,7 +470,7 @@ async def export_vessel_track(
     format: str = Query("json", pattern="^(json|csv)$"),
 ):
     """Export vessel track data as JSON or CSV, reading from cold Parquet storage for older data."""
-    settings = get_settings()
+    settings = load_settings()
     base_path = Path(settings.raw_storage.base_path)
     cold_age = timedelta(days=30)
     now = datetime.now(timezone.utc)

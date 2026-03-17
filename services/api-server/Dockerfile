@@ -29,7 +29,8 @@ RUN pip install --no-cache-dir \
     'fastapi>=0.110,<1.0' \
     'uvicorn[standard]>=0.29,<1.0' \
     'pdfplumber>=0.11,<1.0' \
-    'python-multipart>=0.0.7'
+    'python-multipart>=0.0.7' \
+    'pyarrow>=15.0'
 
 # Copy frontend build output
 COPY --from=frontend-build /build/dist /app/static
