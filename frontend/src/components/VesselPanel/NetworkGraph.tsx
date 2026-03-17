@@ -10,6 +10,7 @@ import {
   type SimulationNodeDatum,
   type SimulationLinkDatum,
 } from 'd3-force';
+import { CollapsibleSection } from './CollapsibleSection';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -144,7 +145,6 @@ function edgeLabel(type: string): string {
 
 export function NetworkGraph({ mmsi }: { mmsi: number }) {
   const [depth, setDepth] = useState(1);
-  const [collapsed, setCollapsed] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
   const selectVessel = useVesselStore((s) => s.selectVessel);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -285,198 +285,178 @@ export function NetworkGraph({ mmsi }: { mmsi: number }) {
   /* ---------- Render ---------- */
 
   return (
-    <div
-      ref={containerRef}
-      className="px-3 py-2 border-b border-[#1F2937]"
-      data-testid="network-graph"
-    >
-      {/* Header */}
-      <button
-        className="flex items-center justify-between w-full text-left"
-        onClick={() => setCollapsed(!collapsed)}
-        data-testid="network-graph-toggle"
-      >
-        <span className="text-xs text-gray-400 uppercase tracking-wide">
-          Network Graph
-        </span>
-        <span className="text-gray-500 text-[0.65rem]">
-          {collapsed ? '\u25B6' : '\u25BC'}
-        </span>
-      </button>
-
-      {!collapsed && (
-        <>
-          {/* Depth selector */}
-          <div
-            className="flex items-center gap-2 mt-2 mb-2"
-            data-testid="depth-selector"
-          >
-            <span className="text-xs text-gray-500">Depth:</span>
-            {[1, 2, 3].map((d) => (
-              <button
-                key={d}
-                onClick={() => setDepth(d)}
-                className={`px-2 py-0.5 rounded text-xs ${
-                  depth === d
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-[#1F2937] text-gray-400 hover:bg-[#374151]'
-                }`}
-                data-testid={`depth-btn-${d}`}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-
-          {isLoading && (
-            <div className="text-xs text-gray-500 py-4 text-center">
-              Loading network...
-            </div>
-          )}
-
-          {isEmpty && (
-            <div
-              className="text-xs text-gray-500 py-4 text-center"
-              data-testid="network-empty"
+    <CollapsibleSection title="Network Graph" testId="network-graph">
+      <div ref={containerRef}>
+        {/* Depth selector */}
+        <div
+          className="flex items-center gap-2 mt-2 mb-2"
+          data-testid="depth-selector"
+        >
+          <span className="text-xs text-gray-500">Depth:</span>
+          {[1, 2, 3].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDepth(d)}
+              className={`px-2 py-0.5 rounded text-xs ${
+                depth === d
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-[#1F2937] text-gray-400 hover:bg-[#374151]'
+              }`}
+              data-testid={`depth-btn-${d}`}
             >
-              No network connections found
-            </div>
-          )}
+              {d}
+            </button>
+          ))}
+        </div>
 
-          {simNodes.length > 0 && (
-            <div className="relative" onMouseLeave={hideTooltip}>
-              <svg
-                ref={svgRef}
-                width={SVG_SIZE}
-                height={SVG_SIZE}
-                className="mx-auto"
-                data-testid="network-svg"
-              >
-                {/* SVG defs for edge dash patterns */}
-                <defs>
-                  <filter id="node-glow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
+        {isLoading && (
+          <div className="text-xs text-gray-500 py-4 text-center">
+            Loading network...
+          </div>
+        )}
 
-                {/* Links */}
-                {simLinks.map((link, i) => {
-                  const source = link.source as NetworkNode;
-                  const target = link.target as NetworkNode;
-                  const edgeColor = EDGE_COLORS[link.type] ?? '#4B5563';
-                  const dashArray = EDGE_DASH[link.type];
-                  return (
-                    <g key={`link-${i}`}>
-                      {/* Invisible wider hit area for hover */}
-                      <line
-                        x1={source.x}
-                        y1={source.y}
-                        x2={target.x}
-                        y2={target.y}
-                        stroke="transparent"
-                        strokeWidth={12}
-                        style={{ cursor: 'pointer' }}
-                        onMouseEnter={(e) => showEdgeTooltip(e, link)}
-                        onMouseMove={(e) => showEdgeTooltip(e, link)}
-                        onMouseLeave={hideTooltip}
-                      />
-                      {/* Visible line */}
-                      <line
-                        x1={source.x}
-                        y1={source.y}
-                        x2={target.x}
-                        y2={target.y}
-                        stroke={edgeColor}
-                        strokeWidth={1.5}
-                        strokeDasharray={dashArray}
-                        strokeOpacity={0.7}
-                        pointerEvents="none"
-                        data-testid="network-link"
-                      />
-                      {/* Edge label */}
-                      <text
-                        x={((source.x ?? 0) + (target.x ?? 0)) / 2}
-                        y={((source.y ?? 0) + (target.y ?? 0)) / 2 - 4}
-                        fill="#6B7280"
-                        fontSize="8"
-                        textAnchor="middle"
-                        pointerEvents="none"
-                      >
-                        {edgeLabel(link.type)}
-                      </text>
-                    </g>
-                  );
-                })}
+        {isEmpty && (
+          <div
+            className="text-xs text-gray-500 py-4 text-center"
+            data-testid="network-empty"
+          >
+            No network connections found
+          </div>
+        )}
 
-                {/* Nodes */}
-                {simNodes.map((node) => {
-                  const r = getNodeRadius(node);
-                  const fill = RISK_TIER_COLORS[node.riskTier] ?? '#6B7280';
-                  const isCurrent = node.mmsi === mmsi;
-                  return (
-                    <g
-                      key={node.mmsi}
-                      onClick={() => handleNodeClick(node.mmsi)}
-                      onMouseEnter={(e) => showNodeTooltip(e, node)}
-                      onMouseMove={(e) => showNodeTooltip(e, node)}
-                      onMouseLeave={hideTooltip}
+        {simNodes.length > 0 && (
+          <div className="relative" onMouseLeave={hideTooltip}>
+            <svg
+              ref={svgRef}
+              width={SVG_SIZE}
+              height={SVG_SIZE}
+              className="mx-auto"
+              data-testid="network-svg"
+            >
+              {/* SVG defs for edge dash patterns */}
+              <defs>
+                <filter id="node-glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              {/* Links */}
+              {simLinks.map((link, i) => {
+                const source = link.source as NetworkNode;
+                const target = link.target as NetworkNode;
+                const edgeColor = EDGE_COLORS[link.type] ?? '#4B5563';
+                const dashArray = EDGE_DASH[link.type];
+                return (
+                  <g key={`link-${i}`}>
+                    {/* Invisible wider hit area for hover */}
+                    <line
+                      x1={source.x}
+                      y1={source.y}
+                      x2={target.x}
+                      y2={target.y}
+                      stroke="transparent"
+                      strokeWidth={12}
                       style={{ cursor: 'pointer' }}
-                      data-testid="network-node"
-                      data-mmsi={node.mmsi}
-                      data-risk-tier={node.riskTier}
+                      onMouseEnter={(e) => showEdgeTooltip(e, link)}
+                      onMouseMove={(e) => showEdgeTooltip(e, link)}
+                      onMouseLeave={hideTooltip}
+                    />
+                    {/* Visible line */}
+                    <line
+                      x1={source.x}
+                      y1={source.y}
+                      x2={target.x}
+                      y2={target.y}
+                      stroke={edgeColor}
+                      strokeWidth={1.5}
+                      strokeDasharray={dashArray}
+                      strokeOpacity={0.7}
+                      pointerEvents="none"
+                      data-testid="network-link"
+                    />
+                    {/* Edge label */}
+                    <text
+                      x={((source.x ?? 0) + (target.x ?? 0)) / 2}
+                      y={((source.y ?? 0) + (target.y ?? 0)) / 2 - 4}
+                      fill="#6B7280"
+                      fontSize="8"
+                      textAnchor="middle"
+                      pointerEvents="none"
                     >
-                      {/* Glow ring for selected vessel */}
-                      {isCurrent && (
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r={r + 4}
-                          fill="none"
-                          stroke="#FFFFFF"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.4}
-                          filter="url(#node-glow)"
-                        />
-                      )}
+                      {edgeLabel(link.type)}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Nodes */}
+              {simNodes.map((node) => {
+                const r = getNodeRadius(node);
+                const fill = RISK_TIER_COLORS[node.riskTier] ?? '#6B7280';
+                const isCurrent = node.mmsi === mmsi;
+                return (
+                  <g
+                    key={node.mmsi}
+                    onClick={() => handleNodeClick(node.mmsi)}
+                    onMouseEnter={(e) => showNodeTooltip(e, node)}
+                    onMouseMove={(e) => showNodeTooltip(e, node)}
+                    onMouseLeave={hideTooltip}
+                    style={{ cursor: 'pointer' }}
+                    data-testid="network-node"
+                    data-mmsi={node.mmsi}
+                    data-risk-tier={node.riskTier}
+                  >
+                    {/* Glow ring for selected vessel */}
+                    {isCurrent && (
                       <circle
                         cx={node.x}
                         cy={node.y}
-                        r={r}
-                        fill={fill}
-                        stroke={isCurrent ? '#FFFFFF' : '#1F2937'}
-                        strokeWidth={isCurrent ? 2 : 1}
+                        r={r + 4}
+                        fill="none"
+                        stroke="#FFFFFF"
+                        strokeWidth={1.5}
+                        strokeOpacity={0.4}
+                        filter="url(#node-glow)"
                       />
-                      <text
-                        x={node.x}
-                        y={(node.y ?? 0) + r + 12}
-                        fill="#9CA3AF"
-                        fontSize="9"
-                        textAnchor="middle"
-                        pointerEvents="none"
-                      >
-                        {node.name ?? String(node.mmsi)}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+                    )}
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={r}
+                      fill={fill}
+                      stroke={isCurrent ? '#FFFFFF' : '#1F2937'}
+                      strokeWidth={isCurrent ? 2 : 1}
+                    />
+                    <text
+                      x={node.x}
+                      y={(node.y ?? 0) + r + 12}
+                      fill="#9CA3AF"
+                      fontSize="9"
+                      textAnchor="middle"
+                      pointerEvents="none"
+                    >
+                      {node.name ?? String(node.mmsi)}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
 
-              {/* Tooltip overlay */}
-              {tooltip && (
-                <NetworkTooltip tooltip={tooltip} currentMmsi={mmsi} />
-              )}
+            {/* Tooltip overlay */}
+            {tooltip && (
+              <NetworkTooltip tooltip={tooltip} currentMmsi={mmsi} />
+            )}
 
-              {/* Legend */}
-              <NetworkLegend />
-            </div>
-          )}
-        </>
-      )}
-    </div>
+            {/* Legend */}
+            <NetworkLegend />
+          </div>
+        )}
+      </div>
+    </CollapsibleSection>
   );
 }
 

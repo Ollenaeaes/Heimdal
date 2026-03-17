@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { EnrichmentPayload } from '../../types/api';
+import { CollapsibleSection } from './CollapsibleSection';
 
 export const SOURCE_OPTIONS = [
   'Equasis',
@@ -97,7 +98,6 @@ interface EnrichmentFormProps {
 }
 
 export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
-  const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<EnrichmentFormState>(getInitialFormState);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -135,7 +135,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
   };
 
   return (
-    <div className="border-b border-[#1F2937]" data-testid="enrichment-form-section">
+    <CollapsibleSection title="Manual Enrichment" testId="enrichment-form-section">
       {/* Toast */}
       {toast && (
         <div
@@ -150,20 +150,7 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
         </div>
       )}
 
-      {/* Collapsible header */}
-      <button
-        data-testid="enrichment-form-toggle"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2"
-      >
-        <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">
-          Manual Enrichment
-        </span>
-        <span className="text-gray-500 text-xs">{isOpen ? '▲' : '▼'}</span>
-      </button>
-
-      {isOpen && (
-        <div className="px-3 pb-2 space-y-3" data-testid="enrichment-form-body">
+        <div className="space-y-3" data-testid="enrichment-form-body">
           {/* Source (required) */}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Source *</label>
@@ -320,7 +307,6 @@ export function EnrichmentForm({ mmsi }: EnrichmentFormProps) {
             {mutation.isPending ? 'Submitting...' : 'Submit Enrichment'}
           </button>
         </div>
-      )}
-    </div>
+    </CollapsibleSection>
   );
 }

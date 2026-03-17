@@ -5,6 +5,7 @@ import type { AnomalyEvent } from '../../types/anomaly';
 import { getRuleName } from '../../utils/ruleNames';
 import { SEVERITY_COLORS } from '../../utils/severityColors';
 import { formatTimestamp } from '../../utils/formatters';
+import { CollapsibleSection } from './CollapsibleSection';
 
 interface RiskSectionProps {
   vessel: VesselDetail;
@@ -56,7 +57,7 @@ export function RiskSection({ vessel }: RiskSectionProps) {
   const deduplicated = deduplicateByRule(unresolvedAnomalies);
 
   return (
-    <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="risk-section">
+    <CollapsibleSection title="Risk" defaultExpanded testId="risk-section">
       {/* Score bar */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
@@ -104,7 +105,7 @@ export function RiskSection({ vessel }: RiskSectionProps) {
           ))}
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 

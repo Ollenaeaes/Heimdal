@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { EquasisData } from '../../types/api';
+import { CollapsibleSection } from './CollapsibleSection';
 
 export const FOC_FLAGS = new Set([
   'Panama',
@@ -345,14 +346,11 @@ export function EquasisSection({ mmsi, equasis }: EquasisSectionProps) {
 
   if (!equasis) {
     return (
-      <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="equasis-section">
-        <h3 className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">
-          Equasis Data
-        </h3>
+      <CollapsibleSection title="Equasis Data" testId="equasis-section">
         <p className="text-xs text-gray-500" data-testid="equasis-empty">
           No Equasis data {'\u2014'} Upload a Ship Folder PDF to enrich this vessel
         </p>
-      </div>
+      </CollapsibleSection>
     );
   }
 
@@ -391,11 +389,7 @@ export function EquasisSection({ mmsi, equasis }: EquasisSectionProps) {
   const companyHistory = displayData.company_history ?? [];
 
   return (
-    <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="equasis-section">
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-        Equasis Data
-      </h3>
-
+    <CollapsibleSection title="Equasis Data" testId="equasis-section">
       {/* Summary line */}
       <p className="text-xs text-gray-400 mb-2" data-testid="equasis-summary">
         Last uploaded: {formatUploadDate(latestUpload.upload_timestamp)}
@@ -488,6 +482,6 @@ export function EquasisSection({ mmsi, equasis }: EquasisSectionProps) {
           )}
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }

@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CollapsibleSection } from './CollapsibleSection';
 
 export const EQUASIS_TOAST_DURATION_MS = 5000;
 
@@ -134,7 +135,7 @@ export function EquasisUpload({ mmsi }: EquasisUploadProps) {
   }, [handleFiles]);
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700" data-testid="equasis-upload-section">
+    <CollapsibleSection title="Equasis Upload" testId="equasis-upload-section">
       {/* Toast */}
       {toast && (
         <div
@@ -148,11 +149,6 @@ export function EquasisUpload({ mmsi }: EquasisUploadProps) {
           {toast.message}
         </div>
       )}
-
-      {/* Upload heading */}
-      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
-        Upload Equasis PDFs
-      </h4>
 
       {/* Drop zone */}
       <div
@@ -204,7 +200,7 @@ export function EquasisUpload({ mmsi }: EquasisUploadProps) {
           )}
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 

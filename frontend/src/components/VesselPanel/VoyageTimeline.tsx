@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatTimestampAbsolute } from '../../utils/formatters';
 import type { AnomalyEvent } from '../../types/anomaly';
 import type { TrackPoint } from '../../types/api';
+import { CollapsibleSection } from './CollapsibleSection';
 
 interface VoyageTimelineProps {
   mmsi: number;
@@ -67,28 +68,6 @@ export function VoyageTimeline({ mmsi, anomalies, onFlyTo }: VoyageTimelineProps
 
   const dayLabels = getDayLabels();
 
-  if (isLoading) {
-    return (
-      <div className="px-4 py-3 border-b border-gray-700" data-testid="voyage-timeline">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-          Voyage Timeline
-        </h3>
-        <div className="text-xs text-gray-500">Loading track data...</div>
-      </div>
-    );
-  }
-
-  if (!track || track.length === 0) {
-    return (
-      <div className="px-4 py-3 border-b border-gray-700" data-testid="voyage-timeline">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-          Voyage Timeline
-        </h3>
-        <div className="text-xs text-gray-500">No track data available</div>
-      </div>
-    );
-  }
-
   const handleMarkerClick = (anomaly: AnomalyEvent) => {
     const details = anomaly.details as Record<string, unknown>;
     const lat = (details?.lat as number) ?? null;
@@ -99,49 +78,51 @@ export function VoyageTimeline({ mmsi, anomalies, onFlyTo }: VoyageTimelineProps
   };
 
   return (
-    <div className="px-4 py-3 border-b border-gray-700" data-testid="voyage-timeline">
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-        Voyage Timeline
-      </h3>
-
-      <div className="overflow-x-auto" data-testid="timeline-scroll-container">
-        <div className="relative min-w-[600px] h-20">
-          {/* Day labels */}
-          <div className="absolute top-0 left-0 right-0 flex justify-between text-xs text-gray-500">
-            {dayLabels.map((d) => (
-              <span key={d.label} style={{ left: `${d.position}%` }} className="absolute">
-                {d.label}
-              </span>
-            ))}
-          </div>
-
-          {/* Track line */}
-          <div className="absolute top-8 left-0 right-0 h-0.5 bg-gray-600" data-testid="track-line" />
-
-          {/* Event markers */}
-          {anomalies.map((anomaly) => {
-            const pos = getTimelinePosition(anomaly.timestamp);
-            const color = getMarkerColor(anomaly.ruleId);
-            return (
-              <button
-                key={anomaly.id}
-                className={`absolute top-6 w-3 h-3 rounded-full ${MARKER_CSS[color]} cursor-pointer hover:ring-2 hover:ring-white transition-all group`}
-                style={{ left: `${pos}%`, transform: 'translateX(-50%)' }}
-                data-testid={`timeline-marker-${color}`}
-                data-rule-id={anomaly.ruleId}
-                onClick={() => handleMarkerClick(anomaly)}
-                title={anomaly.ruleId}
-              >
-                <span className="absolute bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
-                  {anomaly.ruleId}
-                  <br />
-                  {formatTimestampAbsolute(anomaly.timestamp)}
+    <CollapsibleSection title="Voyage Timeline" testId="voyage-timeline">
+      {isLoading ? (
+        <div className="text-xs text-gray-500">Loading track data...</div>
+      ) : !track || track.length === 0 ? (
+        <div className="text-xs text-gray-500">No track data available</div>
+      ) : (
+        <div className="overflow-x-auto" data-testid="timeline-scroll-container">
+          <div className="relative min-w-[600px] h-20">
+            {/* Day labels */}
+            <div className="absolute top-0 left-0 right-0 flex justify-between text-xs text-gray-500">
+              {dayLabels.map((d) => (
+                <span key={d.label} style={{ left: `${d.position}%` }} className="absolute">
+                  {d.label}
                 </span>
-              </button>
-            );
-          })}
+              ))}
+            </div>
+
+            {/* Track line */}
+            <div className="absolute top-8 left-0 right-0 h-0.5 bg-gray-600" data-testid="track-line" />
+
+            {/* Event markers */}
+            {anomalies.map((anomaly) => {
+              const pos = getTimelinePosition(anomaly.timestamp);
+              const color = getMarkerColor(anomaly.ruleId);
+              return (
+                <button
+                  key={anomaly.id}
+                  className={`absolute top-6 w-3 h-3 rounded-full ${MARKER_CSS[color]} cursor-pointer hover:ring-2 hover:ring-white transition-all group`}
+                  style={{ left: `${pos}%`, transform: 'translateX(-50%)' }}
+                  data-testid={`timeline-marker-${color}`}
+                  data-rule-id={anomaly.ruleId}
+                  onClick={() => handleMarkerClick(anomaly)}
+                  title={anomaly.ruleId}
+                >
+                  <span className="absolute bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gray-800 text-gray-300 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                    {anomaly.ruleId}
+                    <br />
+                    {formatTimestampAbsolute(anomaly.timestamp)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </CollapsibleSection>
   );
 }

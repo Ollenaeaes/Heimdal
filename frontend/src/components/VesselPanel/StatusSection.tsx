@@ -7,6 +7,7 @@ import {
   formatTimestamp,
 } from '../../utils/formatters';
 import { getNavStatusLabel } from '../../utils/navStatus';
+import { CollapsibleSection } from './CollapsibleSection';
 
 interface StatusSectionProps {
   vessel: VesselDetail;
@@ -32,18 +33,14 @@ export function StatusSection({ vessel, mmsi }: StatusSectionProps) {
       : undefined;
 
   return (
-    <div className="px-3 py-2 border-b border-[#1F2937]" data-testid="status-section">
-      <h3 className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">
-        Status
-      </h3>
-
+    <CollapsibleSection title="Status" defaultExpanded testId="status-section">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
         <FieldRow label="Position" value={positionStr} testId="field-position" fullWidth mono />
         <FieldRow label="Speed (SOG)" value={formatSpeed(sog)} testId="field-sog" mono />
         <FieldRow label="Course (COG)" value={formatCourse(cog)} testId="field-cog" mono />
         <FieldRow
           label="Heading"
-          value={heading !== null && heading !== undefined ? `${heading}°` : '—'}
+          value={heading !== null && heading !== undefined ? `${heading}°` : '\u2014'}
           testId="field-heading"
           mono
         />
@@ -66,7 +63,7 @@ export function StatusSection({ vessel, mmsi }: StatusSectionProps) {
           Updated {formatTimestamp(timestamp)}
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
