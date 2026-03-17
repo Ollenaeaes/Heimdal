@@ -1,16 +1,6 @@
-import { useEffect } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import { useLookbackStore } from './useLookbackStore';
 import type { TrackPoint } from '../types/api';
-
-interface NetworkResponse {
-  mmsi: number;
-  edges: Array<{
-    vessel_a_mmsi: number;
-    vessel_b_mmsi: number;
-  }>;
-  vessels: Record<string, unknown>;
-}
 
 async function fetchTrack(
   mmsi: number,
@@ -21,7 +11,6 @@ async function fetchTrack(
     start: start.toISOString(),
     end: end.toISOString(),
   });
-  // Simplify if large time range (>3 days)
   const rangeDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
   if (rangeDays > 3) {
     params.set('simplify', '0.001');
@@ -32,106 +21,86 @@ async function fetchTrack(
 }
 
 async function fetchNetworkMmsis(mmsi: number): Promise<number[]> {
-  const res = await fetch(`/api/vessels/${mmsi}/network?depth=1`);
-  if (!res.ok) return [];
-  const data: NetworkResponse = await res.json();
-  const mmsis = new Set<number>();
-  for (const edge of data.edges) {
-    mmsis.add(edge.vessel_a_mmsi);
-    mmsis.add(edge.vessel_b_mmsi);
+  try {
+    const res = await fetch(`/api/vessels/${mmsi}/network?depth=1`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const mmsis = new Set<number>();
+    for (const edge of data.edges ?? []) {
+      mmsis.add(edge.vessel_a_mmsi);
+      mmsis.add(edge.vessel_b_mmsi);
+    }
+    mmsis.delete(mmsi);
+    return [...mmsis];
+  } catch {
+    return [];
   }
-  mmsis.delete(mmsi);
-  return [...mmsis];
 }
 
 /**
- * Fetches tracks for all lookback vessels (selected + optional network).
- * Writes results directly into the lookback store.
+ * Fetches tracks for all lookback vessels when lookback activates.
+ * Uses plain fetch + useEffect instead of useQueries to avoid sync issues.
  */
 export function useLookbackTracks() {
   const isActive = useLookbackStore((s) => s.isActive);
   const selectedVessels = useLookbackStore((s) => s.selectedVessels);
   const showNetwork = useLookbackStore((s) => s.showNetwork);
   const dateRange = useLookbackStore((s) => s.dateRange);
-  const setTracks = useLookbackStore((s) => s.setTracks);
-  const setTrackError = useLookbackStore((s) => s.setTrackError);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Step 1: Fetch network MMSIs if showNetwork is enabled
-  const networkQueries = useQueries({
-    queries: isActive && showNetwork
-      ? selectedVessels.map((mmsi) => ({
-          queryKey: ['lookback-network', mmsi],
-          queryFn: () => fetchNetworkMmsis(mmsi),
-          staleTime: Infinity,
-        }))
-      : [],
-  });
+  useEffect(() => {
+    if (!isActive || selectedVessels.length === 0) return;
 
-  // Collect unique network MMSIs
-  const networkMmsis = new Set<number>();
-  if (showNetwork) {
-    for (const q of networkQueries) {
-      if (q.data) {
-        for (const m of q.data) {
-          if (!selectedVessels.includes(m)) {
-            networkMmsis.add(m);
+    // Cancel any previous fetch cycle
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const { setTracks, setTrackError } = useLookbackStore.getState();
+
+    async function loadAll() {
+      const allMmsis = [...selectedVessels];
+
+      // Resolve network vessels if enabled
+      if (showNetwork) {
+        const networkResults = await Promise.all(
+          selectedVessels.map((mmsi) => fetchNetworkMmsis(mmsi)),
+        );
+        const networkSet = new Set<number>();
+        for (const list of networkResults) {
+          for (const m of list) {
+            if (!selectedVessels.includes(m)) networkSet.add(m);
           }
+        }
+        const networkArr = [...networkSet];
+        useLookbackStore.setState({ networkVessels: networkArr });
+        allMmsis.push(...networkArr);
+      }
+
+      if (controller.signal.aborted) return;
+
+      // Fetch all tracks in parallel
+      const results = await Promise.allSettled(
+        allMmsis.map((mmsi) => fetchTrack(mmsi, dateRange.start, dateRange.end)),
+      );
+
+      if (controller.signal.aborted) return;
+
+      for (let i = 0; i < allMmsis.length; i++) {
+        const mmsi = allMmsis[i];
+        const result = results[i];
+        if (result.status === 'fulfilled') {
+          setTracks(mmsi, result.value);
+        } else {
+          setTrackError(mmsi, result.reason?.message ?? 'Failed to load track');
         }
       }
     }
-  }
 
-  // Update network vessels in store
-  useEffect(() => {
-    if (isActive && showNetwork) {
-      const store = useLookbackStore.getState();
-      const current = new Set(store.networkVessels);
-      const desired = networkMmsis;
-      if (
-        current.size !== desired.size ||
-        [...desired].some((m) => !current.has(m))
-      ) {
-        useLookbackStore.setState({ networkVessels: [...desired] });
-      }
-    }
-  }, [isActive, showNetwork, networkMmsis.size]);
+    loadAll();
 
-  // Step 2: Fetch tracks for all vessels (selected + network)
-  const allMmsis = isActive
-    ? [...selectedVessels, ...networkMmsis]
-    : [];
-
-  const trackQueries = useQueries({
-    queries: allMmsis.map((mmsi) => ({
-      queryKey: ['lookback-track', mmsi, dateRange.start.toISOString(), dateRange.end.toISOString()],
-      queryFn: () => fetchTrack(mmsi, dateRange.start, dateRange.end),
-      staleTime: Infinity,
-      enabled: isActive,
-    })),
-  });
-
-  // Sync track results into the lookback store
-  useEffect(() => {
-    if (!isActive) return;
-
-    for (let i = 0; i < allMmsis.length; i++) {
-      const mmsi = allMmsis[i];
-      const query = trackQueries[i];
-      if (!query) continue;
-
-      if (query.data) {
-        setTracks(mmsi, query.data);
-      } else if (query.error) {
-        setTrackError(
-          mmsi,
-          query.error instanceof Error ? query.error.message : 'Failed to load track',
-        );
-      }
-    }
-  }, [isActive, trackQueries.map((q) => q.dataUpdatedAt).join(',')]);
-
-  const isLoading = trackQueries.some((q) => q.isLoading);
-  const allLoaded = trackQueries.every((q) => q.isSuccess || q.isError);
-
-  return { isLoading, allLoaded };
+    return () => {
+      controller.abort();
+    };
+  }, [isActive, selectedVessels.join(','), showNetwork, dateRange.start.getTime(), dateRange.end.getTime()]);
 }

@@ -265,26 +265,36 @@ async def area_history(
         "coordinates": [coords],
     })
 
+    # Use a subquery on distinct MMSIs first, then count — much faster than
+    # scanning all positions with ST_Within + GROUP BY on huge tables.
     sql = text(
-        "SELECT vp.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier, "
-        "COUNT(*) as position_count "
-        "FROM vessel_positions vp "
-        "JOIN vessel_profiles vp2 ON vp.mmsi = vp2.mmsi "
-        "WHERE vp.timestamp BETWEEN :start AND :end "
-        "  AND ST_Within(vp.position::geometry, ST_GeomFromGeoJSON(:polygon_geojson)) "
-        "GROUP BY vp.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier "
-        "ORDER BY position_count DESC "
-        "LIMIT 50"
+        "SET LOCAL statement_timeout = '30s'; "
+        "SELECT sub.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier, sub.position_count "
+        "FROM ("
+        "  SELECT vp.mmsi, COUNT(*) as position_count "
+        "  FROM vessel_positions vp "
+        "  WHERE vp.timestamp BETWEEN :start AND :end "
+        "    AND ST_Intersects(vp.position::geometry, ST_GeomFromGeoJSON(:polygon_geojson)) "
+        "  GROUP BY vp.mmsi "
+        "  ORDER BY position_count DESC "
+        "  LIMIT 50"
+        ") sub "
+        "JOIN vessel_profiles vp2 ON sub.mmsi = vp2.mmsi "
+        "ORDER BY sub.position_count DESC"
     )
 
     session_factory = get_session()
     async with session_factory() as session:
-        result = await session.execute(sql, {
-            "start": start,
-            "end": end,
-            "polygon_geojson": geojson_polygon,
-        })
-        rows = result.mappings().all()
+        try:
+            result = await session.execute(sql, {
+                "start": start,
+                "end": end,
+                "polygon_geojson": geojson_polygon,
+            })
+            rows = result.mappings().all()
+        except Exception as exc:
+            logger.warning("Area history query failed: %s", exc)
+            raise HTTPException(status_code=504, detail="Query timed out — try a smaller area or shorter time range")
 
     return [
         {

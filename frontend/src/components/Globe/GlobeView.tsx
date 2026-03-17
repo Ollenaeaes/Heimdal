@@ -44,7 +44,6 @@ export interface GlobeViewProps {
 function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfrastructure = false, showGnssZones = false, showNetwork = false }: GlobeViewProps = {}) {
   const viewerRef = useRef<{ cesiumElement?: Viewer }>(null);
   const lookbackActive = useLookbackStore((s) => s.isActive);
-  const isAreaMode = useLookbackStore((s) => s.isAreaMode);
 
   // Fetch lookback tracks when active
   useLookbackTracks();
@@ -121,8 +120,8 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfra
         fullscreenButton={false}
         shouldAnimate
       >
-        {/* Hide real-time markers when area lookback is active */}
-        {!(lookbackActive && isAreaMode) && <VesselMarkers />}
+        {/* Hide real-time markers during any lookback mode */}
+        {!lookbackActive && <VesselMarkers />}
         {!lookbackActive && <TrackTrail />}
         <GfwEventMarkers visible={showGfwEvents && !lookbackActive} />
         <SarMarkers visible={showSarDetections && !lookbackActive} />
