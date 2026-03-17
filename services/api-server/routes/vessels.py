@@ -1,27 +1,40 @@
 """Vessel REST endpoints for the Heimdal API server.
 
 Provides:
-- GET /api/vessels           — paginated vessel list with filters
-- GET /api/vessels/{mmsi}    — full vessel profile
+- GET /api/vessels              — paginated vessel list with filters
+- GET /api/vessels/snapshot     — lightweight map snapshot
+- GET /api/vessels/area-history — historical vessels within a polygon
+- GET /api/vessels/{mmsi}       — full vessel profile
 - GET /api/vessels/{mmsi}/track — vessel position track
+- GET /api/vessels/{mmsi}/track/export — track export (JSON/CSV, with cold storage)
 """
 
 from __future__ import annotations
 
+import asyncio
+import csv
+import io
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import json as _json
 
+import pyarrow.parquet as pq
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy import text
 
+from shared.config import get_settings
 from shared.db.connection import get_session
 
 logger = logging.getLogger("api-server.vessels")
 
 router = APIRouter(prefix="/api", tags=["vessels"])
+
+# Limit concurrent Parquet export reads
+_export_semaphore = asyncio.Semaphore(2)
 
 # Fields returned in the vessel summary (list endpoint)
 _SUMMARY_FIELDS = (
@@ -211,6 +224,80 @@ async def vessel_snapshot(
     ]
 
 
+@router.get("/vessels/area-history")
+async def area_history(
+    polygon: str = Query(..., description="JSON array of [lon, lat] coordinate pairs"),
+    start: datetime = Query(...),
+    end: datetime = Query(...),
+):
+    """Return vessels that appeared within a polygon during a time range."""
+    # Parse polygon JSON
+    try:
+        coords = _json.loads(polygon)
+    except _json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="polygon must be valid JSON")
+
+    if not isinstance(coords, list) or len(coords) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="polygon must have at least 3 coordinate pairs",
+        )
+
+    for i, pair in enumerate(coords):
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"coordinate at index {i} must be a [lon, lat] pair",
+            )
+
+    # Close the ring if not already closed
+    if coords[0] != coords[-1]:
+        coords.append(coords[0])
+
+    # Clamp date range to max 30 days
+    max_range = timedelta(days=30)
+    if end - start > max_range:
+        start = end - max_range
+
+    # Build GeoJSON polygon
+    geojson_polygon = _json.dumps({
+        "type": "Polygon",
+        "coordinates": [coords],
+    })
+
+    sql = text(
+        "SELECT vp.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier, "
+        "COUNT(*) as position_count "
+        "FROM vessel_positions vp "
+        "JOIN vessel_profiles vp2 ON vp.mmsi = vp2.mmsi "
+        "WHERE vp.timestamp BETWEEN :start AND :end "
+        "  AND ST_Within(vp.position::geometry, ST_GeomFromGeoJSON(:polygon_geojson)) "
+        "GROUP BY vp.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier "
+        "ORDER BY position_count DESC "
+        "LIMIT 50"
+    )
+
+    session_factory = get_session()
+    async with session_factory() as session:
+        result = await session.execute(sql, {
+            "start": start,
+            "end": end,
+            "polygon_geojson": geojson_polygon,
+        })
+        rows = result.mappings().all()
+
+    return [
+        {
+            "mmsi": r["mmsi"],
+            "ship_name": r["ship_name"],
+            "flag_state": r["flag_country"],
+            "risk_tier": r["risk_tier"],
+            "position_count": r["position_count"],
+        }
+        for r in rows
+    ]
+
+
 @router.get("/vessels/{mmsi}")
 async def get_vessel(mmsi: int):
     """Return full vessel profile including last position, anomaly count, latest enrichment, sanctions details."""
@@ -373,3 +460,148 @@ async def get_vessel_track(
         rows = result.mappings().all()
 
     return [dict(r) for r in rows]
+
+
+@router.get("/vessels/{mmsi}/track/export")
+async def export_vessel_track(
+    mmsi: int,
+    start: datetime = Query(...),
+    end: datetime = Query(...),
+    format: str = Query("json", pattern="^(json|csv)$"),
+):
+    """Export vessel track data as JSON or CSV, reading from cold Parquet storage for older data."""
+    settings = get_settings()
+    base_path = Path(settings.raw_storage.base_path)
+    cold_age = timedelta(days=30)
+    now = datetime.now(timezone.utc)
+    cutoff = now - cold_age
+
+    positions: list[dict] = []
+
+    # --- Portion within last 30 days: query the DB ---
+    db_start = max(start, cutoff)
+    db_end = end
+    if db_end > db_start:
+        session_factory = get_session()
+        async with session_factory() as session:
+            result = await session.execute(
+                text(
+                    "SELECT timestamp, "
+                    "ST_Y(position::geometry) AS lat, "
+                    "ST_X(position::geometry) AS lon, "
+                    "sog, cog, heading "
+                    "FROM vessel_positions "
+                    "WHERE mmsi = :mmsi AND timestamp BETWEEN :start_time AND :end_time "
+                    "ORDER BY timestamp ASC"
+                ),
+                {"mmsi": mmsi, "start_time": db_start, "end_time": db_end},
+            )
+            for r in result.mappings().all():
+                positions.append({
+                    "timestamp": r["timestamp"].isoformat() if r["timestamp"] else None,
+                    "lat": r["lat"],
+                    "lon": r["lon"],
+                    "sog": r["sog"],
+                    "cog": r["cog"],
+                    "heading": r["heading"],
+                })
+
+    # --- Portion older than 30 days: read from cold Parquet storage ---
+    parquet_end = min(end, cutoff)
+    if start < parquet_end:
+        async with _export_semaphore:
+            parquet_positions = await asyncio.to_thread(
+                _read_parquet_positions, base_path, mmsi, start, parquet_end
+            )
+        positions = parquet_positions + positions  # prepend older data
+
+    # --- Format output ---
+    if format == "csv":
+        return _build_csv_response(positions, mmsi, start, end)
+
+    return positions
+
+
+def _read_parquet_positions(
+    base_path: Path,
+    mmsi: int,
+    start: datetime,
+    end: datetime,
+) -> list[dict]:
+    """Read positions from monthly Parquet files in cold storage."""
+    positions: list[dict] = []
+
+    # Iterate over each month in the range
+    current = start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    while current <= end:
+        year = current.year
+        month = current.month
+        # Build path from validated date components only (no user input)
+        parquet_path = (
+            base_path
+            / "cold"
+            / "ais"
+            / f"{year:04d}"
+            / f"{month:02d}"
+            / f"positions_{year:04d}-{month:02d}.parquet"
+        )
+
+        if parquet_path.exists():
+            try:
+                table = pq.read_table(
+                    str(parquet_path),
+                    filters=[("mmsi", "=", mmsi)],
+                )
+                df = table.to_pandas()
+
+                if not df.empty:
+                    # Filter by timestamp range
+                    if "timestamp" in df.columns:
+                        ts = df["timestamp"]
+                        mask = (ts >= start) & (ts <= end)
+                        df = df[mask]
+
+                    for _, row in df.iterrows():
+                        ts_val = row.get("timestamp")
+                        positions.append({
+                            "timestamp": ts_val.isoformat() if hasattr(ts_val, "isoformat") else str(ts_val),
+                            "lat": row.get("lat"),
+                            "lon": row.get("lon"),
+                            "sog": row.get("sog"),
+                            "cog": row.get("cog"),
+                            "heading": row.get("heading"),
+                        })
+            except Exception:
+                logger.warning("Failed to read parquet file %s", parquet_path, exc_info=True)
+
+        # Advance to next month
+        if month == 12:
+            current = current.replace(year=year + 1, month=1)
+        else:
+            current = current.replace(month=month + 1)
+
+    # Sort by timestamp
+    positions.sort(key=lambda p: p["timestamp"] or "")
+    return positions
+
+
+def _build_csv_response(
+    positions: list[dict], mmsi: int, start: datetime, end: datetime
+) -> Response:
+    """Build a CSV file response from position data."""
+    output = io.StringIO()
+    fieldnames = ["timestamp", "lat", "lon", "sog", "cog", "heading"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for pos in positions:
+        writer.writerow(pos)
+
+    start_str = start.strftime("%Y%m%d")
+    end_str = end.strftime("%Y%m%d")
+    filename = f"track-{mmsi}-{start_str}-{end_str}.csv"
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
