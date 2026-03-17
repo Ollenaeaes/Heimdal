@@ -305,9 +305,23 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - Tests: 25 frontend tests
 - Commit: `85034f9`
 
+### 30-lookback-and-export (all 8 stories)
+- Story 1: CollapsibleSection.tsx — shared wrapper, applied to all 11 VesselPanel sections below IdentitySection
+- Story 2: LookbackSection.tsx — vessel search, date range picker, network toggle, start playback button
+  - useLookbackStore.ts — Zustand store for multi-vessel lookback state (vessel/area modes)
+- Story 3: useLookbackTracks.ts — parallel multi-vessel track fetching with TanStack useQueries, network resolution
+- Story 4: TimelineBar.tsx — full-width bottom bar with play/pause, speed controls (1x/5x/30x/100x), scrubber, time-based animation loop via requestAnimationFrame
+- Story 5: LookbackOverlay.tsx — multi-vessel globe rendering with binary-search interpolation, progressive trails, network vessel dimming
+- Story 6: TrackExportSection.tsx (frontend) + GET /api/vessels/{mmsi}/track/export (backend) — JSON/CSV export with cold Parquet storage support, semaphore rate limiting
+- Story 7: Removed TrackReplay.tsx, ReplayOverlay.tsx, useTrackReplay.ts, useReplayStore.ts, trackReplay.test.ts — updated barrel exports
+- Story 8: AreaLookbackTool.tsx (polygon drawing via ScreenSpaceEventHandler) + AreaLookbackPanel.tsx (search + results) + GET /api/vessels/area-history (PostGIS ST_Within)
+- Frontend build: 4 chunks, total ~540KB gzipped
+- All 15 pre-existing test failures unchanged, zero new regressions
+- Commits: 5 commits on feature/lookback-and-export branch
+
 ## Current Story
 
-Wave 14 complete. All 3 specs across waves 13-14 implemented.
+Spec 30 complete. All stories implemented.
 
 ## Known Issues
 
@@ -361,17 +375,9 @@ Wave 14 complete. All 3 specs across waves 13-14 implemented.
 
 ## Notes for Next Session
 
-- WAVE 12 COMPLETE (spec 29) on branch `feature/operations-centre-theme`
-- All 26 specs across 12 waves implemented
-- Frontend tests passing: 408 (4 pre-existing failures: window not defined in Node for Cesium)
-- 16 new Wave 12 tests
-- Full visual restyle: dark navy globe, chevron markers, HUD top bar, dense panels, ops-centre aesthetic
-- Fonts: Inter (proportional) + JetBrains Mono (monospace) via Google Fonts
-- Ready for merge to main
-
-### Wave 13-14: Capability Modules Frontend — ALL COMPLETE
-- **Spec 26** — Infrastructure Protection Frontend: 4 stories ✓
-- **Spec 27** — Spoofing Detection Frontend: 3 stories ✓
-- **Spec 28** — Network Mapping Frontend: 4 stories ✓
-
-- New approved spec: **30-lookback-and-export** — Multi-vessel temporal lookback with bottom timeline bar, track export (JSON/CSV from hot+cold storage), collapsible panel sections. 7 stories across 5 groups. Ready for implementation.
+- Spec 30 lookback-and-export complete on branch `feature/lookback-and-export`
+- Ready for local testing, then merge to main
+- Build and deploy frontend with `npx vite build` (no `tsc` needed in Docker)
+- Backend needs `pyarrow>=15.0` added to api-server container
+- No DB schema changes — no migration needed, safe for prod deploy with `--no-deps`
+- The old replay system (TrackReplay, ReplayOverlay, useReplayStore) is fully removed

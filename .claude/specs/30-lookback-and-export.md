@@ -2,7 +2,7 @@
 
 **Slug:** `lookback-and-export`
 **Created:** 2026-03-16
-**Status:** approved
+**Status:** completed
 **Priority:** high
 
 ---
@@ -22,6 +22,8 @@ The current replay only shows one vessel at a time, embedded in the VesselPanel.
 - NOT: More than 5 user-selected vessels in playback (network vessels are additive but read-only)
 - NOT: PDF/image export of tracks
 - NOT: Saving/sharing lookback sessions
+- NOT: Saving/reusing drawn polygons (predefined zones are a future feature)
+- NOT: Polygon vertex editing after drawing (redraw to change the area)
 - NOT: Modifying the cold archiver or retention settings
 
 ---
@@ -202,6 +204,61 @@ Create `LookbackOverlay.tsx` in `components/Globe/` replacing `ReplayOverlay.tsx
 
 ---
 
+### Story 8: Area Lookback (Draw-to-Investigate)
+
+**As a** user investigating an incident in a specific sea area (e.g., subsea cable break, pollution event)
+**I want** to draw a polygon on the globe, select a time range, and play back all vessel traffic that passed through that area
+**So that** I can identify which vessels were present without knowing their identity in advance
+
+**Acceptance Criteria:**
+
+- GIVEN the globe view WHEN I click an "Area Lookback" button in the toolbar THEN the cursor changes to crosshair mode and I can click to place polygon vertices on the globe; double-click or click the first vertex to close the polygon
+- GIVEN I've closed a polygon WHEN the shape completes THEN a configuration popup appears anchored near the polygon showing: the drawn area highlighted in semi-transparent blue, a date range picker (max 30 days), vessel count estimate (fetched on date change), a "Search" button, and a "Cancel" button to clear the polygon
+- GIVEN I click "Search" WHEN the query runs THEN the backend returns all distinct vessels that had at least one position report inside the polygon during the time range
+- GIVEN search results WHEN displayed THEN the popup shows a vessel list (name, MMSI, flag, risk tier, position count in area) sorted by position count descending, with checkboxes to include/exclude vessels from playback
+- GIVEN the vessel list WHEN I click "Start Playback" THEN area lookback activates — all other vessel markers on the globe are hidden, only the discovered vessels are shown, reusing the existing TimelineBar and LookbackOverlay
+- GIVEN area lookback is active WHEN the globe renders THEN the drawn polygon remains visible as a semi-transparent overlay, and only the area-discovered vessels (and their tracks) are rendered — no other vessels are shown to save compute
+- GIVEN area lookback is active WHEN I close the timeline bar THEN the polygon, area lookback, and vessel hiding all deactivate — normal vessel rendering resumes
+- GIVEN the search returns more than 50 vessels WHEN results display THEN show a warning "N vessels found — showing top 50 by activity. Narrow the area or time range for better results." and only the top 50 are available for playback
+
+**Test Requirements:**
+
+- [ ] Test: "Area Lookback" button enters drawing mode with crosshair cursor
+- [ ] Test: Clicking on the globe places vertices; a preview polygon line follows the cursor
+- [ ] Test: Double-click or clicking the first vertex closes the polygon
+- [ ] Test: Configuration popup appears with date range picker and search button
+- [ ] Test: Search calls the area-history API endpoint with correct polygon coordinates + time range
+- [ ] Test: Results show discovered vessels sorted by position count with checkboxes
+- [ ] Test: Unchecking a vessel excludes it from playback
+- [ ] Test: "Start Playback" activates lookback with selected vessels and hides all other markers
+- [ ] Test: Polygon overlay persists during playback
+- [ ] Test: Closing timeline bar clears the polygon and restores normal vessel rendering
+- [ ] Test: More than 50 vessels shows warning and truncates to top 50
+- [ ] Test: Backend endpoint correctly filters positions within polygon geometry
+
+**Technical Notes:**
+
+**Frontend — Drawing Tool:** Create `AreaLookbackTool.tsx` in `components/Globe/`. Use Cesium `ScreenSpaceEventHandler` with `LEFT_CLICK` to place vertices and `MOUSE_MOVE` to show a preview line from the last vertex to the cursor. Double-click or clicking within 10px of the first vertex closes the polygon. Render the in-progress polygon as a `PolylineGraphics` and the completed polygon as a `PolygonGraphics` with semi-transparent blue fill. Store polygon coordinates in `useLookbackStore`.
+
+**Frontend — Vessel Hiding:** When area lookback is active, `useLookbackStore.isAreaMode = true`. The existing `VesselMarkers` component checks this flag and renders nothing when true. Only `LookbackOverlay` renders vessels during area lookback. This is the simplest way to hide all non-relevant vessels without modifying the marker rendering logic.
+
+**Frontend — Config Popup:** Create `AreaLookbackPanel.tsx` as a floating panel (absolute positioned near the polygon centroid). Shows search config before playback, vessel results after search. Feeds discovered MMSIs into `useLookbackStore.configure()` then `activate()` — reusing TimelineBar and LookbackOverlay without modification.
+
+**Backend:** New endpoint `GET /api/vessels/area-history` in `routes/vessels.py`. Accepts `polygon` (JSON array of `[lon, lat]` coordinate pairs), `start`, `end` query params. Query:
+```sql
+SELECT vp.mmsi, vp2.ship_name, vp2.flag_state, vp2.risk_tier, COUNT(*) as position_count
+FROM vessel_positions vp
+JOIN vessel_profiles vp2 ON vp.mmsi = vp2.mmsi
+WHERE vp.timestamp BETWEEN :start AND :end
+  AND ST_Within(vp.position::geometry, ST_GeomFromGeoJSON(:polygon_geojson))
+GROUP BY vp.mmsi, vp2.ship_name, vp2.flag_state, vp2.risk_tier
+ORDER BY position_count DESC
+LIMIT 50
+```
+Uses PostGIS `ST_Within` + `ST_GeomFromGeoJSON` against the `vessel_positions.position` geography column. Consider adding a spatial index (`CREATE INDEX idx_positions_geom ON vessel_positions USING GIST (position)`) if query performance is slow on large time ranges.
+
+---
+
 ### Story 7: Remove Old Replay System
 
 **As a** developer
@@ -236,10 +293,15 @@ No database schema changes. A new Zustand store (`useLookbackStore`) replaces `u
 interface LookbackState {
   // Configuration (set before playback starts)
   isActive: boolean;
-  selectedVessels: number[];       // MMSIs (max 5)
+  selectedVessels: number[];       // MMSIs (max 5 for vessel mode, up to 50 for area mode)
   networkVessels: number[];        // MMSIs from network graph (unbounded but typically <20)
   showNetwork: boolean;
   dateRange: { start: Date; end: Date };
+
+  // Area lookback mode
+  isAreaMode: boolean;             // true = area lookback, false = vessel lookback
+  areaPolygon: [number, number][] | null;  // [lon, lat] pairs defining the polygon (null when not in area mode)
+  isDrawing: boolean;              // true while user is placing polygon vertices
 
   // Playback state
   isPlaying: boolean;
@@ -252,6 +314,7 @@ interface LookbackState {
 
   // Actions
   configure: (config: LookbackConfig) => void;
+  configureArea: (polygon: [number, number][], vessels: number[], dateRange: DateRange) => void;
   activate: () => void;
   deactivate: () => void;
   play: () => void;
@@ -261,12 +324,15 @@ interface LookbackState {
   seekToProgress: (percent: number) => void;
   setTracks: (mmsi: number, track: TrackPoint[]) => void;
   setTrackError: (mmsi: number, error: string) => void;
+  startDrawing: () => void;
+  finishDrawing: (polygon: [number, number][]) => void;
+  cancelDrawing: () => void;
 }
 ```
 
 ### API Changes
 
-**New endpoint:**
+**New endpoints:**
 
 ```
 GET /api/vessels/{mmsi}/track/export?start=<ISO>&end=<ISO>&format=json|csv
@@ -275,6 +341,16 @@ GET /api/vessels/{mmsi}/track/export?start=<ISO>&end=<ISO>&format=json|csv
 - Returns track data from either hot DB or cold Parquet storage depending on the date range
 - Response: JSON array or CSV stream
 - No auth changes (same as existing track endpoint)
+
+```
+GET /api/vessels/area-history?polygon=<GeoJSON>&start=<ISO>&end=<ISO>
+```
+
+- `polygon`: URL-encoded GeoJSON Polygon geometry (array of `[lon, lat]` coordinate rings)
+- Returns distinct vessels with position counts inside the polygon during the time range
+- Response: JSON array of `{mmsi, ship_name, flag_state, risk_tier, position_count}`
+- Limited to 50 results, ordered by position_count descending
+- Uses PostGIS `ST_Within` + `ST_GeomFromGeoJSON` for spatial filtering
 
 ### Dependencies
 
@@ -294,20 +370,22 @@ GET /api/vessels/{mmsi}/track/export?start=<ISO>&end=<ISO>&format=json|csv
 
 - **Story 1** — Collapsible panel sections → `frontend/src/components/VesselPanel/CollapsibleSection.tsx` + refactor all section components
 - **Story 6 (backend only)** — Track export API endpoint → `services/api-server/routes/vessels.py`
+- **Story 8 (backend only)** — Area-history API endpoint → `services/api-server/routes/vessels.py` (different endpoint, same file — coordinate with Story 6)
 
 ### Group 2 (parallel — after Group 1)
 
-- **Story 2** — Lookback section UI → `frontend/src/components/VesselPanel/LookbackSection.tsx` + `frontend/src/hooks/useLookbackStore.ts`
+- **Story 2** — Lookback section UI → `frontend/src/components/VesselPanel/LookbackSection.tsx` + `frontend/src/hooks/useLookbackStore.ts` (includes area mode fields in store)
 - **Story 6 (frontend only)** — Track export UI → `frontend/src/components/VesselPanel/TrackExportSection.tsx`
 
 ### Group 3 (parallel — after Group 2)
 
 - **Story 3** — Multi-vessel track fetching → `frontend/src/hooks/useLookbackTracks.ts`
 - **Story 4** — Bottom timeline bar → `frontend/src/components/Globe/TimelineBar.tsx`
+- **Story 8 (frontend)** — Area drawing tool + config panel → `frontend/src/components/Globe/AreaLookbackTool.tsx` + `AreaLookbackPanel.tsx`
 
 ### Group 4 (after Group 3)
 
-- **Story 5** — Globe multi-vessel rendering → `frontend/src/components/Globe/LookbackOverlay.tsx` + modifications to `GlobeView.tsx`
+- **Story 5** — Globe multi-vessel rendering → `frontend/src/components/Globe/LookbackOverlay.tsx` + modifications to `GlobeView.tsx` (includes area mode: hide other markers when `isAreaMode`, render polygon overlay)
 
 ### Group 5 (after Group 4 verified)
 
@@ -315,7 +393,8 @@ GET /api/vessels/{mmsi}/track/export?start=<ISO>&end=<ISO>&format=json|csv
 
 **Parallel safety rules:**
 - Stories in the same group touch DIFFERENT files/folders
-- Story 5 depends on both the store (Story 2), tracks (Story 3), and timeline (Story 4)
+- Story 5 depends on both the store (Story 2), tracks (Story 3), timeline (Story 4), and area tool (Story 8 frontend)
+- Story 8 backend and Story 6 backend both touch `vessels.py` — if in same group, coordinate to avoid conflicts (different functions, append to file)
 - Story 7 only runs after everything else is verified working
 
 ---
@@ -328,6 +407,8 @@ GET /api/vessels/{mmsi}/track/export?start=<ISO>&end=<ISO>&format=json|csv
 - Network vessel resolution: depth=1 only (immediate connections, not full graph)
 - Timeline scrubber: simple click-to-seek, no drag support initially
 - Cold storage export: read full Parquet file and filter in memory (fine for monthly files)
+- Area lookback polygon: simple click-to-place vertices, no vertex editing/dragging after placement
+- Area-history query: no spatial index initially — add if query time exceeds 5s on typical ranges
 
 ### Upgrade Path (what changes for production)
 
@@ -335,12 +416,17 @@ GET /api/vessels/{mmsi}/track/export?start=<ISO>&end=<ISO>&format=json|csv
 - "Add geodesic interpolation for long gaps" — accuracy improvement
 - "Partition Parquet by MMSI for faster cold exports" — performance story if export gets slow
 - "Add shared lookback sessions via URL params" — collaboration feature
+- "Add polygon vertex editing" — let users drag vertices to adjust the area after drawing
+- "Add spatial index on vessel_positions" — `CREATE INDEX idx_positions_geom ON vessel_positions USING GIST (position)` if area queries are slow
+- "Add predefined zones for area lookback" — let users pick from saved cable routes, shipping lanes, or port areas instead of drawing
 
 ### Architecture Decisions
 
 - **Time-based animation instead of index-based**: The old replay stepped through array indices, which doesn't work for multi-vessel sync since vessels have different position reporting frequencies. The new system advances a global `currentTime` and each vessel independently finds its position at that time.
-- **Zustand store over React state**: Lookback state needs to be shared between VesselPanel (config), TimelineBar (controls), and LookbackOverlay (rendering) — a global store is the right fit.
+- **Zustand store over React state**: Lookback state needs to be shared between VesselPanel (config), TimelineBar (controls), LookbackOverlay (rendering), and AreaLookbackTool (drawing) — a global store is the right fit.
 - **Separate TimelineBar from VesselPanel**: The timeline is a globe-level UI element, not a panel section. It needs full-width layout and sits outside the panel's DOM hierarchy.
+- **Area lookback reuses the same playback infrastructure**: Once vessels are discovered via the area-history query, they're fed into the same `useLookbackStore` → `useLookbackTracks` → `LookbackOverlay` pipeline as vessel-selection lookback. The only difference is the entry point and the `isAreaMode` flag that hides unrelated vessels.
+- **Hide all other vessels in area mode**: When `isAreaMode` is true, `VesselMarkers` renders nothing. This avoids computing positions, icons, and interactions for thousands of irrelevant vessels. The globe only renders the discovered area vessels via `LookbackOverlay`.
 
 ---
 
@@ -352,7 +438,7 @@ Before this feature is marked complete:
 - [ ] All acceptance criteria met
 - [ ] All tests written and passing
 - [ ] Tests verify real behavior (not just status codes)
-- [ ] Edge cases handled (empty tracks, failed fetches, max vessels)
+- [ ] Edge cases handled (empty tracks, failed fetches, max vessels, empty area results)
 - [ ] No regressions in existing tests
 - [ ] Old replay system fully removed with no dead references
 - [ ] Code committed with proper messages
