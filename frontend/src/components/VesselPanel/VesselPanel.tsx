@@ -1,13 +1,14 @@
 import { useVesselStore } from '../../hooks/useVesselStore';
 import { useVesselDetail } from '../../hooks/useVesselDetail';
-import { useTrackReplay } from '../../hooks/useTrackReplay';
+import { useLookbackStore } from '../../hooks/useLookbackStore';
 import { WatchButton } from './WatchButton';
 import { DossierExport } from './DossierExport';
 import { IdentitySection } from './IdentitySection';
 import { StatusSection } from './StatusSection';
 import { RiskSection } from './RiskSection';
 import { VoyageTimeline } from './VoyageTimeline';
-import { TrackReplay } from './TrackReplay';
+import { LookbackSection } from './LookbackSection';
+import { TrackExportSection } from './TrackExportSection';
 import { SanctionsSection } from './SanctionsSection';
 import { OwnershipSection } from './OwnershipSection';
 import { NetworkGraph } from './NetworkGraph';
@@ -21,7 +22,7 @@ function VesselPanel() {
   const selectedMmsi = useVesselStore((s) => s.selectedMmsi);
   const selectVessel = useVesselStore((s) => s.selectVessel);
   const { data: vessel, isLoading } = useVesselDetail(selectedMmsi);
-  const replay = useTrackReplay(selectedMmsi);
+  const deactivateLookback = useLookbackStore((s) => s.deactivate);
 
   const isOpen = selectedMmsi !== null;
 
@@ -48,7 +49,7 @@ function VesselPanel() {
         <button
           data-testid="panel-close"
           onClick={() => {
-            replay.deactivate();
+            deactivateLookback();
             selectVessel(null);
           }}
           className="text-gray-400 hover:text-white text-lg leading-none"
@@ -71,7 +72,8 @@ function VesselPanel() {
           <StatusSection vessel={vessel} mmsi={vessel.mmsi} />
           <RiskSection vessel={vessel} />
           <VoyageTimeline mmsi={vessel.mmsi} anomalies={vessel.anomalies ?? []} />
-          <TrackReplay replay={replay} />
+          <LookbackSection mmsi={vessel.mmsi} />
+          <TrackExportSection mmsi={vessel.mmsi} />
           <SanctionsSection matches={vessel.sanctionsMatches} />
           <OwnershipSection
             ownershipData={vessel.ownershipData}
