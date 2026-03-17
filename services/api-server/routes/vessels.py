@@ -265,10 +265,7 @@ async def area_history(
         "coordinates": [coords],
     })
 
-    # Use a subquery on distinct MMSIs first, then count — much faster than
-    # scanning all positions with ST_Within + GROUP BY on huge tables.
     sql = text(
-        "SET LOCAL statement_timeout = '30s'; "
         "SELECT sub.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier, sub.position_count "
         "FROM ("
         "  SELECT vp.mmsi, COUNT(*) as position_count "
@@ -286,6 +283,8 @@ async def area_history(
     session_factory = get_session()
     async with session_factory() as session:
         try:
+            # Set statement timeout separately (asyncpg doesn't allow multi-statement)
+            await session.execute(text("SET LOCAL statement_timeout = '30s'"))
             result = await session.execute(sql, {
                 "start": start,
                 "end": end,
