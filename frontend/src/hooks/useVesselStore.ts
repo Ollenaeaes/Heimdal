@@ -27,6 +27,7 @@ export interface VesselStore {
   filters: FilterState;
   updatePosition: (update: VesselState) => void;
   updatePositions: (updates: VesselState[]) => void;
+  replaceGreenVessels: (greenVessels: VesselState[]) => void;
   clearOldPositions: (maxAgeMs: number) => void;
   selectVessel: (mmsi: number | null) => void;
   setFilter: (filter: Partial<FilterState>) => void;
@@ -59,6 +60,20 @@ export const useVesselStore = create<VesselStore>((set) => ({
       const newVessels = new Map(state.vessels);
       for (const update of updates) {
         newVessels.set(update.mmsi, update);
+      }
+      return { vessels: newVessels };
+    }),
+  replaceGreenVessels: (greenVessels) =>
+    set((state) => {
+      // Remove all existing green vessels, then add the new set
+      const newVessels = new Map<number, VesselState>();
+      for (const [mmsi, v] of state.vessels) {
+        if (v.riskTier !== 'green') {
+          newVessels.set(mmsi, v);
+        }
+      }
+      for (const v of greenVessels) {
+        newVessels.set(v.mmsi, v);
       }
       return { vessels: newVessels };
     }),

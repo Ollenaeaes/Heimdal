@@ -4,6 +4,7 @@ import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, HealthIndicator, Wa
 import type { StatsResponse } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
 import { usePositionPolling } from './hooks/usePositionPolling';
+import { useViewportGreenVessels } from './hooks/useViewportGreenVessels';
 import { useOverlays } from './hooks/useOverlays';
 import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Globe/Overlays';
@@ -31,7 +32,27 @@ const DEFAULT_OVERLAYS: OverlayToggleState = {
 /** Refresh interval for snapshot — keep in sync with STATS_REFETCH_INTERVAL (30s). */
 const SNAPSHOT_REFETCH_MS = 30_000;
 
-/** Seed the vessel store from the REST API and re-fetch periodically. */
+/** Parse snapshot API response into VesselState[]. */
+function parseSnapshotData(data: Array<Record<string, unknown>>): VesselState[] {
+  return data.map((d) => ({
+    mmsi: d.mmsi as number,
+    lat: d.lat as number,
+    lon: d.lon as number,
+    sog: (d.sog as number) ?? null,
+    cog: (d.cog as number) ?? null,
+    heading: null,
+    riskTier: (d.risk_tier as VesselState['riskTier']) ?? 'green',
+    riskScore: (d.risk_score as number) ?? 0,
+    name: d.name as string | undefined,
+    shipType: d.ship_type as number | undefined,
+    timestamp: new Date().toISOString(),
+  }));
+}
+
+/**
+ * Seed the vessel store with yellow/red/blacklisted vessels globally.
+ * Green vessels are loaded separately by useViewportGreenVessels.
+ */
 function useVesselSnapshot() {
   const updatePositions = useVesselStore((s) => s.updatePositions);
 
@@ -39,24 +60,11 @@ function useVesselSnapshot() {
     let cancelled = false;
 
     function fetchSnapshot() {
-      fetch('/api/vessels/snapshot')
+      fetch('/api/vessels/snapshot?risk_tiers=yellow,red,blacklisted')
         .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
         .then((data: Array<Record<string, unknown>>) => {
           if (cancelled) return;
-          const vessels: VesselState[] = data.map((d) => ({
-            mmsi: d.mmsi as number,
-            lat: d.lat as number,
-            lon: d.lon as number,
-            sog: (d.sog as number) ?? null,
-            cog: (d.cog as number) ?? null,
-            heading: null,
-            riskTier: (d.risk_tier as VesselState['riskTier']) ?? 'green',
-            riskScore: (d.risk_score as number) ?? 0,
-            name: d.name as string | undefined,
-            shipType: d.ship_type as number | undefined,
-            timestamp: new Date().toISOString(),
-          }));
-          updatePositions(vessels);
+          updatePositions(parseSnapshotData(data));
         })
         .catch(() => {});
     }
@@ -71,6 +79,7 @@ function AppInner() {
   useWatchlistAlerts();
   usePositionPolling();
   useVesselSnapshot();
+  useViewportGreenVessels();
   const [overlays, setOverlays] = useState<OverlayToggleState>(DEFAULT_OVERLAYS);
   const [layerPanelOpen, setLayerPanelOpen] = useState(true);
   useOverlays(overlays);

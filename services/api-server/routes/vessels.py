@@ -133,28 +133,65 @@ async def list_vessels(
 
 
 @router.get("/vessels/snapshot")
-async def vessel_snapshot():
-    """Return a lightweight snapshot of all vessels for map seeding.
+async def vessel_snapshot(
+    risk_tiers: Optional[str] = Query(None, description="Comma-separated risk tiers to include"),
+    bbox: Optional[str] = Query(None, description="sw_lat,sw_lon,ne_lat,ne_lon"),
+    sample: int = Query(1, ge=1, le=20, description="Show every Nth vessel (deterministic thinning via mmsi modulo)"),
+):
+    """Return a lightweight snapshot of vessels for map seeding.
 
     Returns minimal fields (mmsi, lat, lon, risk_tier, risk_score,
     ship_type, cog, sog) so the frontend can render the globe without
     waiting for WebSocket data.
+
+    Supports filtering by risk_tiers and bounding box so the frontend
+    can load high-risk vessels globally and green vessels only within
+    the current viewport. The sample parameter thins results at zoom-out
+    levels (e.g. sample=5 returns every 5th vessel by MMSI).
     """
+    clauses: list[str] = ["vp.last_lat IS NOT NULL AND vp.last_lon IS NOT NULL"]
+    params: dict = {}
+
+    if risk_tiers:
+        tiers = [t.strip() for t in risk_tiers.split(",") if t.strip()]
+        clauses.append("vp.risk_tier = ANY(:risk_tiers)")
+        params["risk_tiers"] = tiers
+
+    if sample > 1:
+        clauses.append("MOD(ABS(hashint4(vp.mmsi)), :sample) = 0")
+        params["sample"] = sample
+
+    if bbox:
+        parts = bbox.split(",")
+        if len(parts) == 4:
+            try:
+                sw_lat, sw_lon, ne_lat, ne_lon = (float(p) for p in parts)
+                clauses.append(
+                    "vp.last_lat >= :sw_lat AND vp.last_lat <= :ne_lat "
+                    "AND vp.last_lon >= :sw_lon AND vp.last_lon <= :ne_lon"
+                )
+                params.update(sw_lat=sw_lat, sw_lon=sw_lon, ne_lat=ne_lat, ne_lon=ne_lon)
+            except ValueError:
+                pass
+
+    where = f"WHERE {' AND '.join(clauses)}"
+
     session_factory = get_session()
     async with session_factory() as session:
         result = await session.execute(
             text(
-                "SELECT vp.mmsi, vp.last_lat, vp.last_lon, vp.risk_tier, "
-                "vp.risk_score, vp.ship_type, vp.ship_name, "
-                "lp.cog, lp.sog "
-                "FROM vessel_profiles vp "
-                "LEFT JOIN LATERAL ("
-                "  SELECT cog, sog FROM vessel_positions "
-                "  WHERE mmsi = vp.mmsi "
-                "  ORDER BY timestamp DESC LIMIT 1"
-                ") lp ON true "
-                "WHERE vp.last_lat IS NOT NULL AND vp.last_lon IS NOT NULL"
-            )
+                f"SELECT vp.mmsi, vp.last_lat, vp.last_lon, vp.risk_tier, "
+                f"vp.risk_score, vp.ship_type, vp.ship_name, "
+                f"lp.cog, lp.sog "
+                f"FROM vessel_profiles vp "
+                f"LEFT JOIN LATERAL ("
+                f"  SELECT cog, sog FROM vessel_positions "
+                f"  WHERE mmsi = vp.mmsi "
+                f"  ORDER BY timestamp DESC LIMIT 1"
+                f") lp ON true "
+                f"{where}"
+            ),
+            params,
         )
         rows = result.mappings().all()
 
