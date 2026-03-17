@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { Cartesian3 } from 'cesium';
 import { getCesiumViewer } from './Globe/cesiumViewer';
 import { useVesselStore } from '../hooks/useVesselStore';
+import { useLookbackStore } from '../hooks/useLookbackStore';
 import { useAlertStream, type AlertEvent } from '../hooks/useAlertStream';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -81,10 +82,11 @@ export default function EventLog() {
     [vessels, selectVessel],
   );
 
+  const lookbackActive = useLookbackStore((s) => s.isActive);
   const activeCount = events.filter((e) => e.severity === 'critical' || e.severity === 'high').length;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-40">
+    <div className={`absolute left-0 right-0 z-30 ${lookbackActive ? 'bottom-[60px]' : 'bottom-0'}`}>
       {/* Toggle bar */}
       <button
         onClick={() => setOpen(!open)}
