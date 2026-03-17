@@ -16,6 +16,12 @@ import { GnssZoneOverlay } from './GnssZoneOverlay';
 import { DuplicateMmsiLines } from './DuplicateMmsiLines';
 import { NetworkOverlay } from './NetworkOverlay';
 import { HoverDatablock } from './HoverDatablock';
+import { LookbackOverlay } from './LookbackOverlay';
+import { TimelineBar } from './TimelineBar';
+import { AreaLookbackDrawing } from './AreaLookbackTool';
+import { AreaLookbackPanel } from './AreaLookbackPanel';
+import { useLookbackStore } from '../../hooks/useLookbackStore';
+import { useLookbackTracks } from '../../hooks/useLookbackTracks';
 import { INITIAL_LON, INITIAL_LAT, INITIAL_ALT, setCesiumViewer } from './cesiumViewer';
 
 const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
@@ -37,6 +43,11 @@ export interface GlobeViewProps {
 
 function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfrastructure = false, showGnssZones = false, showNetwork = false }: GlobeViewProps = {}) {
   const viewerRef = useRef<{ cesiumElement?: Viewer }>(null);
+  const lookbackActive = useLookbackStore((s) => s.isActive);
+  const isAreaMode = useLookbackStore((s) => s.isAreaMode);
+
+  // Fetch lookback tracks when active
+  useLookbackTracks();
 
   useEffect(() => {
     const check = setInterval(() => {
@@ -110,16 +121,21 @@ function GlobeView({ showGfwEvents = false, showSarDetections = false, showInfra
         fullscreenButton={false}
         shouldAnimate
       >
-        <VesselMarkers />
-        <TrackTrail />
-        <GfwEventMarkers visible={showGfwEvents} />
-        <SarMarkers visible={showSarDetections} />
+        {/* Hide real-time markers when area lookback is active */}
+        {!(lookbackActive && isAreaMode) && <VesselMarkers />}
+        {!lookbackActive && <TrackTrail />}
+        <GfwEventMarkers visible={showGfwEvents && !lookbackActive} />
+        <SarMarkers visible={showSarDetections && !lookbackActive} />
         <InfrastructureOverlay visible={showInfrastructure} />
-        <DuplicateMmsiLines visible={showGnssZones} />
-        <NetworkOverlay visible={showNetwork} />
+        <DuplicateMmsiLines visible={showGnssZones && !lookbackActive} />
+        <NetworkOverlay visible={showNetwork && !lookbackActive} />
+        <LookbackOverlay />
+        <AreaLookbackDrawing />
       </ResiumViewer>
       <HoverDatablock />
-      <GnssZoneOverlay visible={showGnssZones} />
+      <GnssZoneOverlay visible={showGnssZones && !lookbackActive} />
+      <TimelineBar />
+      <AreaLookbackPanel />
     </>
   );
 }

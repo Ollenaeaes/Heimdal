@@ -8,6 +8,7 @@ import { useViewportGreenVessels } from './hooks/useViewportGreenVessels';
 import { useOverlays } from './hooks/useOverlays';
 import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Globe/Overlays';
+import { AreaLookbackButton } from './components/Globe/AreaLookbackTool';
 import Minimap from './components/Minimap';
 import type { OverlayToggleState } from './components/Globe/Overlays';
 import type { VesselState } from './types/vessel';
@@ -220,6 +221,7 @@ function AppInner() {
             <RiskFilter />
             <TypeFilter />
             <TimeRangeFilter />
+            <AreaLookbackButton />
           </div>
 
           {/* Layer panel toggle */}
