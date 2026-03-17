@@ -265,13 +265,15 @@ async def area_history(
         "coordinates": [coords],
     })
 
+    # Use ST_Intersects on native geography (no ::geometry cast) so the GIST index is used.
+    # ST_GeogFromText wraps the GeoJSON polygon as geography to match the column type.
     sql = text(
         "SELECT sub.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier, sub.position_count "
         "FROM ("
         "  SELECT vp.mmsi, COUNT(*) as position_count "
         "  FROM vessel_positions vp "
         "  WHERE vp.timestamp BETWEEN :start AND :end "
-        "    AND ST_Intersects(vp.position::geometry, ST_GeomFromGeoJSON(:polygon_geojson)) "
+        "    AND ST_Intersects(vp.position, ST_GeogFromText(ST_AsText(ST_GeomFromGeoJSON(:polygon_geojson)))) "
         "  GROUP BY vp.mmsi "
         "  ORDER BY position_count DESC "
         "  LIMIT 50"
