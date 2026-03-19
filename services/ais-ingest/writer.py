@@ -152,14 +152,40 @@ class BatchWriter:
 
                 for mmsi, data in vessels.items():
                     data["mmsi"] = mmsi
+
+                    # --- Profile overwrite protection ---
+                    # Don't let AIS updates from transponders without IMO
+                    # overwrite identity fields on profiles that have a valid IMO.
+                    # This is a belt-and-suspenders guard behind the collision
+                    # detection in main.py.
+                    _IDENTITY_FIELDS = frozenset({
+                        "ship_name", "call_sign", "ship_type", "length",
+                        "width", "draught", "destination",
+                    })
+                    has_imo = bool(data.get("imo"))
+
                     cols = list(data.keys())
                     vals = [data[c] for c in cols]
                     placeholders = [f"${i + 1}" for i in range(len(cols))]
-                    updates = [
-                        f"{c} = COALESCE(EXCLUDED.{c}, vessel_profiles.{c})"
-                        for c in cols
-                        if c != "mmsi"
-                    ]
+                    updates = []
+                    for c in cols:
+                        if c == "mmsi":
+                            continue
+                        if c in _IDENTITY_FIELDS and not has_imo:
+                            # Only overwrite identity fields if the incoming
+                            # data has an IMO (trusted source), OR the existing
+                            # profile has no IMO yet.
+                            updates.append(
+                                f"{c} = CASE"
+                                f" WHEN vessel_profiles.imo IS NULL"
+                                f"  THEN COALESCE(EXCLUDED.{c}, vessel_profiles.{c})"
+                                f" ELSE vessel_profiles.{c}"
+                                f" END"
+                            )
+                        else:
+                            updates.append(
+                                f"{c} = COALESCE(EXCLUDED.{c}, vessel_profiles.{c})"
+                            )
                     updates.append("updated_at = NOW()")
 
                     sql = (
