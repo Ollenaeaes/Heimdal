@@ -63,6 +63,7 @@ async function fetchVesselDetail(mmsi: number): Promise<VesselDetail> {
     },
     manualEnrichment: raw.latest_enrichment ?? undefined,
     manualEnrichments: [],
+    lastPositionTime: raw.last_position?.timestamp ?? undefined,
   };
 }
 

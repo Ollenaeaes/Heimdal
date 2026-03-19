@@ -24,7 +24,7 @@ export function StatusSection({ vessel, mmsi }: StatusSectionProps) {
   const cog = live?.cog ?? vessel.cog ?? null;
   const heading = live?.heading ?? vessel.heading ?? null;
   const destination = live?.destination ?? vessel.destination;
-  const timestamp = live?.timestamp ?? (vessel as any).timestamp;
+  const timestamp = live?.timestamp ?? vessel.lastPositionTime;
   const navStatus = live?.navStatus ?? vessel.navStatus;
 
   const positionStr =

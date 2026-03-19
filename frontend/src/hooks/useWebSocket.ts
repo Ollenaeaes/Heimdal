@@ -138,7 +138,7 @@ export function useWebSocket(): ConnectionStatus {
             cog: d.cog ?? null,
             heading: d.heading ?? null,
             navStatus: d.nav_status ?? existing?.navStatus ?? null,
-            timestamp: d.timestamp ?? new Date().toISOString(),
+            timestamp: d.timestamp ?? existing?.timestamp ?? new Date().toISOString(),
             // Preserve fields the stream doesn't provide
             riskTier: existing?.riskTier ?? 'green',
             riskScore: existing?.riskScore ?? 0,

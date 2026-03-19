@@ -90,6 +90,7 @@ export interface VesselDetail {
   manualEnrichment?: ManualEnrichment;
   manualEnrichments?: ManualEnrichmentRecord[];
   equasis?: EquasisData | null;
+  lastPositionTime?: string;
 }
 
 export interface TrackPoint {
