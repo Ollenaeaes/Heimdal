@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "hostinger-mcp": {
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        "/Users/olle.naas/Developer/Heimdal/scripts/hostinger-mcp.sh"
+      ],
+      "env": {}
+    }
+  }
+}
