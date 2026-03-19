@@ -92,6 +92,11 @@ async def update_vessel_sanctions(
 ) -> None:
     """Update sanctions_status and risk_tier for a vessel profile.
 
+    Also creates a ``sanctions_match`` anomaly_event so the scoring engine
+    can calculate the correct tier.  Without this anomaly, the scoring
+    engine's ``_update_score_and_tier`` would overwrite the tier on the
+    next position update.
+
     If any match has a high-confidence identifier (IMO/MMSI, confidence >= 0.9)
     from a known sanctions program, the vessel is set to 'blacklisted'.
     """
@@ -105,11 +110,15 @@ async def update_vessel_sanctions(
         "us_ofac_sdn", "eu_fsf", "gb_hmt_sanctions", "un_sc_sanctions",
     })
 
-    # Determine if this is a confirmed sanctions match
+    # Determine if this is a confirmed sanctions match and find the best match
     tier_update = ""
+    best_match: dict | None = None
     try:
         data = _json.loads(sanctions_status)
-        for match in data.get("matches", []):
+        matches = data.get("matches", [])
+        if matches:
+            best_match = max(matches, key=lambda m: m.get("confidence", 0))
+        for match in matches:
             if (
                 match.get("matched_field") in ("imo", "mmsi")
                 and float(match.get("confidence", 0)) >= 0.9
@@ -128,6 +137,54 @@ async def update_vessel_sanctions(
         ),
         {"mmsi": mmsi, "sanctions_status": sanctions_status},
     )
+
+    # Create a sanctions_match anomaly_event if we have matches.
+    # This ensures the scoring engine can find the anomaly when
+    # recalculating the tier on the next position update.
+    # Skip if an unresolved sanctions_match anomaly already exists.
+    if best_match:
+        existing = await session.execute(
+            text(
+                "SELECT id FROM anomaly_events "
+                "WHERE mmsi = :mmsi AND rule_id = 'sanctions_match' "
+                "AND resolved = false LIMIT 1"
+            ),
+            {"mmsi": mmsi},
+        )
+        if existing.first() is None:
+            confidence = best_match.get("confidence", 0)
+            matched_field = best_match.get("matched_field", "")
+            program = best_match.get("program", "unknown")
+            is_identifier = matched_field in ("imo", "mmsi")
+            is_sanctions = program in _SANCTIONS_PROGRAMS
+
+            if is_identifier and is_sanctions:
+                severity, points, match_type = "critical", 100.0, "direct_sanctions"
+            elif is_identifier:
+                severity, points, match_type = "high", 40.0, "direct_detention"
+            else:
+                severity, points, match_type = "moderate", 15.0, "name_only"
+
+            details = _json.dumps({
+                "confidence": confidence,
+                "matched_field": matched_field,
+                "program": program,
+                "entity_id": best_match.get("entity_id"),
+                "match_type": match_type,
+            })
+            await session.execute(
+                text(
+                    "INSERT INTO anomaly_events "
+                    "(mmsi, rule_id, severity, points, details) "
+                    "VALUES (:mmsi, 'sanctions_match', :severity, :points, :details)"
+                ),
+                {
+                    "mmsi": mmsi,
+                    "severity": severity,
+                    "points": points,
+                    "details": details,
+                },
+            )
 
 
 async def get_vessel_profile_by_mmsi(
