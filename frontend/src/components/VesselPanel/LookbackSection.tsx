@@ -23,9 +23,9 @@ export function LookbackSection({ mmsi }: LookbackSectionProps) {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
+    return d.toISOString().slice(0, 16);
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 16));
 
   const vessels = useVesselStore((s) => s.vessels);
 
@@ -65,8 +65,8 @@ export function LookbackSection({ mmsi }: LookbackSectionProps) {
   );
 
   const handleStartPlayback = useCallback(() => {
-    const start = new Date(startDate + 'T00:00:00Z');
-    const end = new Date(endDate + 'T23:59:59Z');
+    const start = new Date(startDate + ':00Z');
+    const end = new Date(endDate + ':00Z');
 
     // Clamp to max 30 days
     const minStart = new Date(end);
@@ -85,10 +85,10 @@ export function LookbackSection({ mmsi }: LookbackSectionProps) {
   const minDate = useMemo(() => {
     const d = new Date(endDate);
     d.setDate(d.getDate() - MAX_DAYS);
-    return d.toISOString().slice(0, 10);
+    return d.toISOString().slice(0, 16);
   }, [endDate]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 16);
 
   if (isActive) return null; // Don't show config when active — timeline bar takes over
 
@@ -100,7 +100,7 @@ export function LookbackSection({ mmsi }: LookbackSectionProps) {
             <div className="flex-1">
               <label className="text-xs text-gray-500 block mb-1">Start</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={startDate}
                 min={minDate}
                 max={endDate}
@@ -112,7 +112,7 @@ export function LookbackSection({ mmsi }: LookbackSectionProps) {
             <div className="flex-1">
               <label className="text-xs text-gray-500 block mb-1">End</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={endDate}
                 max={today}
                 onChange={(e) => setEndDate(e.target.value)}

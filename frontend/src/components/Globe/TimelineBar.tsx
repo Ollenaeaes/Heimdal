@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useLookbackStore } from '../../hooks/useLookbackStore';
 import { formatTimestampAbsolute } from '../../utils/formatters';
 
-const SPEED_OPTIONS = [1, 5, 30, 100];
+const SPEED_OPTIONS = [1, 5, 100, 500];
 
 /** Detect AIS gaps (>6h) in a track for visual indicators on the timeline. */
 function detectGapRanges(
@@ -114,7 +114,7 @@ export function TimelineBar() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 h-[60px] bg-[#111827]/90 backdrop-blur-md border-t border-[#1F2937] z-40 flex items-center gap-3 px-4"
+      className="fixed bottom-0 left-0 right-0 h-[60px] bg-[#111827]/90 backdrop-blur-md border-t border-[#1F2937] z-[60] flex items-center gap-3 px-4"
       data-testid="timeline-bar"
     >
       {/* Play/Pause */}

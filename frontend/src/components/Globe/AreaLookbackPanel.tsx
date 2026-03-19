@@ -23,20 +23,20 @@ export function AreaLookbackPanel() {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
+    return d.toISOString().slice(0, 16);
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<AreaVessel[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 16);
   const minDate = (() => {
     const d = new Date(endDate);
     d.setDate(d.getDate() - MAX_DAYS);
-    return d.toISOString().slice(0, 10);
+    return d.toISOString().slice(0, 16);
   })();
 
   const handleSearch = useCallback(async () => {
@@ -47,8 +47,8 @@ export function AreaLookbackPanel() {
     setWarning(null);
 
     try {
-      const start = new Date(startDate + 'T00:00:00Z');
-      const end = new Date(endDate + 'T23:59:59Z');
+      const start = new Date(startDate + ':00Z');
+      const end = new Date(endDate + ':00Z');
       const polygonParam = JSON.stringify(areaPolygon);
 
       const params = new URLSearchParams({
@@ -68,9 +68,9 @@ export function AreaLookbackPanel() {
         return;
       }
 
-      if (data.length >= 50) {
+      if (data.length >= 500) {
         setWarning(
-          `${data.length}+ vessels found — showing top 50 by activity. Narrow the area or time range for better results.`,
+          `${data.length}+ vessels found — showing top 500 by activity. Narrow the area or time range for better results.`,
         );
       }
 
@@ -86,8 +86,8 @@ export function AreaLookbackPanel() {
   const handleStartPlayback = useCallback(() => {
     if (!areaPolygon || selected.size === 0) return;
 
-    const start = new Date(startDate + 'T00:00:00Z');
-    const end = new Date(endDate + 'T23:59:59Z');
+    const start = new Date(startDate + ':00Z');
+    const end = new Date(endDate + ':00Z');
 
     configureArea(areaPolygon, [...selected], { start, end });
     activate();
@@ -139,7 +139,7 @@ export function AreaLookbackPanel() {
               <div className="flex-1">
                 <label className="text-xs text-gray-500 block mb-1">Start</label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   value={startDate}
                   min={minDate}
                   max={endDate}
@@ -151,7 +151,7 @@ export function AreaLookbackPanel() {
               <div className="flex-1">
                 <label className="text-xs text-gray-500 block mb-1">End</label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   value={endDate}
                   max={today}
                   onChange={(e) => setEndDate(e.target.value)}

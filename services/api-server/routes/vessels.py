@@ -276,7 +276,7 @@ async def area_history(
         "    AND ST_Intersects(vp.position, ST_GeogFromText(ST_AsText(ST_GeomFromGeoJSON(:polygon_geojson)))) "
         "  GROUP BY vp.mmsi "
         "  ORDER BY position_count DESC "
-        "  LIMIT 50"
+        "  LIMIT 500"
         ") sub "
         "JOIN vessel_profiles vp2 ON sub.mmsi = vp2.mmsi "
         "ORDER BY sub.position_count DESC"
