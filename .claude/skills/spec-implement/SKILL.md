@@ -223,8 +223,38 @@ Then loop back to Phase 1 for the next story.
 
 1. Run the complete test suite one final time
 2. Verify all tests pass
-3. Update the spec status to `completed`
-4. Update progress.md:
+3. **If the spec touched frontend code** (any changes in `frontend/`), run the Chrome E2E verification gate before marking the spec as done:
+
+### Chrome E2E Verification Gate
+
+**Important:** This step is run by the orchestrator directly (NOT a subagent), because spawned subagents cannot access Chrome browser tools due to a known limitation.
+
+The app must be running. Start the dev server if needed (e.g., `cd frontend && npm run dev`).
+
+Using the Chrome browser tools (`mcp__claude-in-chrome__*`), do the following:
+
+1. **Open the app** in Chrome (default: `http://localhost:5173`)
+2. **Navigate to each page/feature** that was added or changed in this spec
+3. **Interact with the UI as a real user would:** click buttons, fill forms, open panels, toggle controls, navigate between views
+4. **Verify that:**
+   - Pages load without errors
+   - UI elements render correctly and are interactive
+   - Data displays correctly (vessel names, scores, positions, etc.)
+   - No console errors or uncaught exceptions
+   - Navigation between views works
+5. **For each feature tested**, record: PASS or FAIL with a description of what was tested
+6. **On failure:** note the exact error, console output, and what step broke — then fix the issue and re-test
+
+**Gate rules:**
+- Do NOT use fetch/curl — interact through the browser only
+- Test the actual user flow, not just page loads
+- Check the browser console for errors after each interaction
+- If a page requires data that doesn't exist, note it as BLOCKED (not FAIL)
+- **If the Chrome E2E gate fails:** fix the issues and re-run the gate. The spec is NOT done until the gate passes.
+- **If Chrome tools are not available** (session not started with `--chrome`): warn the user that Chrome E2E verification was skipped and the spec should not be considered fully verified.
+
+4. Update the spec status to `completed`
+5. Update progress.md:
 
 ```markdown
 ## Current Feature
@@ -238,8 +268,8 @@ Then loop back to Phase 1 for the next story.
 - Total tests: <N>
 ```
 
-5. Commit the status updates
-6. Present a summary to the user
+6. Commit the status updates
+7. Present a summary to the user (including Chrome E2E results if applicable)
 
 ---
 
