@@ -32,3 +32,9 @@ data/temp/
 *.prj
 *.cst
 .oci-state.json
+
+# Raw AIS data (ingested at runtime)
+data/raw/
+
+# Claude Code agent worktrees
+.claude/worktrees/
