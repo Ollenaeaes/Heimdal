@@ -319,7 +319,28 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - All 15 pre-existing test failures unchanged, zero new regressions
 - Commits: 5 commits on feature/lookback-and-export branch
 
-## Current Story
+## Current Feature
+
+**Spec:** 31-auth-backend + 32-auth-frontend + 33-user-notifications (Waves 15-16)
+**Branch:** TBD (feature/user-auth)
+**Status:** Specs drafted, ready for approval
+
+### What's next
+
+Wave 15 — User Authentication:
+- Spec 31 (auth-backend): 7 stories — users table, SMTP, JWT, register/confirm/login, middleware, inactivity lifecycle
+- Spec 32 (auth-frontend): 5 stories — auth store, login modal, confirm page, HUD menu, feature gating
+
+Wave 16 — User-Scoped Watchlist & Email Notifications:
+- Spec 33 (user-notifications): 6 stories — per-user watchlist, watch rules, notification engine, email alerts, UI
+
+### Prerequisites (manual steps)
+- Create `alerts@heimdalwatch.cloud` email account in Hostinger hPanel
+- Set SMTP_PASS env var in production
+- Set JWT_SECRET env var in production
+- DB migration 014_users.sql must be applied via `psql -f` (prod DB safety rule)
+
+## Previous Feature
 
 Spec 30 complete. All stories implemented.
 
@@ -337,7 +358,7 @@ Spec 30 complete. All stories implemented.
 - D1: 7 waves with 16 specs total. Waves run sequentially, specs within each wave run in parallel.
 - D2: Replaced custom SAR processor with GFW API consumption in enrichment service.
 - D3: Eliminated Copernicus+CFAR — GFW provides ML-validated SAR detections via API.
-- D4: No authentication for local deployment. Single-user workstation.
+- D4: ~~No authentication for local deployment. Single-user workstation.~~ **REVERSED in Wave 15** — adding multi-user JWT auth with email registration via heimdalwatch.cloud. Globe remains public, expensive features gated behind login.
 - D5: OpenSanctions via bulk download (free non-commercial), not API.
 - D6: GFW APIs are the primary enrichment source. GISIS/MARS demoted to optional best-effort.
 - D7: GFW-sourced rules have higher confidence than real-time rules. Dedup logic suppresses real-time when GFW covers same behavior.

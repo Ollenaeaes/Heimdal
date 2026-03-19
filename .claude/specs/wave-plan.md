@@ -1,10 +1,10 @@
 # Heimdal Build Wave Plan
 
 **Created:** 2026-03-11
-**Updated:** 2026-03-14 (Operations Centre Theme — Update 005)
+**Updated:** 2026-03-19 (User Auth & Notifications — Update 006)
 **Status:** draft
-**Total Specs:** 29
-**Total Waves:** 14
+**Total Specs:** 34
+**Total Waves:** 16
 
 ---
 
@@ -22,6 +22,8 @@ Waves must run sequentially — each wave depends on the previous completing.
 > **Update 005:** Inserted Wave 12 (Operations Centre Visual Theme) before capability module frontends. Full frontend restyle to maritime VTS aesthetic: dark navy globe, chevron vessel markers with tier-differentiated glow/pulse, HUD status bar, dense sharp-cornered panels, Inter + JetBrains Mono typography. Former Waves 12-13 renumbered to 13-14. Total: 29 specs across 14 waves.
 
 > **Update 004:** Added Waves 11–13 (Capability Modules). Three modules extending Heimdal from sanctions compliance into maritime domain awareness: (1) Critical Infrastructure Protection — 3 rules detecting anchor-drag sabotage patterns near subsea cables/pipelines, with globe overlays and dashboard panel; (2) AIS Spoofing Detection — 5 new rules (stacking with existing ais_spoofing) covering position-on-land, impossible speed, duplicate MMSI, frozen positions, and zombie vessel identity theft, plus GNSS interference zone clustering; (3) Sanctions Evasion Network Mapping — encounter/ownership graph construction, network risk score propagation, d3-force network visualization. Backend and frontend split into separate specs per module (6 specs total). New DB tables: infrastructure_routes, infrastructure_events, land_mask, gnss_interference_zones, network_edges.
+
+> **Update 006:** Added Waves 15–16 (User Auth & Email Notifications). Major pivot from D4 ("no auth, single-user workstation") to multi-user with email-based registration via heimdalwatch.cloud. Wave 15 adds JWT auth backend (users table, SMTP email, registration/confirmation/login, endpoint protection, inactivity lifecycle) and auth frontend (login modal, feature gating, session management). Wave 16 migrates watchlist to per-user, adds geofence watch rules ("alert me when sanctioned vessel enters this bbox"), and email notification engine via alerts@heimdalwatch.cloud. 3 new specs, 2 new waves. Total: 33 specs across 16 waves.
 
 ### Wave 1 — Foundation Infrastructure (3 specs, parallel)
 No dependencies. Start here.
@@ -136,6 +138,29 @@ Depends on: Wave 11 (spec 25), Wave 13 (for consistent frontend patterns)
 |------|------|-------|
 | 28 | `network-mapping-frontend` | Network score display, d3-force network graph tab, globe network mode, vessel chain view |
 
+### Wave 15 — User Authentication (2 specs, sequential with parallel stories)
+Depends on: Wave 3 (api-server), Wave 6 (watchlist), Wave 12 (frontend theme)
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 31 | `auth-backend` | Users table, JWT auth, email registration/confirmation/login, SMTP via Hostinger, auth middleware, inactivity lifecycle (6mo disable + 2wk warning), endpoint protection |
+| 32 | `auth-frontend` | Login modal (no login wall — globe always visible), registration flow, confirmation page, auth Zustand store, authFetch utility, feature gating (watchlist/lookback/export require login), HUD user menu |
+
+**Implementation notes:**
+- Backend stories 1-3 (DB + SMTP + JWT) run in parallel first
+- Backend stories 4-5 (register/login endpoints) next
+- Frontend can start Story 1 (auth store) in parallel with backend Story 3 (JWT)
+- Frontend Stories 2-5 depend on backend endpoints being available
+- SMTP setup requires `alerts@heimdalwatch.cloud` email account created in Hostinger hPanel (manual, one-time)
+
+### Wave 16 — User-Scoped Features & Notifications (2 specs, parallel)
+Depends on: Wave 15 (auth backend + frontend)
+
+| Spec | Slug | Scope |
+|------|------|-------|
+| 33 | `user-notifications` | Per-user watchlist migration, watch rules (vessel + geofence), notification engine (Redis event matching → email), digest modes (immediate/hourly/daily), rate limiting (50 emails/day/user), watch rules panel, notification bell, email templates via alerts@heimdalwatch.cloud |
+| 34 | `bulk-track-export` | Async bulk track data export (DB + cold Parquet), background job queue (DB table, single-worker, CPU-conscious), gzip-compressed JSON/CSV, email with download link when ready, 5-day link expiry with auto-purge, max 3 pending per user |
+
 ---
 
 ## Build Order Diagram
@@ -181,13 +206,34 @@ Wave 11: [23-infra-backend] [24-spoofing-backend] [25-network-backend]   ← COM
                        │              │                    │
                        └──────────────┴────────────────────┘
                                    │
-Wave 12:            [29-operations-centre-theme]
+Wave 12:            [29-operations-centre-theme]                         ← COMPLETED
                                    │
-Wave 13:       [26-infra-frontend] [27-spoofing-frontend]
+Wave 13:       [26-infra-frontend] [27-spoofing-frontend]                ← COMPLETED
                        │                    │
                        └────────────────────┘
                                    │
-Wave 14:               [28-network-frontend]
+Wave 14:               [28-network-frontend]                             ← COMPLETED
+                                   │
+                                   │
+              ═══════════════════════════════════════
+              ║  USER AUTH & NOTIFICATIONS PIVOT    ║
+              ║  (Reverses D4: no-auth → multi-user)║
+              ═══════════════════════════════════════
+                                   │
+Wave 15:       [31-auth-backend] → [32-auth-frontend]
+               │ DB + SMTP + JWT │   │ Login modal    │
+               │ Register/login  │   │ Feature gating │
+               │ Auth middleware  │   │ Auth store     │
+               │ Inactivity life │   │ Session mgmt   │
+                       │                    │
+                       └────────────────────┘
+                                   │
+Wave 16:  [33-user-notifications]    [34-bulk-track-export]
+          │ Per-user watchlist  │    │ Async job queue     │
+          │ Geofence watch rules│    │ DB + Parquet reader │
+          │ Email alerts engine │    │ Gzip streaming      │
+          │ Notification bell   │    │ Email download link │
+          │ Digest batching     │    │ 5-day expiry+purge  │
 ```
 
 ---
@@ -234,6 +280,11 @@ Wave 14:               [28-network-frontend]
 | land_mask | seed data (Wave 11+) | scoring |
 | gnss_interference_zones | scoring (Wave 11+) | api-server |
 | network_edges | scoring, api-server (Wave 11+) | api-server, scoring |
+| users | api-server (Wave 15+) | api-server |
+| refresh_tokens | api-server (Wave 15+) | api-server |
+| watch_rules | api-server (Wave 16+) | api-server, notification engine |
+| notification_log | notification engine (Wave 16+) | api-server |
+| export_jobs | api-server (Wave 16+) | api-server, export runner |
 
 ### External API Dependencies
 | API | Consumer | Auth | Rate Limits |
