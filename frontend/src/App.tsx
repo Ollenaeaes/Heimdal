@@ -12,7 +12,7 @@ import { OverlayToggles } from './components/Globe/Overlays';
 // MaritimeBoundariesOverlay removed — will be reimplemented as MapLibre layer
 // import { MaritimeBoundariesOverlay } from './components/Globe/MaritimeBoundariesOverlay';
 import { AreaLookbackButton } from './components/Globe/AreaLookbackTool';
-import Minimap from './components/Minimap';
+import Minimap from './components/Map/Minimap';
 import type { OverlayToggleState } from './components/Globe/Overlays';
 import type { VesselState } from './types/vessel';
 
@@ -214,7 +214,18 @@ function AppInner() {
 
       <div style={{ flex: 1, position: 'relative' }}>
         <Suspense fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500">Loading map...</div>}>
-          <MapView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} showInfrastructure={overlays.showInfrastructure} showGnssZones={overlays.showGnssZones} showNetwork={overlays.showNetwork} />
+          <MapView
+            showGfwEvents={overlays.showGfwEvents}
+            showSarDetections={overlays.showSarDetections}
+            showInfrastructure={overlays.showInfrastructure}
+            showGnssZones={overlays.showGnssZones}
+            showNetwork={overlays.showNetwork}
+            showStsZones={overlays.showStsZones}
+            showTerminals={overlays.showTerminals}
+            showSeaBorders={overlays.showSeaBorders}
+            showSeaBordersEez={overlays.showSeaBordersEez}
+            showSeaBorders12nm={overlays.showSeaBorders12nm}
+          />
         </Suspense>
 
         {/* Left side layer control panel */}
