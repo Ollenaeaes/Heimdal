@@ -207,23 +207,6 @@ export function VesselLayer() {
       />
 
       {/* Watchlist halo — rendered behind vessel markers */}
-      <Layer
-        id="vessel-watchlist-halo"
-        type="circle"
-        filter={[
-          'all',
-          ['!', ['has', 'point_count']],
-          ['==', ['get', 'isWatchlisted'], true],
-        ]}
-        paint={{
-          'circle-radius': 8,
-          'circle-color': 'transparent',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': 'rgba(255, 255, 255, 0.4)',
-        }}
-        beforeId="vessel-markers"
-      />
-
       {/* Individual vessel markers (unclustered) */}
       <Layer
         id="vessel-markers"
@@ -257,6 +240,23 @@ export function VesselLayer() {
         onClick={onVesselClick}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
+      />
+
+      {/* Watchlist halo — rendered after markers, visually behind via larger radius */}
+      <Layer
+        id="vessel-watchlist-halo"
+        type="circle"
+        filter={[
+          'all',
+          ['!', ['has', 'point_count']],
+          ['==', ['get', 'isWatchlisted'], true],
+        ]}
+        paint={{
+          'circle-radius': 8,
+          'circle-color': 'transparent',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': 'rgba(255, 255, 255, 0.4)',
+        }}
       />
 
       {/* Selection ring for currently selected vessel */}

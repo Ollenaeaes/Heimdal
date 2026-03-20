@@ -11,6 +11,11 @@ import { InfrastructureLayer } from './InfrastructureLayer';
 import { GnssHeatmap } from './GnssHeatmap';
 import { DuplicateMmsiLayer } from './DuplicateMmsiLayer';
 import { NetworkLayer } from './NetworkLayer';
+import { GfwEventLayer } from './GfwEventLayer';
+import { SarDetectionLayer } from './SarDetectionLayer';
+import { TrackTrails } from './TrackTrails';
+import { TrackTrail } from './TrackTrail';
+import { HoverTooltip } from './HoverTooltip';
 
 export interface MapViewProps {
   showGfwEvents?: boolean;
@@ -62,9 +67,14 @@ function MapView(props: MapViewProps) {
       />
       <InfrastructureLayer visible={props.showInfrastructure ?? false} />
       {!lookbackActive && <VesselLayer />}
+      {!lookbackActive && <TrackTrails />}
+      {!lookbackActive && <TrackTrail />}
       <GnssHeatmap visible={props.showGnssZones ?? false} />
       <DuplicateMmsiLayer visible={props.showGnssZones ?? false} />
       <NetworkLayer visible={props.showNetwork ?? false} />
+      <GfwEventLayer visible={props.showGfwEvents ?? false} />
+      <SarDetectionLayer visible={props.showSarDetections ?? false} />
+      <HoverTooltip />
     </Map>
   );
 }
