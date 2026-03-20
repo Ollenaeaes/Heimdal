@@ -124,6 +124,9 @@ export interface OverlayToggleState {
   showStsZones: boolean;
   showTerminals: boolean;
   showEez: boolean;
+  showSeaBorders: boolean;
+  showSeaBordersEez: boolean;
+  showSeaBorders12nm: boolean;
   showSarDetections: boolean;
   showGfwEvents: boolean;
   showInfrastructure: boolean;
@@ -190,12 +193,34 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
       <label className="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"
-          checked={state.showEez}
-          onChange={() => toggle('showEez')}
+          checked={state.showSeaBorders}
+          onChange={() => toggle('showSeaBorders')}
           className="accent-blue-500"
         />
-        Norwegian EEZ
+        Sea Borders
       </label>
+      {state.showSeaBorders && (
+        <div className="ml-4 flex flex-col gap-1.5">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={state.showSeaBordersEez}
+              onChange={() => toggle('showSeaBordersEez')}
+              className="accent-blue-400"
+            />
+            <span className="text-blue-300">EEZ (200nm)</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={state.showSeaBorders12nm}
+              onChange={() => toggle('showSeaBorders12nm')}
+              className="accent-blue-300"
+            />
+            <span className="text-blue-200">Territorial Sea (12nm)</span>
+          </label>
+        </div>
+      )}
       <div className="border-t border-[#1F2937] my-1" />
       <label className="flex items-center gap-2 cursor-pointer">
         <input

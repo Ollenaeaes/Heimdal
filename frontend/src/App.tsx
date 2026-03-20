@@ -5,15 +5,18 @@ import type { StatsResponse } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
 import { usePositionPolling } from './hooks/usePositionPolling';
 import { useViewportGreenVessels } from './hooks/useViewportGreenVessels';
+// useOverlays is a no-op until Cesium overlay system is fully removed (Story 11)
 import { useOverlays } from './hooks/useOverlays';
 import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Globe/Overlays';
+// MaritimeBoundariesOverlay removed — will be reimplemented as MapLibre layer
+// import { MaritimeBoundariesOverlay } from './components/Globe/MaritimeBoundariesOverlay';
 import { AreaLookbackButton } from './components/Globe/AreaLookbackTool';
 import Minimap from './components/Minimap';
 import type { OverlayToggleState } from './components/Globe/Overlays';
 import type { VesselState } from './types/vessel';
 
-const GlobeView = lazy(() => import('./components/Globe/GlobeView'));
+const MapView = lazy(() => import('./components/Map/MapView'));
 const VesselPanel = lazy(() => import('./components/VesselPanel/VesselPanel'));
 const EventLog = lazy(() => import('./components/EventLog'));
 
@@ -23,6 +26,9 @@ const DEFAULT_OVERLAYS: OverlayToggleState = {
   showStsZones: false,
   showTerminals: false,
   showEez: false,
+  showSeaBorders: false,
+  showSeaBordersEez: true,
+  showSeaBorders12nm: true,
   showSarDetections: false,
   showGfwEvents: false,
   showInfrastructure: false,
@@ -207,8 +213,8 @@ function AppInner() {
       </header>
 
       <div style={{ flex: 1, position: 'relative' }}>
-        <Suspense fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500">Loading globe...</div>}>
-          <GlobeView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} showInfrastructure={overlays.showInfrastructure} showGnssZones={overlays.showGnssZones} showNetwork={overlays.showNetwork} />
+        <Suspense fallback={<div className="w-full h-full bg-slate-900 flex items-center justify-center text-slate-500">Loading map...</div>}>
+          <MapView showGfwEvents={overlays.showGfwEvents} showSarDetections={overlays.showSarDetections} showInfrastructure={overlays.showInfrastructure} showGnssZones={overlays.showGnssZones} showNetwork={overlays.showNetwork} />
         </Suspense>
 
         {/* Left side layer control panel */}
