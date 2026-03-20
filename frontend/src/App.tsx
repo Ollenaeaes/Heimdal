@@ -5,15 +5,11 @@ import type { StatsResponse } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
 import { usePositionPolling } from './hooks/usePositionPolling';
 import { useViewportGreenVessels } from './hooks/useViewportGreenVessels';
-// useOverlays is a no-op until Cesium overlay system is fully removed (Story 11)
-import { useOverlays } from './hooks/useOverlays';
 import { useVesselStore } from './hooks/useVesselStore';
-import { OverlayToggles } from './components/Globe/Overlays';
-// MaritimeBoundariesOverlay removed — will be reimplemented as MapLibre layer
-// import { MaritimeBoundariesOverlay } from './components/Globe/MaritimeBoundariesOverlay';
-import { AreaLookbackButton } from './components/Globe/AreaLookbackTool';
+import { OverlayToggles } from './components/Map/OverlayToggles';
+import { AreaLookbackButton } from './components/Map/AreaLookbackButton';
 import Minimap from './components/Map/Minimap';
-import type { OverlayToggleState } from './components/Globe/Overlays';
+import type { OverlayToggleState } from './components/Map/OverlayToggles';
 import type { VesselState } from './types/vessel';
 
 const MapView = lazy(() => import('./components/Map/MapView'));
@@ -89,8 +85,6 @@ function AppInner() {
   useViewportGreenVessels();
   const [overlays, setOverlays] = useState<OverlayToggleState>(DEFAULT_OVERLAYS);
   const [layerPanelOpen, setLayerPanelOpen] = useState(true);
-  useOverlays(overlays);
-
   const setFilter = useVesselStore((s) => s.setFilter);
   const filters = useVesselStore((s) => s.filters);
 

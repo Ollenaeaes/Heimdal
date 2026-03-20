@@ -1,33 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock Cesium
-vi.mock('cesium', () => ({
-  Cartesian3: {
-    fromDegrees: vi.fn((lon: number, lat: number, alt?: number) => ({ x: lon, y: lat, z: alt ?? 0 })),
-  },
-  Color: {
-    fromCssColorString: vi.fn((css: string) => ({ css })),
-    WHITE: { css: 'white' },
-    BLACK: { css: 'black' },
-  },
-  Ion: { defaultAccessToken: '' },
-}));
-
-vi.mock('resium', () => ({
-  CustomDataSource: vi.fn(({ children }: { children?: unknown }) => children),
-  Entity: vi.fn(({ children }: { children?: unknown }) => children),
-  PolylineGraphics: vi.fn(() => null),
-  PointGraphics: vi.fn(() => null),
-  useCesium: vi.fn(() => ({ viewer: null })),
-}));
-
 vi.mock('@tanstack/react-query', () => ({
   useQuery: vi.fn(() => ({ data: undefined, isLoading: false })),
   QueryClient: vi.fn(),
   QueryClientProvider: vi.fn(({ children }: { children?: unknown }) => children),
 }));
 
-import { ROUTE_TYPE_COLORS } from '../components/Globe/InfrastructureOverlay';
+import { ROUTE_TYPE_COLORS } from '../components/Map/InfrastructureLayer';
 
 // Realistic test data
 const makeRouteFeature = (overrides: Record<string, unknown> = {}) => ({
@@ -74,15 +53,9 @@ describe('Infrastructure route type color mapping', () => {
   });
 });
 
-describe('InfrastructureOverlay component exports', () => {
-  it('exports InfrastructureOverlay component', async () => {
-    const { InfrastructureOverlay } = await import('../components/Globe/InfrastructureOverlay');
-    expect(InfrastructureOverlay).toBeDefined();
-    expect(typeof InfrastructureOverlay).toBe('function');
-  });
-
+describe('InfrastructureLayer component exports', () => {
   it('exports ROUTE_TYPE_COLORS map', async () => {
-    const { ROUTE_TYPE_COLORS: colors } = await import('../components/Globe/InfrastructureOverlay');
+    const { ROUTE_TYPE_COLORS: colors } = await import('../components/Map/InfrastructureLayer');
     expect(colors).toBeDefined();
     expect(typeof colors).toBe('object');
     expect(Object.keys(colors)).toContain('telecom_cable');

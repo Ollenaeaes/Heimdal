@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Cartesian3 } from 'cesium';
-import { getCesiumViewer } from './Globe/cesiumViewer';
+import { getMapInstance } from './Map/mapInstance';
 import { useVesselStore } from '../hooks/useVesselStore';
 import { useLookbackStore } from '../hooks/useLookbackStore';
 import { useAlertStream, type AlertEvent } from '../hooks/useAlertStream';
@@ -69,12 +68,9 @@ export default function EventLog() {
       const lon = event.lon ?? vessel?.lon;
 
       if (lat != null && lon != null) {
-        const viewer = getCesiumViewer();
-        if (viewer) {
-          viewer.camera.flyTo({
-            destination: Cartesian3.fromDegrees(lon, lat, 50_000),
-            duration: 1.5,
-          });
+        const map = getMapInstance();
+        if (map) {
+          map.flyTo({ center: [lon, lat], zoom: 10, duration: 1500 });
         }
       }
       selectVessel(event.mmsi);

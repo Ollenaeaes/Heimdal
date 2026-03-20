@@ -1,31 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// Mock Cesium
-vi.mock('cesium', () => ({
-  Cartesian3: {
-    fromDegrees: vi.fn((lon: number, lat: number, alt?: number) => ({ x: lon, y: lat, z: alt ?? 0 })),
-    UNIT_Z: { x: 0, y: 0, z: 1 },
-  },
-  CallbackProperty: vi.fn((cb: () => unknown) => ({ callback: cb })),
-  NearFarScalar: vi.fn((near: number, nearVal: number, far: number, farVal: number) => ({
-    near, nearValue: nearVal, far, farValue: farVal,
-  })),
-  Color: {
-    fromCssColorString: vi.fn((css: string) => ({ css })),
-    BLACK: { css: 'black' },
-    WHITE: { css: 'white' },
-    BLUE: { css: 'blue' },
-  },
-  Ion: { defaultAccessToken: '' },
-}));
-
-vi.mock('resium', () => ({
-  CustomDataSource: vi.fn(({ children }: { children?: unknown }) => children),
-  Entity: vi.fn(({ children }: { children?: unknown }) => children),
-  BillboardGraphics: vi.fn(() => null),
-  useCesium: vi.fn(() => ({ viewer: null })),
-}));
-
 vi.mock('@tanstack/react-query', () => ({
   useQuery: vi.fn(() => ({ data: [], isLoading: false })),
 }));
@@ -153,19 +127,7 @@ describe('SAR dark ship filtering', () => {
   });
 });
 
-describe('SarMarkers component exports', () => {
-  it('exports SarMarkers component', async () => {
-    const { SarMarkers } = await import('../components/Globe/SarMarkers');
-    expect(SarMarkers).toBeDefined();
-    expect(typeof SarMarkers).toBe('function');
-  });
-
-  it('exports SarMarkersProps type interface', async () => {
-    const mod = await import('../components/Globe/SarMarkers');
-    // Verify the component exists — TypeScript ensures the props type is correct at compile time
-    expect(mod.SarMarkers).toBeDefined();
-  });
-});
+// SarMarkers Cesium component removed in Story 11 (MapLibre migration)
 
 describe('SAR store integration', () => {
   it('darkShipsOnly filter exists in store', async () => {

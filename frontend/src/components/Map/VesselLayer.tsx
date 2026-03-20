@@ -9,7 +9,7 @@ import type { VesselState } from '../../types/vessel';
 
 /**
  * Filter vessels according to the active FilterState.
- * Local copy to avoid importing from Globe/VesselMarkers (which pulls in Cesium).
+ * Filter vessels according to the active FilterState.
  */
 export function filterVessels(
   vessels: Map<number, VesselState>,

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { Math as CesiumMath } from 'cesium';
-import { getCesiumViewer } from '../components/Globe/cesiumViewer';
+import { getMapInstance } from '../components/Map/mapInstance';
 import { useVesselStore } from './useVesselStore';
 import type { VesselState } from '../types/vessel';
 
@@ -23,8 +22,8 @@ function sampleRateFromSpan(lonSpan: number): number {
 }
 
 /**
- * Loads green-tier vessels only within the current camera viewport.
- * Listens to camera moveEnd events and fetches green vessels in the
+ * Loads green-tier vessels only within the current map viewport.
+ * Listens to map moveend events and fetches green vessels in the
  * visible bounding box. This avoids loading thousands of green vessels
  * on the other side of the globe. At wider zoom levels, thins results
  * using deterministic sampling (every Nth vessel by MMSI).
@@ -33,26 +32,24 @@ export function useViewportGreenVessels() {
   const replaceGreenVessels = useVesselStore((s) => s.replaceGreenVessels);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBboxRef = useRef<string>('');
-  const removeListenerRef = useRef<(() => void) | null>(null);
 
   const fetchGreenInBbox = useCallback(() => {
-    const viewer = getCesiumViewer();
-    if (!viewer || viewer.isDestroyed()) return;
+    const map = getMapInstance();
+    if (!map) return;
 
     try {
-      const rect = viewer.camera.computeViewRectangle();
-      if (!rect) return;
+      const bounds = map.getBounds();
 
       // Add 10% buffer around the viewport
-      const dLon = (rect.east - rect.west) * 0.1;
-      const dLat = (rect.north - rect.south) * 0.1;
+      const dLon = (bounds.getEast() - bounds.getWest()) * 0.1;
+      const dLat = (bounds.getNorth() - bounds.getSouth()) * 0.1;
 
-      const sw_lat = CesiumMath.toDegrees(rect.south - dLat);
-      const sw_lon = CesiumMath.toDegrees(rect.west - dLon);
-      const ne_lat = CesiumMath.toDegrees(rect.north + dLat);
-      const ne_lon = CesiumMath.toDegrees(rect.east + dLon);
+      const sw_lat = bounds.getSouth() - dLat;
+      const sw_lon = bounds.getWest() - dLon;
+      const ne_lat = bounds.getNorth() + dLat;
+      const ne_lon = bounds.getEast() + dLon;
 
-      const lonSpan = CesiumMath.toDegrees(rect.east - rect.west);
+      const lonSpan = bounds.getEast() - bounds.getWest();
       const sample = sampleRateFromSpan(lonSpan);
 
       const bboxStr = `${sw_lat.toFixed(2)},${sw_lon.toFixed(2)},${ne_lat.toFixed(2)},${ne_lon.toFixed(2)},s${sample}`;
@@ -82,28 +79,35 @@ export function useViewportGreenVessels() {
         })
         .catch(() => {});
     } catch {
-      /* viewer destroyed */
+      /* map not ready */
     }
   }, [replaceGreenVessels]);
 
   useEffect(() => {
     let mounted = true;
 
-    // Wait for Cesium viewer to initialize
-    const pollForViewer = setInterval(() => {
-      const viewer = getCesiumViewer();
-      if (!viewer || viewer.isDestroyed()) return;
-      clearInterval(pollForViewer);
+    // Wait for MapLibre map to initialize
+    const pollForMap = setInterval(() => {
+      const map = getMapInstance();
+      if (!map) return;
+      clearInterval(pollForMap);
       if (!mounted) return;
 
-      // Subscribe to camera movement
-      removeListenerRef.current = viewer.camera.moveEnd.addEventListener(() => {
+      // Subscribe to map movement
+      const onMoveEnd = () => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(fetchGreenInBbox, DEBOUNCE_MS);
-      });
+      };
+      map.on('moveend', onMoveEnd);
 
-      // Initial fetch after viewer settles
+      // Initial fetch after map settles
       debounceRef.current = setTimeout(fetchGreenInBbox, 1000);
+
+      // Store cleanup function
+      const cleanup = () => {
+        map.off('moveend', onMoveEnd);
+      };
+      cleanupRef.current = cleanup;
     }, 200);
 
     // Periodic refresh of green vessels in viewport
@@ -114,10 +118,12 @@ export function useViewportGreenVessels() {
 
     return () => {
       mounted = false;
-      clearInterval(pollForViewer);
+      clearInterval(pollForMap);
       clearInterval(refreshInterval);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (removeListenerRef.current) removeListenerRef.current();
+      if (cleanupRef.current) cleanupRef.current();
     };
   }, [fetchGreenInBbox]);
+
+  const cleanupRef = useRef<(() => void) | null>(null);
 }

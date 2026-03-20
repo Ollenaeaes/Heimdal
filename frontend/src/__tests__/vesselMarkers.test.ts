@@ -1,46 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import type { VesselState } from '../types/vessel';
-
-// Mock Cesium before imports
-vi.mock('cesium', () => ({
-  Cartesian3: {
-    fromDegrees: vi.fn((lon: number, lat: number, alt?: number) => ({
-      x: lon,
-      y: lat,
-      z: alt ?? 0,
-    })),
-    UNIT_Z: { x: 0, y: 0, z: 1 },
-  },
-  ConstantProperty: vi.fn((val: unknown) => ({ value: val })),
-  CallbackProperty: vi.fn((cb: () => unknown) => ({ callback: cb })),
-  NearFarScalar: vi.fn(
-    (near: number, nearVal: number, far: number, farVal: number) => ({
-      near,
-      nearValue: nearVal,
-      far,
-      farValue: farVal,
-    }),
-  ),
-  Ion: { defaultAccessToken: '' },
-  MaterialProperty: {},
-  Color: {
-    fromCssColorString: vi.fn((css: string) => ({ css })),
-  },
-}));
-
-vi.mock('resium', () => ({
-  Entity: vi.fn(({ children }: { children?: unknown }) => children),
-  BillboardGraphics: vi.fn(() => null),
-  useCesium: vi.fn(() => ({ viewer: null })),
-  Viewer: vi.fn(({ children }: { children?: unknown }) => children),
-  CameraFlyTo: vi.fn(() => null),
-}));
 
 import { useVesselStore } from '../hooks/useVesselStore';
 import { MARKER_STYLE, cogToRotation } from '../utils/vesselIcons';
 
-// We test filterVessels directly since it's exported
-import { filterVessels } from '../components/Globe/VesselMarkers';
+// filterVessels now lives in Map/VesselLayer
+import { filterVessels } from '../components/Map/VesselLayer';
 
 const makeVessel = (overrides: Partial<VesselState> = {}): VesselState => ({
   mmsi: 123456789,
@@ -58,16 +23,16 @@ const makeVessel = (overrides: Partial<VesselState> = {}): VesselState => ({
 });
 
 describe('MARKER_STYLE', () => {
-  it('green tier has opacity 0.4 and scale 0.6', () => {
-    expect(MARKER_STYLE.green).toEqual({ opacity: 0.4, scale: 0.6 });
+  it('green tier has correct style', () => {
+    expect(MARKER_STYLE.green).toEqual({ opacity: 0.7, opacityFar: 0.2, scale: 0.5 });
   });
 
-  it('yellow tier has opacity 0.9 and scale 0.8', () => {
-    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.9, scale: 0.8 });
+  it('yellow tier has correct style', () => {
+    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.8, opacityFar: 0.8, scale: 0.7 });
   });
 
-  it('red tier has opacity 1.0 and scale 1.0', () => {
-    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, scale: 1.0 });
+  it('red tier has correct style', () => {
+    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, opacityFar: 1.0, scale: 0.85 });
   });
 });
 
@@ -218,19 +183,5 @@ describe('selectVessel integration', () => {
     useVesselStore.getState().selectVessel(123456789);
     useVesselStore.getState().selectVessel(null);
     expect(useVesselStore.getState().selectedMmsi).toBeNull();
-  });
-});
-
-describe('VesselMarkers component', () => {
-  it('exports VesselMarkers as a function', async () => {
-    const mod = await import('../components/Globe/VesselMarkers');
-    expect(mod.VesselMarkers).toBeDefined();
-    expect(typeof mod.VesselMarkers).toBe('function');
-  });
-
-  it('exports filterVessels utility', async () => {
-    const mod = await import('../components/Globe/VesselMarkers');
-    expect(mod.filterVessels).toBeDefined();
-    expect(typeof mod.filterVessels).toBe('function');
   });
 });

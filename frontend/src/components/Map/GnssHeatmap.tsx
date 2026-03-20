@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
 import { useQuery } from '@tanstack/react-query';
-import { SpoofingTimeControls } from '../Globe/SpoofingTimeControls';
+import { SpoofingTimeControls } from './SpoofingTimeControls';
 
 export interface GnssHeatmapProps {
   visible: boolean;

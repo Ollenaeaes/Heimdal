@@ -2,40 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // --- Mocks ---
 
-vi.mock('cesium', () => ({
-  Cartesian3: {
-    fromDegrees: vi.fn((lon: number, lat: number, alt?: number) => ({
-      x: lon,
-      y: lat,
-      z: alt ?? 0,
-    })),
-  },
-  Cartesian2: vi.fn((x: number, y: number) => ({ x, y })),
-  Color: {
-    fromCssColorString: vi.fn((css: string) => ({
-      css,
-      withAlpha: vi.fn((alpha: number) => ({ css, alpha })),
-    })),
-    BLACK: { css: 'black' },
-    WHITE: { css: 'white' },
-  },
-  Ion: { defaultAccessToken: '' },
-  PolylineDashMaterialProperty: vi.fn((opts: Record<string, unknown>) => ({
-    type: 'dash',
-    ...opts,
-  })),
-  LabelStyle: { FILL_AND_OUTLINE: 2 },
-  VerticalOrigin: { BOTTOM: 1, CENTER: 0 },
-}));
-
-vi.mock('resium', () => ({
-  Entity: vi.fn(({ children }: { children?: unknown }) => children),
-  PolylineGraphics: vi.fn(() => null),
-  PointGraphics: vi.fn(() => null),
-  CustomDataSource: vi.fn(({ children }: { children?: unknown }) => children),
-  useCesium: vi.fn(() => ({ viewer: null })),
-}));
-
 const mockUseQuery = vi.fn(() => ({ data: undefined, isLoading: false }));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
@@ -70,10 +36,9 @@ vi.mock('d3-force', () => {
 
 import { useVesselStore } from '../hooks/useVesselStore';
 import { NetworkScoreLine } from '../components/VesselPanel/RiskSection';
-import { NetworkOverlay } from '../components/Globe/NetworkOverlay';
 import { buildChain } from '../components/VesselPanel/VesselChain';
 import type { NetworkApiResponse } from '../components/VesselPanel/NetworkGraph';
-import type { OverlayToggleState } from '../components/Globe/Overlays';
+import type { OverlayToggleState } from '../components/Map/OverlayToggles';
 
 // --- Test data helpers ---
 
@@ -339,58 +304,6 @@ describe('NetworkGraph', () => {
     expect(getNodeRadius(0)).toBe(8);
     expect(getNodeRadius(45)).toBe(8 + Math.min(45 / 20, 6));
     expect(getNodeRadius(200)).toBe(8 + 6); // capped at 6 extra
-  });
-});
-
-// --- Story 3: NetworkOverlay (Globe) ---
-
-describe('NetworkOverlay', () => {
-  it('returns null when not visible', () => {
-    // The component checks: if (!visible || !selectedMmsi) return null;
-    // With visible=false, it should return null
-    const result = false || !null; // visible=false means first condition true → null
-    expect(true).toBe(true); // Logic verified in component
-
-    // Verify the exported function exists
-    expect(typeof NetworkOverlay).toBe('function');
-  });
-
-  it('returns null when no vessel selected', () => {
-    useVesselStore.setState({ selectedMmsi: null });
-    const selectedMmsi = useVesselStore.getState().selectedMmsi;
-    expect(selectedMmsi).toBeNull();
-    // Component: if (!visible || !selectedMmsi) return null;
-    // With selectedMmsi=null → returns null
-  });
-
-  it('exports as a function component', () => {
-    expect(typeof NetworkOverlay).toBe('function');
-    expect(NetworkOverlay.name).toBe('NetworkOverlay');
-  });
-
-  it('uses correct edge type color mapping', () => {
-    const EDGE_TYPE_COLORS: Record<string, string> = {
-      encounter: '#FFFFFF',
-      proximity: '#94A3B8',
-      port_visit: '#06B6D4',
-      ownership: '#A78BFA',
-    };
-
-    expect(EDGE_TYPE_COLORS.encounter).toBe('#FFFFFF');
-    expect(EDGE_TYPE_COLORS.proximity).toBe('#94A3B8');
-    expect(EDGE_TYPE_COLORS.port_visit).toBe('#06B6D4');
-  });
-
-  it('proximity edges use dashed lines', () => {
-    const data = makeNetworkApiResponse();
-    const proximityEdges = data.edges.filter(
-      (e) => e.edge_type === 'proximity',
-    );
-    expect(proximityEdges.length).toBeGreaterThan(0);
-    // The component uses dashed = edge.edge_type === 'proximity'
-    for (const e of proximityEdges) {
-      expect(e.edge_type === 'proximity').toBe(true);
-    }
   });
 });
 

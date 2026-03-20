@@ -1,33 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
-
-// Mock Cesium modules before importing anything that uses them
-vi.mock('cesium', () => ({
-  Cartesian3: {
-    fromDegrees: vi.fn((lon: number, lat: number, alt?: number) => ({ x: lon, y: lat, z: alt ?? 0 })),
-  },
-  Cartesian2: vi.fn((x: number, y: number) => ({ x, y })),
-  Color: {
-    fromCssColorString: vi.fn((css: string) => ({ css })),
-    BLACK: { css: 'black' },
-    WHITE: { css: 'white' },
-    BLUE: { css: 'blue' },
-  },
-  LabelStyle: { FILL_AND_OUTLINE: 2 },
-  VerticalOrigin: { BOTTOM: 1 },
-  PolylineDashMaterialProperty: vi.fn((opts: Record<string, unknown>) => ({ type: 'dash', ...opts })),
-  Ion: { defaultAccessToken: '' },
-  MaterialProperty: {},
-}));
-
-vi.mock('resium', () => ({
-  Entity: vi.fn(({ children }: { children?: unknown }) => children),
-  PolygonGraphics: vi.fn(() => null),
-  PointGraphics: vi.fn(() => null),
-  LabelGraphics: vi.fn(() => null),
-  PolylineGraphics: vi.fn(() => null),
-  Viewer: vi.fn(({ children }: { children?: unknown }) => children),
-  CameraFlyTo: vi.fn(() => null),
-}));
+import { describe, it, expect } from 'vitest';
 
 import stsZonesData from '../data/stsZones.json';
 import terminalsData from '../data/terminals.json';
@@ -119,34 +90,10 @@ describe('Overlay data loading', () => {
   });
 });
 
-describe('Overlays component', () => {
-  it('renders without errors with all overlays visible', async () => {
-    const { Overlays } = await import('../components/Globe/Overlays');
-    expect(Overlays).toBeDefined();
-    expect(typeof Overlays).toBe('function');
-
-    // Call the component function directly - with mocked Resium it returns JSX
-    const result = Overlays({ showStsZones: true, showTerminals: true, showEez: true });
-    expect(result).toBeDefined();
-  });
-
-  it('renders without errors with all overlays hidden', async () => {
-    const { Overlays } = await import('../components/Globe/Overlays');
-    const result = Overlays({ showStsZones: false, showTerminals: false, showEez: false });
-    expect(result).toBeDefined();
-  });
-
+describe('OverlayToggles component', () => {
   it('exports OverlayToggles component', async () => {
-    const { OverlayToggles } = await import('../components/Globe/Overlays');
+    const { OverlayToggles } = await import('../components/Map/OverlayToggles');
     expect(OverlayToggles).toBeDefined();
     expect(typeof OverlayToggles).toBe('function');
-  });
-
-  it('exports correct TypeScript interfaces via props validation', async () => {
-    const { Overlays } = await import('../components/Globe/Overlays');
-    // Verify the component accepts the expected props shape
-    const props = { showStsZones: true, showTerminals: false, showEez: true };
-    const result = Overlays(props);
-    expect(result).toBeDefined();
   });
 });

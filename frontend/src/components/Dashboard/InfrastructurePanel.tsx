@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Cartesian3 } from 'cesium';
-import { getCesiumViewer } from '../Globe/cesiumViewer';
+import { getMapInstance } from '../Map/mapInstance';
 import { useVesselStore } from '../../hooks/useVesselStore';
 
 interface InfraAlert {
@@ -73,12 +72,9 @@ export function InfrastructurePanel() {
   const handleAlertClick = (alert: InfraAlert) => {
     selectVessel(alert.mmsi);
     if (alert.lat != null && alert.lon != null) {
-      const viewer = getCesiumViewer();
-      if (viewer && !viewer.isDestroyed()) {
-        viewer.camera.flyTo({
-          destination: Cartesian3.fromDegrees(alert.lon, alert.lat, 50_000),
-          duration: 1.5,
-        });
+      const map = getMapInstance();
+      if (map) {
+        map.flyTo({ center: [alert.lon, alert.lat], zoom: 10, duration: 1500 });
       }
     }
   };

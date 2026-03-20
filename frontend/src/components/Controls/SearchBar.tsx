@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useVesselStore } from '../../hooks/useVesselStore';
-import { getCesiumViewer } from '../Globe/cesiumViewer';
-import { Cartesian3 } from 'cesium';
+import { getMapInstance } from '../Map/mapInstance';
 import type { VesselState } from '../../types/vessel';
 import { RISK_COLORS } from '../../utils/riskColors';
 
@@ -105,12 +104,9 @@ export function SearchBar() {
       setOpen(false);
 
       // Pan the map to the vessel
-      const viewer = getCesiumViewer();
-      if (viewer) {
-        viewer.camera.flyTo({
-          destination: Cartesian3.fromDegrees(result.lon, result.lat, 50_000),
-          duration: 1.5,
-        });
+      const map = getMapInstance();
+      if (map) {
+        map.flyTo({ center: [result.lon, result.lat], zoom: 10, duration: 1500 });
       }
     },
     [selectVessel],

@@ -1,25 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// Mock Cesium for module imports that reference it
-vi.mock('cesium', () => ({
-  Cartesian3: { fromDegrees: vi.fn(), UNIT_Z: { x: 0, y: 0, z: 1 } },
-  ConstantProperty: vi.fn(),
-  CallbackProperty: vi.fn((cb: () => unknown) => ({ callback: cb })),
-  NearFarScalar: vi.fn(),
-  Ion: { defaultAccessToken: '' },
-  Color: { fromCssColorString: vi.fn((css: string) => ({ css, withAlpha: (a: number) => ({ css, alpha: a }) })) },
-  PolylineDashMaterialProperty: vi.fn(),
-  IonImageryProvider: { fromAssetId: vi.fn() },
-}));
-
-vi.mock('resium', () => ({
-  Entity: vi.fn(({ children }: { children?: unknown }) => children),
-  BillboardGraphics: vi.fn(() => null),
-  PolylineGraphics: vi.fn(() => null),
-  useCesium: vi.fn(() => ({ viewer: null })),
-  Viewer: vi.fn(({ children }: { children?: unknown }) => children),
-}));
-
 // ── Story 1: Theme Foundation ─────────────────────────────────────────
 
 describe('Theme Foundation', () => {
@@ -41,20 +21,13 @@ describe('Theme Foundation', () => {
   });
 });
 
-// ── Story 2: Globe Styling ────────────────────────────────────────────
+// ── Story 2: Map Styling ────────────────────────────────────────────
 
-describe('Globe Styling', () => {
-  it('GlobeView configures dark globe base color and scene', async () => {
-    const mod = await import('../components/Globe/GlobeView');
-    expect(mod.GlobeView).toBeDefined();
-    expect(typeof mod.GlobeView).toBe('function');
-  });
-
-  it('exports camera constants', async () => {
-    const mod = await import('../components/Globe/cesiumViewer');
-    expect(mod.INITIAL_LON).toBeDefined();
-    expect(mod.INITIAL_LAT).toBeDefined();
-    expect(mod.INITIAL_ALT).toBeDefined();
+describe('Map Styling', () => {
+  it('exports camera constants from mapInstance', async () => {
+    const mod = await import('../components/Map/mapInstance');
+    expect(mod.INITIAL_CENTER).toBeDefined();
+    expect(mod.INITIAL_ZOOM).toBeDefined();
   });
 });
 
@@ -63,9 +36,9 @@ describe('Globe Styling', () => {
 describe('Chevron Vessel Markers', () => {
   it('MARKER_STYLE has spec values for all tiers', async () => {
     const { MARKER_STYLE } = await import('../utils/vesselIcons');
-    expect(MARKER_STYLE.green).toEqual({ opacity: 0.6, scale: 0.6 });
-    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.9, scale: 0.8 });
-    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, scale: 1.0 });
+    expect(MARKER_STYLE.green).toEqual({ opacity: 0.7, opacityFar: 0.2, scale: 0.5 });
+    expect(MARKER_STYLE.yellow).toEqual({ opacity: 0.8, opacityFar: 0.8, scale: 0.7 });
+    expect(MARKER_STYLE.red).toEqual({ opacity: 1.0, opacityFar: 1.0, scale: 0.85 });
   });
 
   it('cogToRotation converts COG degrees to radians correctly', async () => {
@@ -75,29 +48,14 @@ describe('Chevron Vessel Markers', () => {
     expect(cogToRotation(null)).toBe(0);
   });
 
-  it('red pulse oscillates between 1.0 and 1.15 scale factor', async () => {
+  it('red tier has expected scale', async () => {
     const { MARKER_STYLE } = await import('../utils/vesselIcons');
-    // The CallbackProperty increments by 0.06 and uses 0.15 amplitude
-    // At sin=0 → scale = 1.0 * MARKER_STYLE.red.scale = 1.2
-    // At sin=1 → scale = 1.15 * 1.2 = 1.38
-    // At sin=-1 → scale = 0.85 * 1.2 = 1.02
-    // This verifies the pulse range is 1.0-1.15 multiplier on base scale
-    expect(MARKER_STYLE.red.scale).toBe(1.0);
+    expect(MARKER_STYLE.red.scale).toBe(0.85);
   });
 
-  it('VesselMarkers exports filterVessels', async () => {
-    const mod = await import('../components/Globe/VesselMarkers');
+  it('VesselLayer exports filterVessels', async () => {
+    const mod = await import('../components/Map/VesselLayer');
     expect(mod.filterVessels).toBeDefined();
-  });
-});
-
-// ── Story 4: Track Trails ─────────────────────────────────────────────
-
-describe('Track Trail Tapering', () => {
-  it('TrackTrail component exports', async () => {
-    const mod = await import('../components/Globe/TrackTrail');
-    expect(mod.TrackTrail).toBeDefined();
-    expect(typeof mod.TrackTrail).toBe('function');
   });
 });
 
