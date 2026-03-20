@@ -16,6 +16,8 @@ import { SarDetectionLayer } from './SarDetectionLayer';
 import { TrackTrails } from './TrackTrails';
 import { TrackTrail } from './TrackTrail';
 import { HoverTooltip } from './HoverTooltip';
+import { LookbackLayer } from './LookbackLayer';
+import { AreaDrawingTool } from './AreaDrawingTool';
 
 export interface MapViewProps {
   showGfwEvents?: boolean;
@@ -74,6 +76,8 @@ function MapView(props: MapViewProps) {
       <NetworkLayer visible={props.showNetwork ?? false} />
       <GfwEventLayer visible={props.showGfwEvents ?? false} />
       <SarDetectionLayer visible={props.showSarDetections ?? false} />
+      <LookbackLayer />
+      <AreaDrawingTool />
       <HoverTooltip />
     </Map>
   );
