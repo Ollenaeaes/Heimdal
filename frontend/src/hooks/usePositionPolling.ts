@@ -42,6 +42,8 @@ export function usePositionPolling(): 'polling' | 'idle' | 'error' {
             risk_score: number;
             ship_name: string | null;
             ship_type: number | null;
+            length: number | null;
+            width: number | null;
           }>;
           server_time: string;
         } = await res.json();
@@ -63,6 +65,8 @@ export function usePositionPolling(): 'polling' | 'idle' | 'error' {
             riskScore: p.risk_score,
             name: p.ship_name ?? undefined,
             shipType: p.ship_type ?? undefined,
+            length: p.length,
+            width: p.width,
           }));
           const { updatePositions } = useVesselStore.getState();
           updatePositions(batch);

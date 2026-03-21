@@ -23,21 +23,21 @@ export function createMinimapStyle(): StyleSpecification {
       {
         id: 'background',
         type: 'background',
-        paint: { 'background-color': '#F8FAFC' },
+        paint: { 'background-color': '#0A1628' },
       },
       {
         id: 'land',
         type: 'fill',
         source: 'openmaptiles',
         'source-layer': 'landcover',
-        paint: { 'fill-color': '#E2E8F0' },
+        paint: { 'fill-color': '#1A2332' },
       },
       {
         id: 'water',
         type: 'fill',
         source: 'openmaptiles',
         'source-layer': 'water',
-        paint: { 'fill-color': '#F8FAFC' },
+        paint: { 'fill-color': '#0A1628' },
       },
     ],
   };
@@ -113,7 +113,7 @@ export default function Minimap() {
 
   return (
     <div
-      className="absolute bottom-10 left-3 z-30 rounded border border-slate-700/50 overflow-hidden shadow-lg cursor-crosshair"
+      className="absolute bottom-10 left-3 z-30 rounded border border-[#1F2937] overflow-hidden shadow-lg cursor-crosshair"
       style={{ width: WIDTH, height: HEIGHT }}
       onClick={handleClick}
     >

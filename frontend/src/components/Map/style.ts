@@ -13,36 +13,36 @@ export function createMapStyle(): StyleSpecification {
     },
     glyphs: `https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=${key}`,
     layers: [
-      // Background — acts as water color since most of the world is ocean
+      // Background — dark navy ocean
       {
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': '#F8FAFC',
+          'background-color': '#0A1628',
         },
       },
-      // Land polygon fill
+      // Land polygon fill — dark charcoal
       {
         id: 'landcover',
         type: 'fill',
         source: 'openmaptiles',
         'source-layer': 'landcover',
         paint: {
-          'fill-color': '#E2E8F0',
+          'fill-color': '#1A2332',
           'fill-opacity': 0.6,
         },
       },
-      // Land base (from landuse layer with no filter — catches all land)
+      // Land base
       {
         id: 'land',
         type: 'fill',
         source: 'openmaptiles',
         'source-layer': 'landuse',
         paint: {
-          'fill-color': '#E2E8F0',
+          'fill-color': '#1A2332',
         },
       },
-      // Industrial / commercial / port areas
+      // Industrial / commercial / port areas — slightly lighter
       {
         id: 'landuse-industrial',
         type: 'fill',
@@ -57,32 +57,32 @@ export function createMapStyle(): StyleSpecification {
           'harbour',
         ],
         paint: {
-          'fill-color': '#D1D5DB',
+          'fill-color': '#243044',
           'fill-opacity': 0.7,
         },
       },
-      // Water fill — matches background so ocean/lakes are seamless
+      // Water fill — matches dark ocean background
       {
         id: 'water',
         type: 'fill',
         source: 'openmaptiles',
         'source-layer': 'water',
         paint: {
-          'fill-color': '#F8FAFC',
+          'fill-color': '#0A1628',
         },
       },
-      // Shoreline / coastline stroke
+      // Shoreline / coastline stroke — subtle
       {
         id: 'shoreline',
         type: 'line',
         source: 'openmaptiles',
         'source-layer': 'water',
         paint: {
-          'line-color': '#94A3B8',
+          'line-color': '#2D4A6F',
           'line-width': 1,
         },
       },
-      // Country borders
+      // Country borders — dim blue-gray
       {
         id: 'boundary-country',
         type: 'line',
@@ -90,11 +90,12 @@ export function createMapStyle(): StyleSpecification {
         'source-layer': 'boundary',
         filter: ['==', 'admin_level', 2],
         paint: {
-          'line-color': '#CBD5E1',
-          'line-width': 1,
+          'line-color': '#2D4A6F',
+          'line-width': 0.8,
+          'line-opacity': 0.6,
         },
       },
-      // Roads — very subtle, only major ones
+      // Roads — very subtle on dark base
       {
         id: 'road-major',
         type: 'line',
@@ -102,13 +103,13 @@ export function createMapStyle(): StyleSpecification {
         'source-layer': 'transportation',
         filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
         paint: {
-          'line-color': '#CBD5E1',
+          'line-color': '#2D4A6F',
           'line-width': 0.5,
-          'line-opacity': 0.4,
+          'line-opacity': 0.3,
         },
         minzoom: 6,
       },
-      // Place labels — cities and towns
+      // Place labels — light text on dark bg
       {
         id: 'place-labels',
         type: 'symbol',
@@ -128,8 +129,8 @@ export function createMapStyle(): StyleSpecification {
           'text-max-width': 8,
         },
         paint: {
-          'text-color': '#475569',
-          'text-halo-color': '#F8FAFC',
+          'text-color': '#8899AA',
+          'text-halo-color': '#0A1628',
           'text-halo-width': 1.5,
         },
       },
@@ -155,8 +156,8 @@ export function createMapStyle(): StyleSpecification {
           'text-letter-spacing': 0.1,
         },
         paint: {
-          'text-color': '#94A3B8',
-          'text-halo-color': '#F8FAFC',
+          'text-color': '#4A6580',
+          'text-halo-color': '#0A1628',
           'text-halo-width': 1.5,
         },
         minzoom: 2,

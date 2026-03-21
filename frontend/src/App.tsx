@@ -43,12 +43,14 @@ function parseSnapshotData(data: Array<Record<string, unknown>>): VesselState[] 
     lon: d.lon as number,
     sog: (d.sog as number) ?? null,
     cog: (d.cog as number) ?? null,
-    heading: null,
+    heading: (d.heading as number) ?? null,
     riskTier: (d.risk_tier as VesselState['riskTier']) ?? 'green',
     riskScore: (d.risk_score as number) ?? 0,
     name: d.name as string | undefined,
     shipType: d.ship_type as number | undefined,
     timestamp: new Date().toISOString(),
+    length: (d.length as number) ?? null,
+    width: (d.width as number) ?? null,
   }));
 }
 
@@ -84,7 +86,6 @@ function AppInner() {
   useVesselSnapshot();
   useViewportGreenVessels();
   const [overlays, setOverlays] = useState<OverlayToggleState>(DEFAULT_OVERLAYS);
-  const [layerPanelOpen, setLayerPanelOpen] = useState(true);
   const setFilter = useVesselStore((s) => s.setFilter);
   const filters = useVesselStore((s) => s.filters);
 
@@ -120,8 +121,8 @@ function AppInner() {
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* HUD Bar — thin, semi-transparent, status line per visual theme spec */}
       <header
-        className="h-9 shrink-0 flex items-center px-4 border-b border-slate-700/50"
-        style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)' }}
+        className="h-9 shrink-0 flex items-center px-4 border-b border-[#1F2937]"
+        style={{ backgroundColor: 'rgba(10, 14, 23, 0.92)' }}
       >
         {/* HEIMDAL wordmark */}
         <h1
@@ -235,19 +236,8 @@ function AppInner() {
             <AreaLookbackButton />
           </div>
 
-          {/* Layer panel toggle */}
-          <button
-            onClick={() => setLayerPanelOpen(!layerPanelOpen)}
-            className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-slate-300 bg-slate-800/80 border border-slate-700/50 hover:bg-slate-700/80 backdrop-blur-sm"
-          >
-            <span className="text-[0.65rem]">{layerPanelOpen ? '▼' : '▶'}</span>
-            Layers
-          </button>
-
-          {/* Collapsible overlay toggles */}
-          {layerPanelOpen && (
-            <OverlayToggles state={overlays} onChange={setOverlays} />
-          )}
+          {/* Layer toggles — self-collapsing */}
+          <OverlayToggles state={overlays} onChange={setOverlays} />
         </div>
 
         <Minimap />

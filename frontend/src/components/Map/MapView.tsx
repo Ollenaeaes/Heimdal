@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
 import { Map } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { MapRef } from 'react-map-gl/maplibre';
+import type { MapRef, MapLayerMouseEvent } from 'react-map-gl/maplibre';
 import { setMapInstance, INITIAL_CENTER, INITIAL_ZOOM } from './mapInstance';
 import { createMapStyle } from './style';
 import { useLookbackStore } from '../../hooks/useLookbackStore';
+import { useVesselStore } from '../../hooks/useVesselStore';
 import { VesselLayer } from './VesselLayer';
 import { StaticOverlays } from './StaticOverlays';
 import { InfrastructureLayer } from './InfrastructureLayer';
@@ -34,8 +35,11 @@ export interface MapViewProps {
 
 const mapStyle = createMapStyle();
 
+const VESSEL_LAYER_IDS = ['vessel-dots-stationary', 'vessel-arrows', 'vessel-hulls'];
+
 function MapView(props: MapViewProps) {
   const lookbackActive = useLookbackStore((s) => s.isActive);
+  const selectVessel = useVesselStore((s) => s.selectVessel);
 
   const onLoad = useCallback((evt: { target: maplibregl.Map }) => {
     setMapInstance(evt.target);
@@ -46,6 +50,18 @@ function MapView(props: MapViewProps) {
       setMapInstance(null);
     }
   }, []);
+
+  const onClick = useCallback((e: MapLayerMouseEvent) => {
+    if (!e.features?.length) return;
+    const feature = e.features[0];
+    const layerId = feature.layer?.id;
+    if (!layerId || !VESSEL_LAYER_IDS.includes(layerId)) return;
+
+    const mmsi = feature.properties?.mmsi;
+    if (mmsi == null) return;
+
+    selectVessel(Number(mmsi));
+  }, [selectVessel]);
 
   return (
     <Map
@@ -58,7 +74,8 @@ function MapView(props: MapViewProps) {
       style={{ width: '100%', height: '100%' }}
       mapStyle={mapStyle}
       onLoad={onLoad}
-      interactiveLayerIds={['vessel-clusters', 'vessel-markers']}
+      onClick={onClick}
+      interactiveLayerIds={VESSEL_LAYER_IDS}
     >
       <StaticOverlays
         showStsZones={props.showStsZones ?? false}

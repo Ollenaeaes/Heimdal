@@ -55,7 +55,9 @@ async def get_recent_positions(
                        vp.risk_tier,
                        vp.risk_score,
                        vp.ship_name,
-                       vp.ship_type
+                       vp.ship_type,
+                       vp.length,
+                       vp.width
                 FROM vessel_profiles vp
                 LEFT JOIN LATERAL (
                     SELECT sog, cog, heading, nav_status
@@ -87,6 +89,8 @@ async def get_recent_positions(
             "risk_score": row[9] or 0,
             "ship_name": row[10],
             "ship_type": row[11],
+            "length": row[12],
+            "width": row[13],
         })
 
     return {

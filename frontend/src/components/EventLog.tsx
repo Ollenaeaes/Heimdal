@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { getMapInstance } from './Map/mapInstance';
 import { useVesselStore } from '../hooks/useVesselStore';
 import { useLookbackStore } from '../hooks/useLookbackStore';
@@ -43,6 +43,15 @@ export default function EventLog() {
 
   const vessels = useVesselStore((s) => s.vessels);
   const selectVessel = useVesselStore((s) => s.selectVessel);
+  const prevCountRef = useRef(events.length);
+
+  // Auto-expand when new events arrive
+  useEffect(() => {
+    if (events.length > prevCountRef.current && events.length > 0) {
+      setOpen(true);
+    }
+    prevCountRef.current = events.length;
+  }, [events.length]);
 
   const toggleSeverity = useCallback((sev: string) => {
     setSeverityFilter((prev) => {
@@ -80,34 +89,43 @@ export default function EventLog() {
 
   const lookbackActive = useLookbackStore((s) => s.isActive);
   const activeCount = events.filter((e) => e.severity === 'critical' || e.severity === 'high').length;
+  const hasEvents = events.length > 0;
 
   return (
     <div className={`absolute left-0 right-0 z-30 ${lookbackActive ? 'bottom-[60px]' : 'bottom-0'}`}>
       {/* Toggle bar */}
       <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1 text-xs text-slate-300 bg-slate-800/90 border-t border-slate-700/50 hover:bg-slate-700/90 backdrop-blur-sm w-full"
+        onClick={() => hasEvents && setOpen(!open)}
+        className={`flex items-center gap-2 px-3 text-xs text-slate-300 bg-[#0A0E17]/90 border-t border-[#1F2937] backdrop-blur-sm w-full transition-all ${
+          hasEvents ? 'py-1 hover:bg-[#111827]/90 cursor-pointer' : 'py-0.5 cursor-default'
+        }`}
       >
-        <span className="text-[0.65rem]">{open ? '▼' : '▲'}</span>
-        <span className="font-medium">Event Log</span>
-        {activeCount > 0 && (
-          <span className="ml-1 px-1.5 py-0.5 rounded-full text-[0.6rem] font-mono bg-red-500/20 text-red-400">
-            {activeCount}
-          </span>
+        {hasEvents ? (
+          <>
+            <span className="text-[0.65rem]">{open ? '▼' : '▲'}</span>
+            <span className="font-medium">Event Log</span>
+            {activeCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[0.6rem] font-mono bg-red-500/20 text-red-400">
+                {activeCount}
+              </span>
+            )}
+            <span className="text-slate-500 text-[0.65rem] ml-auto">
+              {filtered.length} events
+            </span>
+          </>
+        ) : (
+          <span className="text-slate-600 text-[0.6rem]">Event Log — no events</span>
         )}
-        <span className="text-slate-500 text-[0.65rem] ml-auto">
-          {filtered.length} events
-        </span>
       </button>
 
       {/* Event log panel */}
-      {open && (
+      {open && hasEvents && (
         <div
-          className="bg-slate-800/95 backdrop-blur-sm border-t border-slate-700/50"
+          className="bg-[#0A0E17]/95 backdrop-blur-sm border-t border-[#1F2937]"
           style={{ height: 200 }}
         >
           {/* Severity filter toggles */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-700/30">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-[#1F2937]/50">
             {(['critical', 'high', 'moderate', 'low'] as const).map((sev) => (
               <button
                 key={sev}
@@ -135,20 +153,17 @@ export default function EventLog() {
           <div className="overflow-y-auto" style={{ height: 'calc(200px - 36px)' }}>
             {filtered.length === 0 ? (
               <div className="flex items-center justify-center h-full text-slate-500 text-xs">
-                No events
+                No events matching filter
               </div>
             ) : (
               filtered.map((event, idx) => (
                 <div
                   key={event.id ?? `${event.mmsi}-${event.timestamp}-${idx}`}
-                  className="flex items-center gap-2 px-3 py-1 hover:bg-slate-700/30 text-[0.7rem] border-b border-slate-700/10"
+                  className="flex items-center gap-2 px-3 py-1 hover:bg-[#1F2937]/30 text-[0.7rem] border-b border-[#1F2937]/10"
                 >
-                  {/* Timestamp */}
                   <span className="shrink-0 font-mono text-slate-500 w-16">
                     {formatTime(event.timestamp)}
                   </span>
-
-                  {/* Severity badge */}
                   <span
                     className="shrink-0 w-16 text-center font-mono font-medium uppercase text-[0.6rem] rounded px-1 py-0.5"
                     style={{
@@ -158,23 +173,17 @@ export default function EventLog() {
                   >
                     {event.severity}
                   </span>
-
-                  {/* Vessel name */}
                   <span className="shrink-0 text-slate-200 font-medium truncate w-36">
                     {event.vesselName ?? `MMSI ${event.mmsi}`}
                   </span>
-
-                  {/* Rule description */}
                   <span className="text-slate-400 truncate flex-1">
                     {RULE_LABELS[event.ruleId] ?? event.ruleId}
                   </span>
-
-                  {/* Fly to button */}
                   <button
                     onClick={() => handleFlyTo(event)}
                     className="shrink-0 text-[0.6rem] text-blue-400 hover:text-blue-300 font-medium"
                   >
-                    → Fly to
+                    Fly to
                   </button>
                 </div>
               ))

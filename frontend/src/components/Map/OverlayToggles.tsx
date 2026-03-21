@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useVesselStore } from '../../hooks/useVesselStore';
 import type { GfwEventType } from '../../types/api';
 import { GFW_EVENT_COLORS } from '../../utils/eventIcons';
@@ -30,6 +31,7 @@ const GFW_EVENT_LABELS: Record<GfwEventType, string> = {
 };
 
 export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
+  const [expanded, setExpanded] = useState(false);
   const darkShipsOnly = useVesselStore((s) => s.filters.darkShipsOnly);
   const showGfwEventTypes = useVesselStore((s) => s.filters.showGfwEventTypes);
   const setFilter = useVesselStore((s) => s.setFilter);
@@ -52,8 +54,51 @@ export function OverlayToggles({ state, onChange }: OverlayTogglesProps) {
     setFilter({ showGfwEventTypes: Array.from(current) });
   };
 
+  // Count active overlays
+  const activeCount = [
+    state.showStsZones, state.showTerminals, state.showSeaBorders,
+    state.showSarDetections, state.showGfwEvents, state.showInfrastructure,
+    state.showGnssZones, state.showNetwork,
+  ].filter(Boolean).length;
+
+  // Collapsed: just a narrow icon strip
+  if (!expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-[#0A0E17]/80 border border-[#1F2937] backdrop-blur-md text-slate-300 hover:text-white hover:bg-[#111827]/90 transition-colors text-xs"
+        title="Toggle map layers"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="1" y="1" width="6" height="6" rx="1" opacity="0.6" />
+          <rect x="9" y="1" width="6" height="6" rx="1" opacity="0.4" />
+          <rect x="1" y="9" width="6" height="6" rx="1" opacity="0.4" />
+          <rect x="9" y="9" width="6" height="6" rx="1" opacity="0.2" />
+        </svg>
+        Layers
+        {activeCount > 0 && (
+          <span className="px-1 py-0.5 rounded text-[0.6rem] font-mono bg-blue-500/20 text-blue-400">
+            {activeCount}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2 bg-[#0A0E17]/80 p-3 rounded border border-[#1F2937] backdrop-blur-md text-white text-xs">
+      {/* Header with collapse button */}
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[0.7rem] font-medium text-slate-400 uppercase tracking-wider">Layers</span>
+        <button
+          onClick={() => setExpanded(false)}
+          className="text-slate-500 hover:text-slate-300 text-sm leading-none px-1"
+          title="Collapse"
+        >
+          ✕
+        </button>
+      </div>
+
       <label className="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"

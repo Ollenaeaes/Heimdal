@@ -47,10 +47,13 @@ export function HoverTooltip() {
     if (!map) return;
 
     const onMouseMove = (e: maplibregl.MapMouseEvent) => {
-      // Check vessel layer first
-      const vesselFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['vessel-markers'],
-      });
+      // Check vessel layers (query whichever are currently rendered)
+      const vesselLayerIds = ['vessel-dots-stationary', 'vessel-arrows', 'vessel-hulls'].filter(
+        (id) => !!map.getLayer(id),
+      );
+      const vesselFeatures = vesselLayerIds.length > 0
+        ? map.queryRenderedFeatures(e.point, { layers: vesselLayerIds })
+        : [];
       if (vesselFeatures.length > 0) {
         const props = vesselFeatures[0].properties;
         if (props?.mmsi != null) {
@@ -65,10 +68,13 @@ export function HoverTooltip() {
         }
       }
 
-      // Check infrastructure layers
-      const infraFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['infra-routes', 'infra-routes-flagged'],
-      });
+      // Check infrastructure layers (only if they exist)
+      const infraLayers = ['infra-routes', 'infra-routes-flagged'].filter(
+        (id) => !!map.getLayer(id),
+      );
+      const infraFeatures = infraLayers.length > 0
+        ? map.queryRenderedFeatures(e.point, { layers: infraLayers })
+        : [];
       if (infraFeatures.length > 0) {
         const f = infraFeatures[0];
         map.getCanvas().style.cursor = 'pointer';

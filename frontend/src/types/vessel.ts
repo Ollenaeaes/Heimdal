@@ -13,4 +13,6 @@ export interface VesselState {
   shipType?: number;
   flagCountry?: string;
   destination?: string;
+  length?: number | null;
+  width?: number | null;
 }

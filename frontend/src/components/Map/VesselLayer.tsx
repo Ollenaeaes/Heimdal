@@ -1,14 +1,22 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Source, Layer, useMap } from 'react-map-gl/maplibre';
-import type { MapLayerMouseEvent, GeoJSONSource } from 'react-map-gl/maplibre';
-import type { FeatureCollection, Point } from 'geojson';
+import type { MapLayerMouseEvent } from 'react-map-gl/maplibre';
+import type { FeatureCollection, Point, LineString, Feature } from 'geojson';
 import { useVesselStore } from '../../hooks/useVesselStore';
-import type { FilterState } from '../../hooks/useVesselStore';
 import { useWatchlistStore } from '../../hooks/useWatchlist';
 import type { VesselState } from '../../types/vessel';
+import { registerVesselIcons } from '../../utils/vesselIcons';
+
+/** Speed threshold (knots) below which a vessel is considered stationary. */
+const STATIONARY_SPEED = 0.5;
+
+/** Zoom level at which we switch from arrows to hull shapes. */
+const HULL_ZOOM = 13;
+
+/** Speed vector: 10 minutes of travel at current SOG, drawn as a line from vessel position. */
+const VECTOR_MINUTES = 10;
 
 /**
- * Filter vessels according to the active FilterState.
  * Filter vessels according to the active FilterState.
  */
 export function filterVessels(
@@ -31,7 +39,7 @@ export function filterVessels(
   return result;
 }
 
-/** Map riskTier to a numeric score for cluster aggregation. */
+/** Map riskTier to a numeric score for data-driven styling. */
 const RISK_SCORE_MAP: Record<string, number> = {
   green: 0,
   yellow: 50,
@@ -44,13 +52,18 @@ export interface VesselFeatureProperties {
   riskTier: string;
   riskScore: number;
   cog: number | null;
+  heading: number | null;
+  sog: number | null;
   shipName: string;
   isWatchlisted: boolean;
   isSpoofed: boolean;
+  isMoving: boolean;
+  vesselLength: number;
+  vesselWidth: number;
 }
 
 /**
- * Convert a vessel Map into a GeoJSON FeatureCollection.
+ * Convert a vessel list into a GeoJSON FeatureCollection.
  * Exported for testing.
  */
 export function buildVesselGeoJson(
@@ -68,10 +81,15 @@ export function buildVesselGeoJson(
       mmsi: v.mmsi,
       riskTier: v.riskTier,
       riskScore: RISK_SCORE_MAP[v.riskTier] ?? 0,
-      cog: v.cog,
+      cog: v.cog ?? null,
+      heading: v.heading ?? null,
+      sog: v.sog ?? null,
       shipName: v.name ?? `MMSI ${v.mmsi}`,
       isWatchlisted: watchedMmsis.has(v.mmsi),
       isSpoofed: spoofedMmsis.has(v.mmsi),
+      isMoving: (v.sog ?? 0) >= STATIONARY_SPEED,
+      vesselLength: v.length ?? 0,
+      vesselWidth: v.width ?? 0,
     },
   }));
 
@@ -82,8 +100,53 @@ export function buildVesselGeoJson(
 }
 
 /**
- * Renders vessel markers with clustering on a MapLibre map.
- * Must be rendered as a child of a react-map-gl <Map>.
+ * Build speed vector lines for moving vessels (10-minute projected path from COG + SOG).
+ * Only generated for vessels with sog >= STATIONARY_SPEED and a valid COG.
+ */
+export function buildSpeedVectors(
+  vessels: VesselState[],
+): FeatureCollection<LineString> {
+  const features: Feature<LineString>[] = [];
+
+  for (const v of vessels) {
+    const sog = v.sog ?? 0;
+    const cog = v.cog;
+    if (sog < STATIONARY_SPEED || cog == null) continue;
+
+    // Distance in nautical miles for VECTOR_MINUTES at current SOG
+    const distNm = sog * (VECTOR_MINUTES / 60);
+    // Convert to approximate degrees (1° lat ≈ 60nm)
+    const distDeg = distNm / 60;
+    const cogRad = (cog * Math.PI) / 180;
+
+    const endLon = v.lon + distDeg * Math.sin(cogRad) / Math.cos((v.lat * Math.PI) / 180);
+    const endLat = v.lat + distDeg * Math.cos(cogRad);
+
+    features.push({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [v.lon, v.lat],
+          [endLon, endLat],
+        ],
+      },
+      properties: {
+        riskTier: v.riskTier,
+      },
+    });
+  }
+
+  return { type: 'FeatureCollection', features };
+}
+
+/**
+ * Renders vessel markers on a MapLibre map with zoom-dependent symbology:
+ * - Zoomed out: dots (stationary) + directional arrows (moving)
+ * - Port-level zoom (>=13): hull shapes rotated by heading, sized by AIS dimensions
+ * - Speed vectors (10 min COG projection) shown at port-level zoom
+ *
+ * No clustering. All vessels above green are always visible.
  */
 export function VesselLayer() {
   const { current: map } = useMap();
@@ -94,6 +157,32 @@ export function VesselLayer() {
   const watchedMmsis = useWatchlistStore((s) => s.watchedMmsis);
   const spoofedMmsis = useVesselStore((s) => s.spoofedMmsis);
 
+  // Register vessel icons when map is available
+  useEffect(() => {
+    if (!map) return;
+    const mapInstance = map.getMap();
+    const register = () => registerVesselIcons(mapInstance);
+
+    // Try immediately if style already loaded
+    if (mapInstance.isStyleLoaded()) {
+      register();
+    }
+    // Also register on load/style.load to handle race conditions
+    mapInstance.on('load', register);
+    mapInstance.on('style.load', register);
+    // Handle missing images as fallback
+    mapInstance.on('styleimagemissing', (e: { id: string }) => {
+      if (e.id.startsWith('arrow-') || e.id.startsWith('hull-')) {
+        register();
+      }
+    });
+
+    return () => {
+      mapInstance.off('load', register);
+      mapInstance.off('style.load', register);
+    };
+  }, [map]);
+
   const visibleVessels = useMemo(() => filterVessels(vessels, filters), [vessels, filters]);
 
   const geojson = useMemo(
@@ -101,31 +190,12 @@ export function VesselLayer() {
     [visibleVessels, watchedMmsis, spoofedMmsis],
   );
 
-  /** Click handler for cluster circles — zoom to expand. */
-  const onClusterClick = useCallback(
-    (e: MapLayerMouseEvent) => {
-      if (!map || !e.features?.[0]) return;
-      const feature = e.features[0];
-      const clusterId = feature.properties?.cluster_id;
-      if (clusterId == null) return;
-
-      const source = map.getSource('vessels') as GeoJSONSource | undefined;
-      if (!source) return;
-
-      (source as unknown as { getClusterExpansionZoom: (id: number, cb: (err: Error | null, zoom: number) => void) => void })
-        .getClusterExpansionZoom(clusterId, (err: Error | null, zoom: number) => {
-          if (err || !feature.geometry || feature.geometry.type !== 'Point') return;
-          map.flyTo({
-            center: feature.geometry.coordinates as [number, number],
-            zoom,
-            duration: 500,
-          });
-        });
-    },
-    [map],
+  const speedVectors = useMemo(
+    () => buildSpeedVectors(visibleVessels),
+    [visibleVessels],
   );
 
-  /** Click handler for individual vessel markers. */
+  /** Click handler for vessel markers (any layer). */
   const onVesselClick = useCallback(
     (e: MapLayerMouseEvent) => {
       if (!map || !e.features?.[0]) return;
@@ -138,7 +208,7 @@ export function VesselLayer() {
       if (feature.geometry?.type === 'Point') {
         map.flyTo({
           center: feature.geometry.coordinates as [number, number],
-          zoom: 10,
+          zoom: Math.max(map.getZoom(), 10),
           duration: 1500,
         });
       }
@@ -146,7 +216,6 @@ export function VesselLayer() {
     [map, selectVessel],
   );
 
-  /** Change cursor to pointer on hover over interactive layers. */
   const onMouseEnter = useCallback(() => {
     if (map) map.getCanvas().style.cursor = 'pointer';
   }, [map]);
@@ -155,122 +224,237 @@ export function VesselLayer() {
     if (map) map.getCanvas().style.cursor = '';
   }, [map]);
 
+  // Compute icon size expression based on vessel length for hull icons
+  // Categories: <50m → 0.35, 50-150m → 0.5, 150-300m → 0.7, 300m+ → 0.9
+  const hullIconSize: maplibregl.ExpressionSpecification = [
+    'interpolate', ['linear'], ['zoom'],
+    HULL_ZOOM, [
+      'step', ['get', 'vesselLength'],
+      0.35,   // < 50m
+      50, 0.5,
+      150, 0.7,
+      300, 0.9,
+    ],
+    18, [
+      'step', ['get', 'vesselLength'],
+      0.7,
+      50, 1.0,
+      150, 1.4,
+      300, 1.8,
+    ],
+  ];
+
   return (
-    <Source
-      id="vessels"
-      type="geojson"
-      data={geojson}
-      cluster={true}
-      clusterRadius={50}
-      clusterMaxZoom={14}
-      clusterProperties={{
-        maxRiskScore: ['max', ['get', 'riskScore']],
-      }}
-    >
-      {/* Cluster circles — color by highest risk in cluster */}
-      <Layer
-        id="vessel-clusters"
-        type="circle"
-        filter={['has', 'point_count']}
-        paint={{
-          'circle-color': [
-            'step',
-            ['get', 'maxRiskScore'],
-            '#22C55E', // green (0-29)
-            30,
-            '#F59E0B', // yellow (30-99)
-            100,
-            '#EF4444', // red (100+)
-          ],
-          'circle-radius': ['step', ['get', 'point_count'], 20, 10, 25, 50, 30],
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#1F2937',
-        }}
-        onClick={onClusterClick}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      />
+    <>
+      {/* ── Speed vectors (COG projected 10 min) ── */}
+      <Source id="vessel-vectors" type="geojson" data={speedVectors}>
+        <Layer
+          id="vessel-speed-vector"
+          type="line"
+          minzoom={HULL_ZOOM}
+          paint={{
+            'line-color': [
+              'match',
+              ['get', 'riskTier'],
+              'green', '#22C55E',
+              'yellow', '#F59E0B',
+              'red', '#EF4444',
+              'blacklisted', '#9333EA',
+              '#6B7280',
+            ],
+            'line-width': 1.5,
+            'line-opacity': 0.6,
+            'line-dasharray': [2, 3],
+          }}
+        />
+      </Source>
 
-      {/* Cluster count labels */}
-      <Layer
-        id="vessel-cluster-count"
-        type="symbol"
-        filter={['has', 'point_count']}
-        layout={{
-          'text-field': '{point_count_abbreviated}',
-          'text-size': 12,
-          'text-font': ['Open Sans Bold'],
-        }}
-        paint={{
-          'text-color': '#FFFFFF',
-        }}
-      />
+      {/* ── Vessel points source (no clustering) ── */}
+      <Source id="vessels" type="geojson" data={geojson}>
 
-      {/* Watchlist halo — rendered behind vessel markers */}
-      {/* Individual vessel markers (unclustered) */}
-      <Layer
-        id="vessel-markers"
-        type="circle"
-        filter={['!', ['has', 'point_count']]}
-        paint={{
-          'circle-color': [
-            'match',
-            ['get', 'riskTier'],
-            'green', '#22C55E',
-            'yellow', '#F59E0B',
-            'red', '#EF4444',
-            'blacklisted', '#9333EA',
-            '#6B7280',
-          ],
-          'circle-radius': [
-            'match',
-            ['get', 'riskTier'],
-            'green', 3,
-            4,
-          ],
-          'circle-opacity': [
-            'match',
-            ['get', 'riskTier'],
-            'green', 0.3,
-            1,
-          ],
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#0F172A',
-        }}
-        onClick={onVesselClick}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      />
+        {/* ── Stationary dots (all zoom levels) ── */}
+        <Layer
+          id="vessel-dots-stationary"
+          type="circle"
+          filter={['==', ['get', 'isMoving'], false]}
+          paint={{
+            'circle-color': [
+              'match',
+              ['get', 'riskTier'],
+              'green', '#22C55E',
+              'yellow', '#F59E0B',
+              'red', '#EF4444',
+              'blacklisted', '#9333EA',
+              '#6B7280',
+            ],
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              3, ['match', ['get', 'riskTier'],
+                'green', 1.5,
+                'yellow', 2.5,
+                'red', 3,
+                'blacklisted', 3.5,
+                2],
+              8, ['match', ['get', 'riskTier'],
+                'green', 2,
+                'yellow', 3.5,
+                'red', 4.5,
+                'blacklisted', 5,
+                3],
+              HULL_ZOOM, ['match', ['get', 'riskTier'],
+                'green', 3,
+                'yellow', 5,
+                'red', 6,
+                'blacklisted', 7,
+                4],
+            ],
+            'circle-opacity': [
+              'match',
+              ['get', 'riskTier'],
+              'green', 0.35,
+              'yellow', 0.9,
+              1,
+            ],
+            'circle-stroke-width': [
+              'match', ['get', 'riskTier'],
+              'green', 0,
+              0.5,
+            ],
+            'circle-stroke-color': '#0A1628',
+          }}
+          maxzoom={HULL_ZOOM}
+          onClick={onVesselClick}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
 
-      {/* Watchlist halo — rendered after markers, visually behind via larger radius */}
-      <Layer
-        id="vessel-watchlist-halo"
-        type="circle"
-        filter={[
-          'all',
-          ['!', ['has', 'point_count']],
-          ['==', ['get', 'isWatchlisted'], true],
-        ]}
-        paint={{
-          'circle-radius': 8,
-          'circle-color': 'transparent',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': 'rgba(255, 255, 255, 0.4)',
-        }}
-      />
+        {/* ── Moving vessel arrows (zoomed out, below hull zoom) ── */}
+        <Layer
+          id="vessel-arrows"
+          type="symbol"
+          filter={['==', ['get', 'isMoving'], true]}
+          maxzoom={HULL_ZOOM}
+          layout={{
+            'icon-image': [
+              'match',
+              ['get', 'riskTier'],
+              'green', 'arrow-green',
+              'yellow', 'arrow-yellow',
+              'red', 'arrow-red',
+              'blacklisted', 'arrow-blacklisted',
+              'arrow-green',
+            ],
+            'icon-size': [
+              'interpolate', ['linear'], ['zoom'],
+              3, ['match', ['get', 'riskTier'],
+                'green', 0.3,
+                'yellow', 0.45,
+                'red', 0.55,
+                'blacklisted', 0.6,
+                0.4],
+              8, ['match', ['get', 'riskTier'],
+                'green', 0.45,
+                'yellow', 0.65,
+                'red', 0.8,
+                'blacklisted', 0.85,
+                0.6],
+              HULL_ZOOM, ['match', ['get', 'riskTier'],
+                'green', 0.6,
+                'yellow', 0.8,
+                'red', 1.0,
+                'blacklisted', 1.05,
+                0.8],
+            ],
+            'icon-rotate': ['coalesce', ['get', 'heading'], ['get', 'cog'], 0],
+            'icon-rotation-alignment': 'map',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          }}
+          paint={{
+            'icon-opacity': [
+              'match',
+              ['get', 'riskTier'],
+              'green', 0.4,
+              1,
+            ],
+          }}
+          onClick={onVesselClick}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
 
-      {/* Selection ring for currently selected vessel */}
-      <Layer
-        id="vessel-selection"
-        type="circle"
-        filter={['==', ['get', 'mmsi'], selectedMmsi ?? '']}
-        paint={{
-          'circle-radius': 10,
-          'circle-color': 'transparent',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#FFFFFF',
-        }}
-      />
-    </Source>
+        {/* ── Hull shapes (port-level zoom, all vessels) ── */}
+        <Layer
+          id="vessel-hulls"
+          type="symbol"
+          minzoom={HULL_ZOOM}
+          layout={{
+            'icon-image': [
+              'match',
+              ['get', 'riskTier'],
+              'green', 'hull-green',
+              'yellow', 'hull-yellow',
+              'red', 'hull-red',
+              'blacklisted', 'hull-blacklisted',
+              'hull-green',
+            ],
+            'icon-size': hullIconSize as unknown as number,
+            'icon-rotate': ['coalesce', ['get', 'heading'], ['get', 'cog'], 0],
+            'icon-rotation-alignment': 'map',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          }}
+          paint={{
+            'icon-opacity': [
+              'match',
+              ['get', 'riskTier'],
+              'green', 0.6,
+              1,
+            ],
+          }}
+          onClick={onVesselClick}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
+
+        {/* ── Watchlist halo ── */}
+        <Layer
+          id="vessel-watchlist-halo"
+          type="circle"
+          filter={['==', ['get', 'isWatchlisted'], true]}
+          paint={{
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              3, 6,
+              8, 8,
+              HULL_ZOOM, 14,
+              18, 22,
+            ],
+            'circle-color': 'transparent',
+            'circle-stroke-width': 2,
+            'circle-stroke-color': 'rgba(255, 255, 255, 0.4)',
+          }}
+        />
+
+        {/* ── Selection ring ── */}
+        <Layer
+          id="vessel-selection"
+          type="circle"
+          filter={['==', ['get', 'mmsi'], selectedMmsi ?? '']}
+          paint={{
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              3, 8,
+              8, 10,
+              HULL_ZOOM, 16,
+              18, 24,
+            ],
+            'circle-color': 'transparent',
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#FFFFFF',
+          }}
+        />
+      </Source>
+    </>
   );
 }
