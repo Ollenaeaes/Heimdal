@@ -60,6 +60,7 @@ export interface VesselFeatureProperties {
   isMoving: boolean;
   vesselLength: number;
   vesselWidth: number;
+  rotation: number;
 }
 
 /**
@@ -84,6 +85,8 @@ export function buildVesselGeoJson(
       cog: v.cog ?? null,
       heading: v.heading ?? null,
       sog: v.sog ?? null,
+      // Pre-computed rotation: heading preferred, COG fallback
+      rotation: v.heading ?? v.cog ?? 0,
       shipName: v.name ?? `MMSI ${v.mmsi}`,
       isWatchlisted: watchedMmsis.has(v.mmsi),
       isSpoofed: spoofedMmsis.has(v.mmsi),
@@ -365,7 +368,7 @@ export function VesselLayer() {
                 'blacklisted', 1.05,
                 0.8],
             ],
-            'icon-rotate': ['coalesce', ['get', 'heading'], ['get', 'cog'], 0],
+            'icon-rotate': ['get', 'rotation'],
             'icon-rotation-alignment': 'map',
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
@@ -399,7 +402,7 @@ export function VesselLayer() {
               'hull-green',
             ],
             'icon-size': hullIconSize as unknown as number,
-            'icon-rotate': ['coalesce', ['get', 'heading'], ['get', 'cog'], 0],
+            'icon-rotate': ['get', 'rotation'],
             'icon-rotation-alignment': 'map',
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
