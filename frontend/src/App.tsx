@@ -9,6 +9,7 @@ import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Map/OverlayToggles';
 import { AreaLookbackButton } from './components/Map/AreaLookbackButton';
 import Minimap from './components/Map/Minimap';
+import { TrackLegend } from './components/Map/TrackLegend';
 import type { OverlayToggleState } from './components/Map/OverlayToggles';
 import type { VesselState } from './types/vessel';
 
@@ -240,6 +241,7 @@ function AppInner() {
           <OverlayToggles state={overlays} onChange={setOverlays} />
         </div>
 
+        <TrackLegend />
         <Minimap />
 
         <Suspense fallback={null}>

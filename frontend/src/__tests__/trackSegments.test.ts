@@ -1,96 +1,78 @@
 import { describe, it, expect } from 'vitest';
-import { buildTrackSegments } from '../components/Map/TrackTrail';
+import { buildSpeedSegments, type TrackPoint } from '../components/Map/TrackTrail';
 
-describe('buildTrackSegments (MapLibre TrackTrail)', () => {
+describe('buildSpeedSegments (MapLibre TrackTrail)', () => {
   const makePoints = (
     timestamps: number[],
+    sog = 10,
     baseLon = 28.0,
     baseLat = 60.0,
-  ) =>
+  ): TrackPoint[] =>
     timestamps.map((t, i) => ({
       lon: baseLon + i * 0.01,
       lat: baseLat + i * 0.01,
       timestamp: new Date(t).toISOString(),
+      sog,
     }));
 
   it('returns empty array for empty input', () => {
-    expect(buildTrackSegments([])).toEqual([]);
+    expect(buildSpeedSegments([])).toEqual([]);
   });
 
   it('returns empty array for a single point', () => {
     const points = makePoints([1000]);
-    expect(buildTrackSegments(points)).toEqual([]);
+    expect(buildSpeedSegments(points)).toEqual([]);
   });
 
-  it('keeps consecutive points as one segment when no gaps', () => {
+  it('creates one segment per pair of consecutive points', () => {
     const base = Date.UTC(2024, 2, 15, 14, 0, 0);
-    // 5 points, 5 minutes apart (no gap)
     const points = makePoints([
       base,
       base + 5 * 60000,
       base + 10 * 60000,
-      base + 15 * 60000,
-      base + 20 * 60000,
     ]);
 
-    const segments = buildTrackSegments(points);
-    expect(segments.length).toBe(1);
+    const segments = buildSpeedSegments(points);
+    expect(segments.length).toBe(2); // 3 points = 2 segments
     expect(segments[0].isGap).toBe(false);
-    expect(segments[0].coordinates.length).toBe(5);
+    expect(segments[0].coordinates.length).toBe(2);
   });
 
-  it('splits on gaps >10 minutes', () => {
+  it('marks gaps >10 minutes', () => {
     const base = Date.UTC(2024, 2, 15, 14, 0, 0);
     const points = makePoints([
       base,
-      base + 5 * 60000, // 5 min — no gap
-      base + 10 * 60000, // 5 min — no gap
-      base + 25 * 60000, // 15 min — GAP
-      base + 30 * 60000, // 5 min — no gap
+      base + 5 * 60000,   // 5 min — no gap
+      base + 25 * 60000,  // 20 min — GAP
+      base + 30 * 60000,  // 5 min — no gap
     ]);
 
-    const segments = buildTrackSegments(points);
-    // Should have: solid segment, gap segment, solid segment
+    const segments = buildSpeedSegments(points);
     expect(segments.length).toBe(3);
     expect(segments[0].isGap).toBe(false);
     expect(segments[1].isGap).toBe(true);
     expect(segments[2].isGap).toBe(false);
   });
 
-  it('marks gap segments correctly', () => {
+  it('computes average speed per segment', () => {
     const base = Date.UTC(2024, 2, 15, 14, 0, 0);
-    // All points 15 minutes apart — all gaps
-    const points = makePoints([
-      base,
-      base + 15 * 60000,
-      base + 30 * 60000,
-      base + 45 * 60000,
-    ]);
+    const points: TrackPoint[] = [
+      { lon: 28.0, lat: 60.0, timestamp: new Date(base).toISOString(), sog: 10 },
+      { lon: 28.01, lat: 60.01, timestamp: new Date(base + 5 * 60000).toISOString(), sog: 20 },
+    ];
 
-    const segments = buildTrackSegments(points);
-    // All gaps, so one gap segment
-    expect(segments.length).toBe(1);
-    expect(segments[0].isGap).toBe(true);
-    expect(segments[0].coordinates.length).toBe(4);
+    const segments = buildSpeedSegments(points);
+    expect(segments[0].speed).toBe(15); // average of 10 and 20
   });
 
-  it('has recency values between 0 and 1', () => {
+  it('handles null sog as 0', () => {
     const base = Date.UTC(2024, 2, 15, 14, 0, 0);
-    const points = makePoints([
-      base,
-      base + 5 * 60000,
-      base + 10 * 60000,
-      base + 25 * 60000, // gap
-      base + 30 * 60000,
-      base + 35 * 60000,
-    ]);
+    const points: TrackPoint[] = [
+      { lon: 28.0, lat: 60.0, timestamp: new Date(base).toISOString(), sog: null },
+      { lon: 28.01, lat: 60.01, timestamp: new Date(base + 5 * 60000).toISOString(), sog: 10 },
+    ];
 
-    const segments = buildTrackSegments(points);
-    for (const seg of segments) {
-      expect(seg.recency).toBeGreaterThanOrEqual(0);
-      expect(seg.recency).toBeLessThanOrEqual(1);
-    }
-    // The last segment should have recency = 1
-    expect(segments[segments.length - 1].recency).toBe(1);
+    const segments = buildSpeedSegments(points);
+    expect(segments[0].speed).toBe(5); // average of 0 and 10
   });
 });
