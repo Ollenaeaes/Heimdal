@@ -65,33 +65,48 @@ function drawHullIcon(color: string): MapImage {
   const ctx = canvas.getContext('2d')!;
 
   const cx = size / 2;
-  const bowY = 4;
-  const sternY = size - 4;
-  const beamHalf = size * 0.22; // half-beam
-  const shoulderY = size * 0.2; // where bow narrows to full beam
+  const bowY = 2;
+  const sternY = size - 3;
+  const hullLen = sternY - bowY;
+  // Realistic L:B ratio ~5.5:1 — beam is narrow relative to length
+  const beamHalf = hullLen / 11; // full beam = hullLen/5.5
+  const shoulderY = bowY + hullLen * 0.15; // bow taper region
+  const sternNotchY = sternY - hullLen * 0.03; // slight stern taper
 
-  // Hull shape
+  // Hull shape — elongated with proper ship proportions
   ctx.beginPath();
-  ctx.moveTo(cx, bowY);                         // bow tip
-  ctx.lineTo(cx + beamHalf, shoulderY);         // right shoulder
-  ctx.lineTo(cx + beamHalf, sternY - 2);        // right side
-  ctx.lineTo(cx - beamHalf, sternY - 2);        // stern
-  ctx.lineTo(cx - beamHalf, shoulderY);         // left side
+  ctx.moveTo(cx, bowY);                              // bow tip
+  // Bow curves — smooth taper using quadratic curves
+  ctx.quadraticCurveTo(cx + beamHalf * 0.4, bowY + (shoulderY - bowY) * 0.3,
+                       cx + beamHalf, shoulderY);     // right bow curve
+  ctx.lineTo(cx + beamHalf, sternNotchY);             // right side
+  ctx.lineTo(cx + beamHalf * 0.85, sternY);           // right stern taper
+  ctx.lineTo(cx - beamHalf * 0.85, sternY);           // stern
+  ctx.lineTo(cx - beamHalf, sternNotchY);             // left stern taper
+  ctx.lineTo(cx - beamHalf, shoulderY);               // left side
+  ctx.quadraticCurveTo(cx - beamHalf * 0.4, bowY + (shoulderY - bowY) * 0.3,
+                       cx, bowY);                     // left bow curve
   ctx.closePath();
 
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.85;
   ctx.fill();
   ctx.globalAlpha = 1.0;
-  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-  ctx.lineWidth = 1.0;
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 0.8;
   ctx.stroke();
 
-  // Bridge dot (near stern, center)
-  const bridgeY = sternY * 0.7;
+  // Bridge/superstructure block (near stern, ~70% down the hull)
+  const bridgeY = bowY + hullLen * 0.68;
+  const bridgeH = hullLen * 0.08;
+  const bridgeW = beamHalf * 1.2;
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillRect(cx - bridgeW / 2, bridgeY, bridgeW, bridgeH);
+
+  // Bridge dot
   ctx.beginPath();
-  ctx.arc(cx, bridgeY, 2.5, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.arc(cx, bridgeY + bridgeH / 2, 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.fill();
 
   const imageData = ctx.getImageData(0, 0, size, size);
