@@ -3,11 +3,12 @@ FROM node:20-alpine AS frontend-build
 WORKDIR /build
 COPY frontend/package*.json ./
 RUN npm ci
-COPY frontend/ .
+# Build args declared before COPY to bust cache when values change
 ARG VITE_CESIUM_ION_TOKEN
-ENV VITE_CESIUM_ION_TOKEN=$VITE_CESIUM_ION_TOKEN
 ARG VITE_MAPTILER_KEY
+ENV VITE_CESIUM_ION_TOKEN=$VITE_CESIUM_ION_TOKEN
 ENV VITE_MAPTILER_KEY=$VITE_MAPTILER_KEY
+COPY frontend/ .
 RUN npx vite build
 
 # Stage 2: Python API server
