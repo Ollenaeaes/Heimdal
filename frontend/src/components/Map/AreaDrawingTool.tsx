@@ -17,12 +17,28 @@ export function AreaDrawingTool() {
   const cancelDrawing = useLookbackStore((s) => s.cancelDrawing);
   const [vertices, setVertices] = useState<[number, number][]>([]);
 
+  /** Snap distance in pixels — clicking within this radius of the first vertex closes the polygon. */
+  const SNAP_PX = 20;
+
   const handleClick = useCallback(
     (e: maplibregl.MapMouseEvent) => {
-      const newVertex: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-      setVertices((prev) => [...prev, newVertex]);
+      const map = mapRef?.getMap();
+      setVertices((prev) => {
+        // If 3+ vertices and click is near the first vertex, close the polygon
+        if (prev.length >= 3 && map) {
+          const firstPx = map.project(prev[0] as [number, number]);
+          const clickPx = e.point;
+          const dx = firstPx.x - clickPx.x;
+          const dy = firstPx.y - clickPx.y;
+          if (Math.sqrt(dx * dx + dy * dy) <= SNAP_PX) {
+            finishDrawing(prev);
+            return [];
+          }
+        }
+        return [...prev, [e.lngLat.lng, e.lngLat.lat]];
+      });
     },
-    [],
+    [mapRef, finishDrawing],
   );
 
   const handleDblClick = useCallback(
@@ -83,12 +99,12 @@ export function AreaDrawingTool() {
 
     const features: GeoJSON.Feature[] = [];
 
-    // Vertex points
-    for (const v of vertices) {
+    // Vertex points — mark first vertex so user knows to click it to close
+    for (let i = 0; i < vertices.length; i++) {
       features.push({
         type: 'Feature',
-        geometry: { type: 'Point', coordinates: v },
-        properties: {},
+        geometry: { type: 'Point', coordinates: vertices[i] },
+        properties: { isFirst: i === 0 && vertices.length >= 3 ? 1 : 0 },
       });
     }
 
@@ -137,10 +153,26 @@ export function AreaDrawingTool() {
         type="circle"
         filter={['==', ['geometry-type'], 'Point']}
         paint={{
-          'circle-radius': 4,
-          'circle-color': '#60A5FA',
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#FFFFFF',
+          'circle-radius': [
+            'case',
+            ['==', ['get', 'isFirst'], 1], 8,
+            4,
+          ],
+          'circle-color': [
+            'case',
+            ['==', ['get', 'isFirst'], 1], '#FFFFFF',
+            '#60A5FA',
+          ],
+          'circle-stroke-width': [
+            'case',
+            ['==', ['get', 'isFirst'], 1], 2,
+            1,
+          ],
+          'circle-stroke-color': [
+            'case',
+            ['==', ['get', 'isFirst'], 1], '#60A5FA',
+            '#FFFFFF',
+          ],
         }}
       />
     </Source>
