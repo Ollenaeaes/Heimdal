@@ -68,12 +68,14 @@ export function useViewportGreenVessels() {
             lon: d.lon as number,
             sog: (d.sog as number) ?? null,
             cog: (d.cog as number) ?? null,
-            heading: null,
+            heading: (d.heading as number) ?? null,
             riskTier: (d.risk_tier as VesselState['riskTier']) ?? 'green',
             riskScore: (d.risk_score as number) ?? 0,
             name: d.name as string | undefined,
             shipType: d.ship_type as number | undefined,
             timestamp: new Date().toISOString(),
+            length: (d.length as number) ?? null,
+            width: (d.width as number) ?? null,
           }));
           replaceGreenVessels(vessels);
         })
