@@ -227,30 +227,27 @@ export function VesselLayer() {
     if (map) map.getCanvas().style.cursor = '';
   }, [map]);
 
-  // Hull icon sizes — small at zoom 13, grow as you zoom in
+  // Hull icon sizes — scaled to real-world vessel dimensions.
+  // The hull icon is HULL_SIZE (64) px tall. At each zoom level we compute
+  // how many pixels correspond to the vessel's actual length:
+  //   meters_per_pixel ≈ 156543 * cos(lat) / 2^zoom
+  // At ~55°N (typical for Northern Europe), cos(55°) ≈ 0.57:
+  //   z13: 10.9 m/px → 200m ship = 18px → size = 18/64 = 0.28
+  //   z14: 5.4 m/px  → 200m ship = 37px → size = 0.58
+  //   z15: 2.7 m/px  → 200m ship = 74px → size = 1.16
+  //   z16: 1.35 m/px → 200m ship = 148px → size = 2.3
+  // We use vesselLength to scale, with a minimum for vessels without dimensions.
+  // Formula: icon-size = vesselLength / (m_per_px * 64)
+  // Simplified per zoom: icon-size = vesselLength * K_zoom
+  // where K_zoom = 1 / (m_per_px * 64)
   const hullIconSize: maplibregl.ExpressionSpecification = [
-    'interpolate', ['linear'], ['zoom'],
-    HULL_ZOOM, [
-      'step', ['get', 'vesselLength'],
-      0.15,   // < 50m
-      50, 0.2,
-      150, 0.28,
-      300, 0.35,
-    ],
-    16, [
-      'step', ['get', 'vesselLength'],
-      0.35,
-      50, 0.5,
-      150, 0.7,
-      300, 0.9,
-    ],
-    18, [
-      'step', ['get', 'vesselLength'],
-      0.6,
-      50, 0.85,
-      150, 1.2,
-      300, 1.5,
-    ],
+    'interpolate', ['exponential', 2], ['zoom'],
+    // Each zoom doubles the pixels, so exponential base 2
+    HULL_ZOOM, ['*', ['max', ['get', 'vesselLength'], 30], 0.00145],  // 1/(10.9*64)
+    14, ['*', ['max', ['get', 'vesselLength'], 30], 0.0029],          // 1/(5.4*64)
+    15, ['*', ['max', ['get', 'vesselLength'], 30], 0.0058],          // 1/(2.7*64)
+    16, ['*', ['max', ['get', 'vesselLength'], 30], 0.0116],          // 1/(1.35*64)
+    18, ['*', ['max', ['get', 'vesselLength'], 30], 0.0464],          // 1/(0.34*64)
   ];
 
   return (
