@@ -227,23 +227,29 @@ export function VesselLayer() {
     if (map) map.getCanvas().style.cursor = '';
   }, [map]);
 
-  // Compute icon size expression based on vessel length for hull icons
-  // Categories: <50m → 0.35, 50-150m → 0.5, 150-300m → 0.7, 300m+ → 0.9
+  // Hull icon sizes — small at zoom 13, grow as you zoom in
   const hullIconSize: maplibregl.ExpressionSpecification = [
     'interpolate', ['linear'], ['zoom'],
     HULL_ZOOM, [
       'step', ['get', 'vesselLength'],
-      0.35,   // < 50m
+      0.15,   // < 50m
+      50, 0.2,
+      150, 0.28,
+      300, 0.35,
+    ],
+    16, [
+      'step', ['get', 'vesselLength'],
+      0.35,
       50, 0.5,
       150, 0.7,
       300, 0.9,
     ],
     18, [
       'step', ['get', 'vesselLength'],
-      0.7,
-      50, 1.0,
-      150, 1.4,
-      300, 1.8,
+      0.6,
+      50, 0.85,
+      150, 1.2,
+      300, 1.5,
     ],
   ];
 
@@ -325,7 +331,7 @@ export function VesselLayer() {
             ],
             'circle-stroke-color': '#0A1628',
           }}
-          maxzoom={HULL_ZOOM}
+          maxzoom={HULL_ZOOM + 1}
           onClick={onVesselClick}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
@@ -336,7 +342,7 @@ export function VesselLayer() {
           id="vessel-arrows"
           type="symbol"
           filter={['==', ['get', 'isMoving'], true]}
-          maxzoom={HULL_ZOOM}
+          maxzoom={HULL_ZOOM + 1}
           layout={{
             'icon-image': [
               'match',
