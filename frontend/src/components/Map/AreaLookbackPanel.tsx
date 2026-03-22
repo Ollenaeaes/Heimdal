@@ -123,8 +123,8 @@ export function AreaLookbackPanel() {
 
       <div className="p-3 space-y-3">
         {/* Date range */}
-        <div className="flex gap-2">
-          <div className="flex-1 min-w-0">
+        <div className="space-y-2">
+          <div>
             <label className="text-[0.65rem] text-slate-500 block mb-1">Start</label>
             <input
               type="datetime-local"
@@ -135,7 +135,7 @@ export function AreaLookbackPanel() {
               data-testid="area-lookback-start"
             />
           </div>
-          <div className="flex-1 min-w-0">
+          <div>
             <label className="text-[0.65rem] text-slate-500 block mb-1">End</label>
             <input
               type="datetime-local"
