@@ -45,9 +45,11 @@ export function TimelineBar() {
       lastFrameRef.current = now;
 
       const { currentTime: ct, dateRange: dr, playbackSpeed: speed } = useLookbackStore.getState();
-      // Each real ms advances playbackSpeed * 60 seconds of simulated time
-      // (so 1x = 1 minute per real second, making 7 days playable in ~minutes)
-      const advanceMs = deltaMs * speed * 60;
+      // At 1x the entire range plays in ~120 seconds (2 minutes).
+      // Speed multiplier scales from that baseline.
+      const rangeDuration = dr.end.getTime() - dr.start.getTime();
+      const basePlaybackDuration = 120_000; // 2 minutes real-time for full range at 1x
+      const advanceMs = deltaMs * speed * (rangeDuration / basePlaybackDuration);
       const nextMs = ct.getTime() + advanceMs;
 
       if (nextMs >= dr.end.getTime()) {
