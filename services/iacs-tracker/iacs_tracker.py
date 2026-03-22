@@ -396,6 +396,104 @@ def is_already_processed(conn, file_hash: str) -> bool:
         return cur.fetchone() is not None
 
 
+def _update_vessel_profiles(conn, max_retries: int = 3) -> None:
+    """Update vessel_profiles.iacs_data from iacs_vessels_current.
+
+    Runs in its own transaction. Retries on deadlock since the batch pipeline
+    may be updating vessel_profiles concurrently.
+    """
+    import time as _time
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            with conn.cursor() as cur:
+                # Update profiles that have a matching IACS record
+                cur.execute(
+                    """
+                    UPDATE vessel_profiles vp
+                    SET iacs_data = jsonb_build_object(
+                        'status', ic.status,
+                        'risk_signal', CASE
+                            WHEN ic.status = 'Withdrawn' AND ic.reason ILIKE '%%by society%%' THEN 'critical'
+                            WHEN ic.status IN ('Withdrawn', 'Suspended', 'Removed') THEN 'high'
+                            WHEN ic.status IN ('Delivered', 'Reinstated') THEN 'none'
+                            ELSE 'low'
+                        END,
+                        'class_society', ic.class_society,
+                        'reason', ic.reason,
+                        'last_seen', ic.last_seen,
+                        'all_entries', ic.all_entries,
+                        'snapshot_date', ic.snapshot_date,
+                        'changes', COALESCE((
+                            SELECT jsonb_agg(jsonb_build_object(
+                                'change_type', ch.change_type,
+                                'field_changed', ch.field_changed,
+                                'old_value', ch.old_value,
+                                'new_value', ch.new_value,
+                                'is_high_risk', ch.is_high_risk,
+                                'detected_at', ch.detected_at
+                            ) ORDER BY ch.detected_at DESC)
+                            FROM iacs_vessels_changes ch
+                            WHERE ch.imo = ic.imo
+                              AND ch.detected_at >= NOW() - INTERVAL '90 days'
+                        ), '[]'::jsonb)
+                    )
+                    FROM iacs_vessels_current ic
+                    WHERE vp.imo = ic.imo AND vp.imo IS NOT NULL
+                    """
+                )
+                updated = cur.rowcount
+                logger.info("Updated %d vessel_profiles with IACS data", updated)
+
+                # Mark vessels with IMO but no IACS record
+                cur.execute(
+                    """
+                    UPDATE vessel_profiles vp
+                    SET iacs_data = jsonb_build_object(
+                        'status', 'NO_IACS_CLASS',
+                        'risk_signal', 'moderate',
+                        'class_society', NULL,
+                        'reason', 'Vessel not found in any IACS classification society records',
+                        'last_seen', NULL,
+                        'all_entries', NULL,
+                        'snapshot_date', NULL
+                    )
+                    WHERE vp.imo IS NOT NULL
+                      AND vp.imo > 0
+                      AND NOT EXISTS (
+                          SELECT 1 FROM iacs_vessels_current ic WHERE ic.imo = vp.imo
+                      )
+                      AND vp.iacs_data IS NULL
+                    """
+                )
+                no_class = cur.rowcount
+                if no_class > 0:
+                    logger.info("Marked %d tracked vessels as NO_IACS_CLASS", no_class)
+
+            conn.commit()
+            return  # Success
+
+        except psycopg2.errors.DeadlockDetected:
+            conn.rollback()
+            if attempt < max_retries:
+                wait = attempt * 5
+                logger.warning(
+                    "Deadlock updating vessel_profiles (attempt %d/%d), retrying in %ds",
+                    attempt, max_retries, wait,
+                )
+                _time.sleep(wait)
+            else:
+                logger.error(
+                    "Failed to update vessel_profiles after %d attempts (deadlock). "
+                    "IACS data is stored — profiles will be updated on next run.",
+                    max_retries,
+                )
+        except Exception:
+            conn.rollback()
+            logger.exception("Failed to update vessel_profiles with IACS data")
+            return
+
+
 def load_current_state(conn) -> dict[int, dict[str, Any]]:
     """Load all current IACS vessel records keyed by IMO."""
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -613,72 +711,12 @@ def diff_and_store(
              added, changed, removed),
         )
 
-        # Update vessel_profiles.iacs_data for scoring engine access.
-        # Join on IMO — only updates vessels already tracked by Heimdal.
-        # Include recent changes (last 90 days) for the scoring rule.
-        cur.execute(
-            """
-            UPDATE vessel_profiles vp
-            SET iacs_data = jsonb_build_object(
-                'status', ic.status,
-                'risk_signal', CASE
-                    WHEN ic.status = 'Withdrawn' AND ic.reason ILIKE '%%by society%%' THEN 'critical'
-                    WHEN ic.status IN ('Withdrawn', 'Suspended', 'Removed') THEN 'high'
-                    WHEN ic.status IN ('Delivered', 'Reinstated') THEN 'none'
-                    ELSE 'low'
-                END,
-                'class_society', ic.class_society,
-                'reason', ic.reason,
-                'last_seen', ic.last_seen,
-                'all_entries', ic.all_entries,
-                'snapshot_date', ic.snapshot_date,
-                'changes', COALESCE((
-                    SELECT jsonb_agg(jsonb_build_object(
-                        'change_type', ch.change_type,
-                        'field_changed', ch.field_changed,
-                        'old_value', ch.old_value,
-                        'new_value', ch.new_value,
-                        'is_high_risk', ch.is_high_risk,
-                        'detected_at', ch.detected_at
-                    ) ORDER BY ch.detected_at DESC)
-                    FROM iacs_vessels_changes ch
-                    WHERE ch.imo = ic.imo
-                      AND ch.detected_at >= NOW() - INTERVAL '90 days'
-                ), '[]'::jsonb)
-            )
-            FROM iacs_vessels_current ic
-            WHERE vp.imo = ic.imo AND vp.imo IS NOT NULL
-            """
-        )
-        updated_profiles = cur.rowcount
-        logger.info("Updated %d vessel_profiles with IACS data", updated_profiles)
-
-        # Also set iacs_data for vessels with IMO that have NO IACS record
-        cur.execute(
-            """
-            UPDATE vessel_profiles vp
-            SET iacs_data = jsonb_build_object(
-                'status', 'NO_IACS_CLASS',
-                'risk_signal', 'moderate',
-                'class_society', NULL,
-                'reason', 'Vessel not found in any IACS classification society records',
-                'last_seen', NULL,
-                'all_entries', NULL,
-                'snapshot_date', NULL
-            )
-            WHERE vp.imo IS NOT NULL
-              AND vp.imo > 0
-              AND NOT EXISTS (
-                  SELECT 1 FROM iacs_vessels_current ic WHERE ic.imo = vp.imo
-              )
-              AND vp.iacs_data IS NULL
-            """
-        )
-        no_class_count = cur.rowcount
-        if no_class_count > 0:
-            logger.info("Marked %d tracked vessels as NO_IACS_CLASS", no_class_count)
-
+    # Commit IACS tables first — this data is ours, no contention
     conn.commit()
+
+    # Update vessel_profiles in a separate transaction.
+    # This can deadlock with the batch pipeline, so we retry on failure.
+    _update_vessel_profiles(conn)
 
     counts = {
         "added": added,
@@ -864,6 +902,9 @@ def _download_process_cleanup(conn, url: str, filename: str) -> dict[str, int] |
     zip_path = download_file(url)
     try:
         return process_file(conn, zip_path, original_filename=filename)
+    except Exception:
+        conn.rollback()  # Reset transaction so connection is reusable
+        raise
     finally:
         zip_path.unlink(missing_ok=True)
         logger.debug("Cleaned up temp file")
@@ -882,7 +923,12 @@ def run_bootstrap(conn) -> None:
         try:
             _download_process_cleanup(conn, link["url"], link["filename"])
         except Exception:
-            logger.exception("Failed to process %s", link["url"])
+            logger.exception("Failed to process %s, will retry once", link["url"])
+            # Retry once — deadlocks are transient
+            try:
+                _download_process_cleanup(conn, link["url"], link["filename"])
+            except Exception:
+                logger.exception("Retry also failed for %s", link["url"])
 
 
 def run_latest(conn) -> None:
