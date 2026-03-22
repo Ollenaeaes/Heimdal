@@ -208,8 +208,7 @@ async def drop_old_db_chunks(pool: asyncpg.Pool, retention_days: int) -> None:
     """Drop TimescaleDB chunks older than retention_days."""
     async with pool.acquire() as conn:
         result = await conn.fetchval(
-            "SELECT drop_chunks('vessel_positions', older_than => $1)",
-            timedelta(days=retention_days),
+            f"SELECT drop_chunks('vessel_positions', older_than => INTERVAL '{int(retention_days)} days')",
         )
         logger.info("Dropped old DB chunks (retention=%d days): %s", retention_days, result)
 
