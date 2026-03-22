@@ -246,25 +246,25 @@ async def eez_sanctioned_report(
     async with session_factory() as session:
         await session.execute(text("SET LOCAL statement_timeout = '90s'"))
 
-        # Step 0: Get EEZ zone id, metadata, and bounding box for fast pre-filtering
+        # Step 0: Get combined bbox across ALL EEZ zones for this country
+        # Countries can have multiple zones (e.g., Norway has mainland + joint regime areas)
         zone_meta = await session.execute(
             text(
-                "SELECT id, geoname, sovereign, "
-                "ST_XMin(geometry::geometry) AS west, "
-                "ST_YMin(geometry::geometry) AS south, "
-                "ST_XMax(geometry::geometry) AS east, "
-                "ST_YMax(geometry::geometry) AS north "
+                "SELECT "
+                "MIN(ST_XMin(geometry::geometry)) AS west, "
+                "MIN(ST_YMin(geometry::geometry)) AS south, "
+                "MAX(ST_XMax(geometry::geometry)) AS east, "
+                "MAX(ST_YMax(geometry::geometry)) AS north, "
+                "(array_agg(geoname ORDER BY ST_Area(geometry) DESC))[1] AS geoname, "
+                "(array_agg(sovereign ORDER BY ST_Area(geometry) DESC))[1] AS sovereign "
                 "FROM maritime_zones "
-                "WHERE zone_type = 'eez' AND iso_sov = :iso_sov "
-                "LIMIT 1"
+                "WHERE zone_type = 'eez' AND iso_sov = :iso_sov"
             ),
             {"iso_sov": iso_sov.upper()},
         )
         zone_row = zone_meta.mappings().first()
-        if not zone_row:
+        if not zone_row or zone_row["geoname"] is None:
             raise HTTPException(status_code=404, detail=f"No EEZ found for {iso_sov.upper()}")
-
-        zone_id = zone_row["id"]
 
         # Step 1: Get blacklisted vessels with sanctions matches on IMO/MMSI
         # Excludes: name-only matches and MoU detention programs
