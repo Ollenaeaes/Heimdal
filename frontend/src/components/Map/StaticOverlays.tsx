@@ -22,7 +22,7 @@ export function StaticOverlays({
   const { data: eezData } = useQuery({
     queryKey: ['maritime-boundaries', 'eez'],
     queryFn: async () => {
-      const res = await fetch('/api/maritime-zones/boundaries?zone_type=eez');
+      const res = await fetch('/api/maritime-zones/boundaries?zone_type=eez&simplify=0.03');
       if (!res.ok) throw new Error(`${res.status}`);
       return res.json();
     },
@@ -34,7 +34,7 @@ export function StaticOverlays({
   const { data: nm12Data } = useQuery({
     queryKey: ['maritime-boundaries', '12nm'],
     queryFn: async () => {
-      const res = await fetch('/api/maritime-zones/boundaries?zone_type=12nm');
+      const res = await fetch('/api/maritime-zones/boundaries?zone_type=12nm&simplify=0.3');
       if (!res.ok) throw new Error(`${res.status}`);
       return res.json();
     },
@@ -118,8 +118,9 @@ export function StaticOverlays({
             type="line"
             paint={{
               'line-color': '#60A5FA',
-              'line-width': 1.5,
-              'line-dasharray': [4, 2],
+              'line-width': 1,
+              'line-opacity': 0.5,
+              'line-dasharray': [6, 3],
             }}
           />
         </Source>
@@ -133,8 +134,9 @@ export function StaticOverlays({
             type="line"
             paint={{
               'line-color': '#93C5FD',
-              'line-width': 1,
-              'line-dasharray': [2, 2],
+              'line-width': 0.7,
+              'line-opacity': 0.35,
+              'line-dasharray': [3, 3],
             }}
           />
         </Source>

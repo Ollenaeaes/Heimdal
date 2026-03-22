@@ -3,14 +3,18 @@
 Provides:
 - GET /api/maritime-zones/boundaries — EEZ/12nm boundary lines as GeoJSON (for map display)
 - GET /api/maritime-zones/lookup      — Which zone(s) contain a given point (for backend logic)
+- GET /api/maritime-zones/eez-report — Sanctioned vessels in an EEZ during a time range
+- GET /api/maritime-zones/countries  — List of countries with EEZ data for dropdown
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
 from shared.db.connection import get_session
@@ -186,4 +190,199 @@ async def lookup_maritime_zone(
             }
             for row in rows
         ],
+    }
+
+
+@router.get("/maritime-zones/countries")
+async def list_eez_countries():
+    """Return a list of countries that have EEZ zone data, for use in dropdowns."""
+    session_factory = get_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            text(
+                "SELECT DISTINCT iso_sov, sovereign "
+                "FROM maritime_zones "
+                "WHERE zone_type = 'eez' AND iso_sov IS NOT NULL "
+                "ORDER BY sovereign"
+            )
+        )
+        rows = result.mappings().all()
+
+    return [
+        {"iso": row["iso_sov"], "name": row["sovereign"]}
+        for row in rows
+    ]
+
+
+@router.get("/maritime-zones/eez-report")
+async def eez_sanctioned_report(
+    iso_sov: str = Query(..., description="ISO country code (e.g. 'DNK' for Denmark)"),
+    hours: Optional[float] = Query(None, description="Lookback hours (alternative to start/end)"),
+    start: Optional[datetime] = Query(None, description="Start of time range (ISO 8601)"),
+    end: Optional[datetime] = Query(None, description="End of time range (ISO 8601)"),
+):
+    """Report unique sanctioned vessels that had positions inside a country's EEZ.
+
+    Finds all vessel_positions that intersect the country's EEZ geometry within
+    the time range, then filters to vessels with sanctions matches. Returns
+    unique vessels with their details and any port calls in the same period.
+    """
+    # Resolve time range
+    if hours is not None:
+        t_end = datetime.now(timezone.utc)
+        t_start = t_end - timedelta(hours=hours)
+    elif start is not None and end is not None:
+        t_start = start
+        t_end = end
+    else:
+        raise HTTPException(status_code=400, detail="Provide either 'hours' or both 'start' and 'end'")
+
+    # Clamp to max 90 days
+    max_range = timedelta(days=90)
+    if t_end - t_start > max_range:
+        t_start = t_end - max_range
+
+    session_factory = get_session()
+    async with session_factory() as session:
+        # Set a generous timeout — this query touches a lot of data
+        await session.execute(text("SET LOCAL statement_timeout = '60s'"))
+
+        # Step 1: Find unique sanctioned MMSIs with positions in this EEZ
+        vessel_query = text(
+            "SELECT DISTINCT vp_pos.mmsi "
+            "FROM vessel_positions vp_pos "
+            "JOIN maritime_zones mz ON ST_Intersects(vp_pos.position, mz.geometry) "
+            "JOIN vessel_profiles vp ON vp_pos.mmsi = vp.mmsi "
+            "WHERE mz.zone_type = 'eez' "
+            "  AND mz.iso_sov = :iso_sov "
+            "  AND vp_pos.timestamp BETWEEN :start AND :end "
+            "  AND vp.sanctions_status IS NOT NULL "
+            "  AND vp.sanctions_status != '{}' "
+            "  AND jsonb_array_length(COALESCE(vp.sanctions_status->'matches', '[]'::jsonb)) > 0"
+        )
+
+        try:
+            result = await session.execute(vessel_query, {
+                "iso_sov": iso_sov.upper(),
+                "start": t_start,
+                "end": t_end,
+            })
+            mmsis = [row["mmsi"] for row in result.mappings().all()]
+        except Exception as exc:
+            logger.warning("EEZ report query failed: %s", exc)
+            raise HTTPException(
+                status_code=504,
+                detail="Query timed out — try a shorter time range",
+            )
+
+        if not mmsis:
+            # Get zone name for the response even if no vessels found
+            zone_result = await session.execute(
+                text(
+                    "SELECT geoname, sovereign FROM maritime_zones "
+                    "WHERE zone_type = 'eez' AND iso_sov = :iso_sov LIMIT 1"
+                ),
+                {"iso_sov": iso_sov.upper()},
+            )
+            zone_row = zone_result.mappings().first()
+            return {
+                "zone": {
+                    "iso_sov": iso_sov.upper(),
+                    "name": zone_row["geoname"] if zone_row else iso_sov.upper(),
+                    "sovereign": zone_row["sovereign"] if zone_row else iso_sov.upper(),
+                },
+                "time_range": {"start": t_start.isoformat(), "end": t_end.isoformat()},
+                "total_sanctioned_vessels": 0,
+                "vessels": [],
+            }
+
+        # Step 2: Get vessel details for all found MMSIs
+        detail_query = text(
+            "SELECT mmsi, imo, ship_name, ship_type_text, flag_country, "
+            "risk_tier, risk_score, sanctions_status, "
+            "last_lat, last_lon, last_position_time, "
+            "length, width, owner, operator "
+            "FROM vessel_profiles "
+            "WHERE mmsi = ANY(:mmsis)"
+        )
+        detail_result = await session.execute(detail_query, {"mmsis": mmsis})
+        vessel_rows = detail_result.mappings().all()
+
+        # Step 3: Get port calls for these vessels in the time range
+        port_query = text(
+            "SELECT mmsi, port_name, lat, lon, start_time, end_time, details "
+            "FROM gfw_events "
+            "WHERE event_type = 'port_visit' "
+            "  AND mmsi = ANY(:mmsis) "
+            "  AND start_time BETWEEN :start AND :end "
+            "ORDER BY start_time DESC"
+        )
+        port_result = await session.execute(port_query, {
+            "mmsis": mmsis,
+            "start": t_start,
+            "end": t_end,
+        })
+        port_rows = port_result.mappings().all()
+
+        # Group port calls by MMSI
+        port_calls_by_mmsi: dict[int, list] = {}
+        for pr in port_rows:
+            m = pr["mmsi"]
+            if m not in port_calls_by_mmsi:
+                port_calls_by_mmsi[m] = []
+            port_calls_by_mmsi[m].append({
+                "port_name": pr["port_name"],
+                "lat": pr["lat"],
+                "lon": pr["lon"],
+                "start_time": pr["start_time"].isoformat() if pr["start_time"] else None,
+                "end_time": pr["end_time"].isoformat() if pr["end_time"] else None,
+            })
+
+        # Get zone metadata
+        zone_result = await session.execute(
+            text(
+                "SELECT geoname, sovereign FROM maritime_zones "
+                "WHERE zone_type = 'eez' AND iso_sov = :iso_sov LIMIT 1"
+            ),
+            {"iso_sov": iso_sov.upper()},
+        )
+        zone_row = zone_result.mappings().first()
+
+    # Build response
+    vessels = []
+    for vr in vessel_rows:
+        sanctions = vr["sanctions_status"] or {}
+        matches = sanctions.get("matches", []) if isinstance(sanctions, dict) else []
+        vessels.append({
+            "mmsi": vr["mmsi"],
+            "imo": vr["imo"],
+            "name": vr["ship_name"],
+            "ship_type": vr["ship_type_text"],
+            "flag": vr["flag_country"],
+            "risk_tier": vr["risk_tier"],
+            "risk_score": vr["risk_score"],
+            "sanctions_programs": list({m.get("program", "unknown") for m in matches}),
+            "sanctions_match_count": len(matches),
+            "last_lat": vr["last_lat"],
+            "last_lon": vr["last_lon"],
+            "last_position_time": vr["last_position_time"].isoformat() if vr["last_position_time"] else None,
+            "length": vr["length"],
+            "width": vr["width"],
+            "owner": vr["owner"],
+            "operator": vr["operator"],
+            "port_calls": port_calls_by_mmsi.get(vr["mmsi"], []),
+        })
+
+    # Sort by risk score descending
+    vessels.sort(key=lambda v: v["risk_score"] or 0, reverse=True)
+
+    return {
+        "zone": {
+            "iso_sov": iso_sov.upper(),
+            "name": zone_row["geoname"] if zone_row else iso_sov.upper(),
+            "sovereign": zone_row["sovereign"] if zone_row else iso_sov.upper(),
+        },
+        "time_range": {"start": t_start.isoformat(), "end": t_end.isoformat()},
+        "total_sanctioned_vessels": len(vessels),
+        "vessels": vessels,
     }

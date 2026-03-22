@@ -9,6 +9,7 @@ import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Map/OverlayToggles';
 import { AreaLookbackButton } from './components/Map/AreaLookbackButton';
 import { AreaLookbackPanel } from './components/Map/AreaLookbackPanel';
+import { EezReportButton } from './components/EezReport';
 import Minimap from './components/Map/Minimap';
 import { TrackLegend } from './components/Map/TrackLegend';
 import type { OverlayToggleState } from './components/Map/OverlayToggles';
@@ -236,6 +237,7 @@ function AppInner() {
             <TypeFilter />
             <TimeRangeFilter />
             <AreaLookbackButton />
+            <EezReportButton />
           </div>
 
           {/* Layer toggles — self-collapsing */}
