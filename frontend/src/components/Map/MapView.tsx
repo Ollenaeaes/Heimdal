@@ -19,6 +19,8 @@ import { TrackTrail } from './TrackTrail';
 import { HoverTooltip } from './HoverTooltip';
 import { LookbackLayer } from './LookbackLayer';
 import { AreaDrawingTool } from './AreaDrawingTool';
+import { TimelineBar } from './TimelineBar';
+import { useLookbackTracks } from '../../hooks/useLookbackTracks';
 
 export interface MapViewProps {
   showGfwEvents?: boolean;
@@ -40,6 +42,9 @@ const VESSEL_LAYER_IDS = ['vessel-dots-stationary', 'vessel-arrows', 'vessel-hul
 function MapView(props: MapViewProps) {
   const lookbackActive = useLookbackStore((s) => s.isActive);
   const selectVessel = useVesselStore((s) => s.selectVessel);
+
+  // Fetch tracks when lookback activates
+  useLookbackTracks();
 
   const onLoad = useCallback((evt: { target: maplibregl.Map }) => {
     setMapInstance(evt.target);
@@ -96,6 +101,7 @@ function MapView(props: MapViewProps) {
       <LookbackLayer />
       <AreaDrawingTool />
       <HoverTooltip />
+      {lookbackActive && <TimelineBar />}
     </Map>
   );
 }

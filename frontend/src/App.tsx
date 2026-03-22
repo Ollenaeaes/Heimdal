@@ -8,6 +8,7 @@ import { useViewportGreenVessels } from './hooks/useViewportGreenVessels';
 import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Map/OverlayToggles';
 import { AreaLookbackButton } from './components/Map/AreaLookbackButton';
+import { AreaLookbackPanel } from './components/Map/AreaLookbackPanel';
 import Minimap from './components/Map/Minimap';
 import { TrackLegend } from './components/Map/TrackLegend';
 import type { OverlayToggleState } from './components/Map/OverlayToggles';
@@ -242,6 +243,7 @@ function AppInner() {
         </div>
 
         <TrackLegend />
+        <AreaLookbackPanel />
         <Minimap />
 
         <Suspense fallback={null}>

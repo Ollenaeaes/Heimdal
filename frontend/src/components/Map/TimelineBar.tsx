@@ -1,0 +1,205 @@
+import { useCallback, useEffect, useRef } from 'react';
+import { useLookbackStore } from '../../hooks/useLookbackStore';
+
+const SPEEDS = [1, 5, 30, 100] as const;
+
+function formatTime(date: Date): string {
+  return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+/**
+ * TimelineBar renders playback controls at the bottom of the map during lookback mode.
+ * Includes play/pause, speed selector, scrubber, timestamp, and close button.
+ * Drives the animation loop via requestAnimationFrame.
+ */
+export function TimelineBar() {
+  const isPlaying = useLookbackStore((s) => s.isPlaying);
+  const playbackSpeed = useLookbackStore((s) => s.playbackSpeed);
+  const currentTime = useLookbackStore((s) => s.currentTime);
+  const dateRange = useLookbackStore((s) => s.dateRange);
+  const tracks = useLookbackStore((s) => s.tracks);
+  const play = useLookbackStore((s) => s.play);
+  const pause = useLookbackStore((s) => s.pause);
+  const setSpeed = useLookbackStore((s) => s.setSpeed);
+  const seekToTime = useLookbackStore((s) => s.seekToTime);
+  const deactivate = useLookbackStore((s) => s.deactivate);
+
+  const rafRef = useRef<number>(0);
+  const lastFrameRef = useRef<number>(0);
+
+  // Animation loop
+  useEffect(() => {
+    if (!isPlaying) {
+      lastFrameRef.current = 0;
+      return;
+    }
+
+    function tick(now: number) {
+      if (lastFrameRef.current === 0) {
+        lastFrameRef.current = now;
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      const deltaMs = now - lastFrameRef.current;
+      lastFrameRef.current = now;
+
+      const { currentTime: ct, dateRange: dr, playbackSpeed: speed } = useLookbackStore.getState();
+      // Each real ms advances playbackSpeed * 60 seconds of simulated time
+      // (so 1x = 1 minute per real second, making 7 days playable in ~minutes)
+      const advanceMs = deltaMs * speed * 60;
+      const nextMs = ct.getTime() + advanceMs;
+
+      if (nextMs >= dr.end.getTime()) {
+        useLookbackStore.getState().seekToTime(dr.end);
+        useLookbackStore.getState().pause();
+        return;
+      }
+
+      useLookbackStore.getState().seekToTime(new Date(nextMs));
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [isPlaying]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === ' ' || e.key === 'k') {
+        e.preventDefault();
+        const { isPlaying: p } = useLookbackStore.getState();
+        p ? pause() : play();
+      } else if (e.key === 'Escape') {
+        deactivate();
+      }
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [play, pause, deactivate]);
+
+  const totalMs = dateRange.end.getTime() - dateRange.start.getTime();
+  const elapsedMs = currentTime.getTime() - dateRange.start.getTime();
+  const progress = totalMs > 0 ? Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100)) : 0;
+
+  const handleScrub = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      seekToTime(new Date(dateRange.start.getTime() + pct * totalMs));
+    },
+    [seekToTime, dateRange, totalMs],
+  );
+
+  const handleScrubDrag = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (e.buttons !== 1) return;
+      handleScrub(e);
+    },
+    [handleScrub],
+  );
+
+  const tracksLoaded = tracks.size;
+  const isLoading = tracksLoaded === 0;
+
+  return (
+    <div
+      className="absolute bottom-0 left-0 right-0 z-50 flex flex-col"
+      style={{ backgroundColor: 'rgba(10, 14, 23, 0.95)' }}
+      data-testid="timeline-bar"
+    >
+      {/* Scrubber track */}
+      <div
+        className="h-2 cursor-pointer relative group"
+        onClick={handleScrub}
+        onMouseMove={handleScrubDrag}
+        data-testid="timeline-scrubber"
+      >
+        <div className="absolute inset-0 bg-slate-800" />
+        <div
+          className="absolute top-0 left-0 h-full bg-blue-500 transition-none"
+          style={{ width: `${progress}%` }}
+        />
+        {/* Thumb */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+          style={{ left: `calc(${progress}% - 6px)` }}
+        />
+      </div>
+
+      {/* Controls row */}
+      <div className="flex items-center gap-3 px-4 py-2">
+        {/* Play / Pause */}
+        <button
+          onClick={() => (isPlaying ? pause() : play())}
+          disabled={isLoading}
+          className="text-white hover:text-blue-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          data-testid="timeline-play-pause"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16" rx="1" />
+              <rect x="14" y="4" width="4" height="16" rx="1" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          )}
+        </button>
+
+        {/* Speed buttons */}
+        <div className="flex items-center gap-1">
+          {SPEEDS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSpeed(s)}
+              className={`px-1.5 py-0.5 text-[0.65rem] font-mono rounded transition-colors ${
+                playbackSpeed === s
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              }`}
+              data-testid={`timeline-speed-${s}`}
+            >
+              {s}x
+            </button>
+          ))}
+        </div>
+
+        {/* Current timestamp */}
+        <span className="font-mono text-xs text-slate-300 ml-2" data-testid="timeline-timestamp">
+          {formatTime(currentTime)}
+        </span>
+
+        {/* Loading indicator */}
+        {isLoading && (
+          <span className="text-xs text-slate-500 ml-2">Loading tracks...</span>
+        )}
+
+        {/* Track count */}
+        {!isLoading && (
+          <span className="text-xs text-slate-500 ml-1">
+            {tracksLoaded} track{tracksLoaded !== 1 ? 's' : ''}
+          </span>
+        )}
+
+        {/* Close button */}
+        <button
+          onClick={deactivate}
+          className="ml-auto text-slate-400 hover:text-red-400 transition-colors"
+          data-testid="timeline-close"
+          aria-label="Close lookback"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
