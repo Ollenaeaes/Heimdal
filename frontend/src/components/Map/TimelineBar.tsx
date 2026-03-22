@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useLookbackStore } from '../../hooks/useLookbackStore';
 
-const SPEEDS = [1, 5, 30, 100] as const;
+const SPEEDS = [1, 10, 100, 500] as const;
 
 function formatTime(date: Date): string {
   return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
@@ -45,11 +45,8 @@ export function TimelineBar() {
       lastFrameRef.current = now;
 
       const { currentTime: ct, dateRange: dr, playbackSpeed: speed } = useLookbackStore.getState();
-      // At 1x the entire range plays in ~120 seconds (2 minutes).
-      // Speed multiplier scales from that baseline.
-      const rangeDuration = dr.end.getTime() - dr.start.getTime();
-      const basePlaybackDuration = 120_000; // 2 minutes real-time for full range at 1x
-      const advanceMs = deltaMs * speed * (rangeDuration / basePlaybackDuration);
+      // 1x = real-time (1ms real = 1ms simulated). Higher speeds are multiples.
+      const advanceMs = deltaMs * speed;
       const nextMs = ct.getTime() + advanceMs;
 
       if (nextMs >= dr.end.getTime()) {
