@@ -102,7 +102,7 @@ export function AreaLookbackPanel() {
 
   return (
     <div
-      className="absolute top-3 right-16 z-50 w-80 rounded-lg shadow-xl border border-slate-700/50 overflow-hidden"
+      className="absolute top-20 left-3 z-50 w-80 rounded-lg shadow-xl border border-slate-700/50 overflow-hidden"
       style={{ backgroundColor: 'rgba(10, 14, 23, 0.95)' }}
       data-testid="area-lookback-panel"
     >
