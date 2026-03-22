@@ -266,8 +266,8 @@ async def eez_sanctioned_report(
 
         zone_id = zone_row["id"]
 
-        # Step 1: Get blacklisted vessels with direct sanctions matches on IMO/MMSI
-        # Excludes: name-only matches, MoU detentions, low-confidence matches
+        # Step 1: Get blacklisted vessels with sanctions matches on IMO/MMSI
+        # Excludes: name-only matches and MoU detention programs
         sanctioned_q = await session.execute(
             text(
                 "SELECT mmsi FROM vessel_profiles "
@@ -275,8 +275,9 @@ async def eez_sanctioned_report(
                 "  AND sanctions_status IS NOT NULL "
                 "  AND EXISTS ("
                 "    SELECT 1 FROM jsonb_array_elements(sanctions_status->'matches') m "
-                "    WHERE m->>'match_type' = 'direct_sanctions' "
-                "      AND m->>'matched_field' IN ('imo', 'mmsi') "
+                "    WHERE m->>'matched_field' IN ('imo', 'mmsi') "
+                "      AND m->>'program' NOT LIKE '%mou%' "
+                "      AND m->>'program' NOT LIKE '%detention%' "
                 "  )"
             )
         )
