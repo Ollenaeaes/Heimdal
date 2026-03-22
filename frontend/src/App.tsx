@@ -10,7 +10,7 @@ import { useVesselStore } from './hooks/useVesselStore';
 import { OverlayToggles } from './components/Map/OverlayToggles';
 import { AreaLookbackButton } from './components/Map/AreaLookbackButton';
 import { AreaLookbackPanel } from './components/Map/AreaLookbackPanel';
-import { EezReportButton } from './components/EezReport';
+import { EezReportButton, EezReportPanel } from './components/EezReport';
 import Minimap from './components/Map/Minimap';
 import { TrackLegend } from './components/Map/TrackLegend';
 import type { OverlayToggleState } from './components/Map/OverlayToggles';
@@ -90,6 +90,7 @@ function AppInner() {
   useVesselSnapshot();
   useViewportGreenVessels();
   const [overlays, setOverlays] = useState<OverlayToggleState>(DEFAULT_OVERLAYS);
+  const [eezReportOpen, setEezReportOpen] = useState(false);
   const setFilter = useVesselStore((s) => s.setFilter);
   const filters = useVesselStore((s) => s.filters);
 
@@ -257,7 +258,7 @@ function AppInner() {
             <MenuDropdown label="Tools" icon="tools">
               <div className="p-1.5 space-y-0.5">
                 <AreaLookbackButton />
-                <EezReportButton />
+                <EezReportButton isOpen={eezReportOpen} onToggle={() => setEezReportOpen((v) => !v)} />
               </div>
             </MenuDropdown>
           </div>
@@ -265,6 +266,7 @@ function AppInner() {
 
         <TrackLegend />
         <AreaLookbackPanel />
+        {eezReportOpen && <EezReportPanel onClose={() => setEezReportOpen(false)} />}
         <Minimap />
 
         <Suspense fallback={null}>

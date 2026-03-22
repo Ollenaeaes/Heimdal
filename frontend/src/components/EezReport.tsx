@@ -127,34 +127,30 @@ function exportCsv(report: EezReportData) {
   URL.revokeObjectURL(url);
 }
 
-export function EezReportButton() {
-  const [open, setOpen] = useState(false);
+export function EezReportButton({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
   const closeMenu = useMenuClose();
 
   const handleClick = () => {
-    setOpen(!open);
+    onToggle();
     closeMenu?.();
   };
 
   return (
-    <>
-      <button
-        onClick={handleClick}
-        className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
-          open
-            ? 'bg-blue-600/20 text-blue-400'
-            : 'text-slate-300 hover:bg-[#1F2937] hover:text-white'
-        }`}
-        data-testid="eez-report-button"
-      >
-        EEZ Sanctions Report
-      </button>
-      {open && <EezReportPanel onClose={() => setOpen(false)} />}
-    </>
+    <button
+      onClick={handleClick}
+      className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
+        isOpen
+          ? 'bg-blue-600/20 text-blue-400'
+          : 'text-slate-300 hover:bg-[#1F2937] hover:text-white'
+      }`}
+      data-testid="eez-report-button"
+    >
+      EEZ Sanctions Report
+    </button>
   );
 }
 
-function EezReportPanel({ onClose }: { onClose: () => void }) {
+export function EezReportPanel({ onClose }: { onClose: () => void }) {
   const [selectedIso, setSelectedIso] = useState('');
   const [hours, setHours] = useState(168); // default 7 days
   const [report, setReport] = useState<EezReportData | null>(null);
