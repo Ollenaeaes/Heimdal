@@ -102,7 +102,7 @@ export function AreaLookbackPanel() {
 
   return (
     <div
-      className="absolute top-3 right-16 z-50 w-72 rounded-lg shadow-xl border border-slate-700/50 overflow-hidden"
+      className="absolute top-3 right-16 z-50 w-80 rounded-lg shadow-xl border border-slate-700/50 overflow-hidden"
       style={{ backgroundColor: 'rgba(10, 14, 23, 0.95)' }}
       data-testid="area-lookback-panel"
     >
@@ -124,7 +124,7 @@ export function AreaLookbackPanel() {
       <div className="p-3 space-y-3">
         {/* Date range */}
         <div className="flex gap-2">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <label className="text-[0.65rem] text-slate-500 block mb-1">Start</label>
             <input
               type="datetime-local"
@@ -135,7 +135,7 @@ export function AreaLookbackPanel() {
               data-testid="area-lookback-start"
             />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <label className="text-[0.65rem] text-slate-500 block mb-1">End</label>
             <input
               type="datetime-local"
