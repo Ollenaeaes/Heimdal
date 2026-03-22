@@ -15,6 +15,7 @@ import gzip
 import json
 import logging
 import sys
+import zlib
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -124,7 +125,7 @@ def convert_to_parquet(
                             all_rows.append(row)
                         except (json.JSONDecodeError, ValueError):
                             continue
-        except (gzip.BadGzipFile, OSError) as e:
+        except (gzip.BadGzipFile, OSError, zlib.error) as e:
             logger.warning("Failed to read %s: %s", filepath, e)
 
     if not all_rows:
