@@ -104,7 +104,6 @@ def _get_parquet_schema():
     global PARQUET_SCHEMA
     if PARQUET_SCHEMA is None:
         PARQUET_SCHEMA = pa.schema([
-            ("_raw", pa.string()),
             ("_received_at", pa.string()),
             ("message_type", pa.string()),
             ("mmsi", pa.int32()),
@@ -136,7 +135,6 @@ def convert_to_parquet(
 
     try:
         for filepath in files:
-            batch_raw: list[str] = []
             batch_received: list[str] = []
             batch_type: list[str] = []
             batch_mmsi: list[int | None] = []
@@ -149,16 +147,15 @@ def convert_to_parquet(
                             continue
                         try:
                             msg = json.loads(line)
-                            batch_raw.append(line.decode("utf-8"))
                             batch_received.append(msg.get("_received_at", ""))
                             batch_type.append(msg.get("MessageType", ""))
                             batch_mmsi.append((msg.get("MetaData") or {}).get("MMSI"))
                         except (json.JSONDecodeError, ValueError):
                             continue
 
-                        if len(batch_raw) >= BATCH_SIZE:
+                        if len(batch_received) >= BATCH_SIZE:
                             table = pa.table(
-                                {"_raw": batch_raw, "_received_at": batch_received,
+                                {"_received_at": batch_received,
                                  "message_type": batch_type, "mmsi": pa.array(batch_mmsi, type=pa.int32())},
                                 schema=schema,
                             )
@@ -166,8 +163,7 @@ def convert_to_parquet(
                                 writer = pq.ParquetWriter(str(output_path), schema,
                                                           compression=settings.cold_storage.compression)
                             writer.write_table(table)
-                            total_rows += len(batch_raw)
-                            batch_raw.clear()
+                            total_rows += len(batch_received)
                             batch_received.clear()
                             batch_type.clear()
                             batch_mmsi.clear()
@@ -176,9 +172,9 @@ def convert_to_parquet(
                 logger.warning("Failed to read %s: %s", filepath, e)
 
             # Flush remaining rows from this file
-            if batch_raw:
+            if batch_received:
                 table = pa.table(
-                    {"_raw": batch_raw, "_received_at": batch_received,
+                    {"_received_at": batch_received,
                      "message_type": batch_type, "mmsi": pa.array(batch_mmsi, type=pa.int32())},
                     schema=schema,
                 )
@@ -186,7 +182,7 @@ def convert_to_parquet(
                     writer = pq.ParquetWriter(str(output_path), schema,
                                               compression=settings.cold_storage.compression)
                 writer.write_table(table)
-                total_rows += len(batch_raw)
+                total_rows += len(batch_received)
 
     finally:
         if writer is not None:
