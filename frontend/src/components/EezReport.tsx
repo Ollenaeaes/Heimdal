@@ -35,6 +35,13 @@ interface ReportVessel {
   owner: string | null;
   operator: string | null;
   port_calls: PortCall[];
+  presence: {
+    entered_at: string | null;
+    exited_at: string | null;
+    total_hours: number;
+    was_inside_at_start: boolean;
+    still_inside: boolean;
+  };
 }
 
 interface EezReportData {
@@ -64,6 +71,59 @@ function formatDateTime(iso: string | null): string {
   } catch {
     return iso;
   }
+}
+
+function exportCsv(report: EezReportData) {
+  const headers = [
+    'MMSI', 'IMO', 'Name', 'Type', 'Flag', 'Risk Tier', 'Risk Score',
+    'Sanctions Programs', 'Owner', 'Operator',
+    'Entered EEZ', 'Exited EEZ', 'Total Hours Inside',
+    'Was Inside At Start', 'Still Inside',
+    'Port Calls', 'Last Position Time',
+  ];
+  const rows = report.vessels.map((v) => [
+    v.mmsi,
+    v.imo ?? '',
+    v.name ?? '',
+    v.ship_type ?? '',
+    v.flag ?? '',
+    v.risk_tier,
+    v.risk_score ?? '',
+    v.sanctions_programs.join('; '),
+    v.owner ?? '',
+    v.operator ?? '',
+    v.presence?.entered_at ?? '',
+    v.presence?.exited_at ?? '',
+    v.presence?.total_hours ?? '',
+    v.presence?.was_inside_at_start ? 'Yes' : 'No',
+    v.presence?.still_inside ? 'Yes' : 'No',
+    v.port_calls.map((pc) => `${pc.port_name} (${pc.start_time ?? '?'})`).join('; '),
+    v.last_position_time ?? '',
+  ]);
+
+  const csvContent = [
+    `# EEZ Sanctions Report: ${report.zone.sovereign}`,
+    `# Period: ${report.time_range.start} to ${report.time_range.end}`,
+    `# Total sanctioned vessels: ${report.total_sanctioned_vessels}`,
+    '',
+    headers.join(','),
+    ...rows.map((r) =>
+      r.map((cell) => {
+        const s = String(cell);
+        return s.includes(',') || s.includes('"') || s.includes('\n')
+          ? `"${s.replace(/"/g, '""')}"`
+          : s;
+      }).join(','),
+    ),
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `eez-report-${report.zone.iso_sov}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function EezReportButton() {
@@ -245,6 +305,14 @@ function EezReportPanel({ onClose }: { onClose: () => void }) {
             <div className="text-[0.6rem] text-slate-600 mt-0.5">
               {formatDateTime(report.time_range.start)} — {formatDateTime(report.time_range.end)}
             </div>
+            {report.vessels.length > 0 && (
+              <button
+                onClick={() => exportCsv(report)}
+                className="mt-2 px-2 py-1 text-[0.65rem] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+              >
+                Export CSV
+              </button>
+            )}
           </div>
 
           {/* Vessel list */}
@@ -286,6 +354,18 @@ function EezReportPanel({ onClose }: { onClose: () => void }) {
                         IMO {v.imo ?? '—'} / MMSI {v.mmsi}
                       </span>
                     </div>
+                    {v.presence && (
+                      <div className="flex items-center gap-2 mt-0.5 text-[0.6rem]">
+                        <span className="text-slate-400">
+                          {v.presence.total_hours}h inside
+                        </span>
+                        {v.presence.still_inside && (
+                          <span className="px-1 py-0.5 rounded bg-green-900/40 text-green-400 text-[0.55rem]">
+                            Currently inside
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </button>
 
                   {/* Expanded details */}
@@ -305,6 +385,29 @@ function EezReportPanel({ onClose }: { onClose: () => void }) {
                           ))}
                         </div>
                       </div>
+
+                      {/* EEZ Presence */}
+                      {v.presence && (
+                        <div className="text-[0.6rem] text-slate-400">
+                          <span className="text-slate-500 block mb-0.5">EEZ Presence</span>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                            <span>Entered:</span>
+                            <span className="text-slate-300">
+                              {v.presence.was_inside_at_start
+                                ? 'Already inside at start'
+                                : formatDateTime(v.presence.entered_at)}
+                            </span>
+                            <span>Exited:</span>
+                            <span className="text-slate-300">
+                              {v.presence.still_inside
+                                ? 'Still inside'
+                                : formatDateTime(v.presence.exited_at)}
+                            </span>
+                            <span>Total time:</span>
+                            <span className="text-slate-300">{v.presence.total_hours}h</span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Owner/operator */}
                       {(v.owner || v.operator) && (

@@ -214,6 +214,53 @@ async def list_eez_countries():
     ]
 
 
+def _compute_presence(positions: list, in_bbox) -> dict:
+    """Walk chronological positions to find entry/exit times and total time inside."""
+    if not positions:
+        return {"entered_at": None, "exited_at": None, "total_hours": 0, "was_inside_at_start": False}
+
+    inside_segments: list[tuple] = []  # (enter_time, exit_time)
+    was_inside = in_bbox(positions[0]["lon"], positions[0]["lat"])
+    was_inside_at_start = was_inside
+    segment_start = positions[0]["timestamp"] if was_inside else None
+    first_entry = positions[0]["timestamp"] if was_inside else None
+    last_exit = None
+
+    for i in range(1, len(positions)):
+        now_inside = in_bbox(positions[i]["lon"], positions[i]["lat"])
+        ts = positions[i]["timestamp"]
+
+        if not was_inside and now_inside:
+            # Entered the EEZ
+            segment_start = ts
+            if first_entry is None:
+                first_entry = ts
+        elif was_inside and not now_inside:
+            # Exited the EEZ
+            if segment_start is not None:
+                inside_segments.append((segment_start, ts))
+            last_exit = ts
+            segment_start = None
+
+        was_inside = now_inside
+
+    # Close open segment (still inside at end of range)
+    if was_inside and segment_start is not None:
+        inside_segments.append((segment_start, positions[-1]["timestamp"]))
+
+    total_seconds = sum(
+        (seg[1] - seg[0]).total_seconds() for seg in inside_segments
+    )
+
+    return {
+        "entered_at": first_entry.isoformat() if first_entry else None,
+        "exited_at": last_exit.isoformat() if last_exit else None,
+        "total_hours": round(total_seconds / 3600, 1),
+        "was_inside_at_start": was_inside_at_start,
+        "still_inside": was_inside,
+    }
+
+
 @router.get("/maritime-zones/eez-report")
 async def eez_sanctioned_report(
     iso_sov: str = Query(..., description="ISO country code (e.g. 'DNK' for Denmark)"),
@@ -327,7 +374,46 @@ async def eez_sanctioned_report(
                 "vessels": [],
             }
 
-        # Step 2: Get vessel details for all found MMSIs
+        # Step 2: Compute entry/exit times and total time inside for each vessel.
+        # Fetch positions for the small set of matched MMSIs, then walk
+        # chronologically checking bbox membership to detect transitions.
+        bbox = (zone_row["west"], zone_row["south"], zone_row["east"], zone_row["north"])
+
+        presence_query = text(
+            "SELECT mmsi, timestamp, "
+            "ST_X(position::geometry) AS lon, ST_Y(position::geometry) AS lat "
+            "FROM vessel_positions "
+            "WHERE mmsi = ANY(:mmsis) "
+            "  AND timestamp BETWEEN :start AND :end "
+            "ORDER BY mmsi, timestamp"
+        )
+        presence_result = await session.execute(presence_query, {
+            "mmsis": mmsis,
+            "start": t_start,
+            "end": t_end,
+        })
+        pos_rows = presence_result.mappings().all()
+
+        # Group positions by MMSI and compute presence intervals
+        def in_bbox(lon: float, lat: float) -> bool:
+            return bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]
+
+        presence_by_mmsi: dict[int, dict] = {}
+        current_mmsi = None
+        positions: list = []
+
+        for pr in pos_rows:
+            if pr["mmsi"] != current_mmsi:
+                if current_mmsi is not None:
+                    presence_by_mmsi[current_mmsi] = _compute_presence(positions, in_bbox)
+                current_mmsi = pr["mmsi"]
+                positions = []
+            positions.append(pr)
+
+        if current_mmsi is not None:
+            presence_by_mmsi[current_mmsi] = _compute_presence(positions, in_bbox)
+
+        # Step 3: Get vessel details for all found MMSIs
         detail_query = text(
             "SELECT mmsi, imo, ship_name, ship_type_text, flag_country, "
             "risk_tier, risk_score, sanctions_status, "
@@ -392,6 +478,7 @@ async def eez_sanctioned_report(
             "owner": vr["owner"],
             "operator": vr["operator"],
             "port_calls": port_calls_by_mmsi.get(vr["mmsi"], []),
+            "presence": presence_by_mmsi.get(vr["mmsi"], {}),
         })
 
     # Sort by risk score descending
