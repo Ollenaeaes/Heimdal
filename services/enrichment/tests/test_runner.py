@@ -217,7 +217,7 @@ class TestEnrichBatch:
     async def test_pipeline_runs_in_correct_order(
         self, mock_gfw_client, mock_session, mock_redis
     ):
-        """Pipeline steps execute in order: events -> SAR -> vessel identity."""
+        """Pipeline steps execute in order: SAR -> events -> vessel identity."""
         call_order = []
 
         async def mock_events(*a, **kw):
@@ -243,7 +243,7 @@ class TestEnrichBatch:
             _vessel_fn=mock_vessel,
         )
 
-        assert call_order == ["events", "sar", "vessel"]
+        assert call_order == ["sar", "events", "vessel"]
         assert result["gfw_events_count"] == 5
         assert result["sar_detections_count"] == 2
 

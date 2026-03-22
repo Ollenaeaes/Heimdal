@@ -4,8 +4,8 @@ Each cycle queries vessel_profiles for vessels that need enrichment (tracked via
 Redis hash ``heimdal:enriched`` mapping MMSI → ISO timestamp). The enrichment
 pipeline runs in order:
 
-  1. GFW Events (behavioral events: AIS gaps, encounters, loitering, port visits)
-  2. GFW SAR (satellite radar detections)
+  1. GFW SAR (satellite radar detections — cheap, ~12 calls)
+  2. GFW Events (behavioral events: AIS gaps, encounters, loitering, port visits)
   3. GFW Vessel Identity (ownership, flag, dimensions)
   4. OpenSanctions (sanctions screening)
   5. GISIS (optional — IMO vessel particulars)
@@ -341,8 +341,8 @@ async def enrich_batch(
     """Run the enrichment pipeline for a batch of vessels.
 
     Pipeline order:
-      1. GFW Events
-      2. GFW SAR
+      1. GFW SAR (cheap — ~12 API calls for all AOIs)
+      2. GFW Events (expensive — 1 call per vessel)
       3. GFW Vessel Identity
       4. OpenSanctions
       5. GISIS (optional)
@@ -390,18 +390,7 @@ async def enrich_batch(
 
         gfw_quota_hit = False
 
-        # Step 1: GFW Events
-        try:
-            count = await _events_fn(gfw_client, session, mmsis, redis_client=redis_client)
-            gfw_events_count = count
-            logger.info("GFW Events: fetched %d events for %d vessels", count, len(mmsis))
-        except GFWQuotaExceeded as e:
-            logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
-            gfw_quota_hit = True
-        except Exception:
-            logger.exception("GFW Events pipeline failed for batch")
-
-        # Step 2: GFW SAR
+        # Step 1: GFW SAR (runs first — only ~12 API calls vs 43k+ for events)
         if aois and not gfw_quota_hit:
             try:
                 count = await _sar_fn(gfw_client, session, aois)
@@ -412,6 +401,18 @@ async def enrich_batch(
                 gfw_quota_hit = True
             except Exception:
                 logger.exception("GFW SAR pipeline failed for batch")
+
+        # Step 2: GFW Events
+        if not gfw_quota_hit:
+            try:
+                count = await _events_fn(gfw_client, session, mmsis, redis_client=redis_client)
+                gfw_events_count = count
+                logger.info("GFW Events: fetched %d events for %d vessels", count, len(mmsis))
+            except GFWQuotaExceeded as e:
+                logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
+                gfw_quota_hit = True
+            except Exception:
+                logger.exception("GFW Events pipeline failed for batch")
 
         # Step 3: GFW Vessel Identity
         if not gfw_quota_hit:
