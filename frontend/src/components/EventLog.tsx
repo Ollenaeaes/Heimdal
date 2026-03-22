@@ -92,7 +92,7 @@ export default function EventLog() {
   const hasEvents = events.length > 0;
 
   return (
-    <div className={`absolute left-0 right-0 z-30 ${lookbackActive ? 'bottom-[60px]' : 'bottom-0'}`}>
+    <div className={`absolute left-0 right-0 z-30 ${lookbackActive ? 'bottom-[76px]' : 'bottom-0'}`}>
       {/* Toggle bar */}
       <button
         onClick={() => hasEvents && setOpen(!open)}

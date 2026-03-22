@@ -153,11 +153,11 @@ export function LookbackLayer() {
             'line-color': [
               'case',
               ['get', 'isNetwork'],
-              'rgba(147, 51, 234, 0.25)',
+              '#A78BFA',
               '#60A5FA',
             ],
-            'line-width': ['case', ['get', 'isNetwork'], 1, 2],
-            'line-opacity': 0.6,
+            'line-width': ['case', ['get', 'isNetwork'], 1.5, 2],
+            'line-opacity': ['case', ['get', 'isNetwork'], 0.5, 0.6],
           }}
         />
       </Source>
