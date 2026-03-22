@@ -195,10 +195,11 @@ async def vessel_snapshot(
             text(
                 f"SELECT vp.mmsi, vp.last_lat, vp.last_lon, vp.risk_tier, "
                 f"vp.risk_score, vp.ship_type, vp.ship_name, "
-                f"lp.cog, lp.sog, lp.heading, vp.length, vp.width "
+                f"lp.cog, lp.sog, lp.heading, lp.timestamp AS last_position_time, "
+                f"vp.length, vp.width "
                 f"FROM vessel_profiles vp "
                 f"LEFT JOIN LATERAL ("
-                f"  SELECT cog, sog, heading FROM vessel_positions "
+                f"  SELECT cog, sog, heading, timestamp FROM vessel_positions "
                 f"  WHERE mmsi = vp.mmsi "
                 f"  ORDER BY timestamp DESC LIMIT 1"
                 f") lp ON true "
@@ -220,6 +221,7 @@ async def vessel_snapshot(
             "cog": r.get("cog"),
             "sog": r.get("sog"),
             "heading": r.get("heading"),
+            "last_position_time": r["last_position_time"].isoformat() if r.get("last_position_time") else None,
             "length": r.get("length"),
             "width": r.get("width"),
         }

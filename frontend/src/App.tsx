@@ -50,7 +50,7 @@ function parseSnapshotData(data: Array<Record<string, unknown>>): VesselState[] 
     riskScore: (d.risk_score as number) ?? 0,
     name: d.name as string | undefined,
     shipType: d.ship_type as number | undefined,
-    timestamp: new Date().toISOString(),
+    timestamp: (d.last_position_time as string) ?? new Date().toISOString(),
     length: (d.length as number) ?? null,
     width: (d.width as number) ?? null,
   }));
