@@ -93,11 +93,31 @@ def group_files_by_day(files: list[Path]) -> dict[str, list[Path]]:
     return dict(groups)
 
 
-def convert_to_parquet(
-    files: list[Path], output_dir: Path, month_key: str, file_type: str
-) -> Path | None:
-    """Convert a list of JSONL.gz files to a single Parquet file.
+PARQUET_SCHEMA = None  # Initialized lazily
 
+BATCH_SIZE = 50_000  # Rows per write batch — keeps memory bounded
+
+
+def _get_parquet_schema():
+    import pyarrow as pa
+
+    global PARQUET_SCHEMA
+    if PARQUET_SCHEMA is None:
+        PARQUET_SCHEMA = pa.schema([
+            ("_raw", pa.string()),
+            ("_received_at", pa.string()),
+            ("message_type", pa.string()),
+            ("mmsi", pa.int32()),
+        ])
+    return PARQUET_SCHEMA
+
+
+def convert_to_parquet(
+    files: list[Path], output_dir: Path, day_key: str, file_type: str
+) -> Path | None:
+    """Convert JSONL.gz files to Parquet using streaming writes.
+
+    Processes one file at a time and flushes in batches to keep memory bounded.
     Returns the path to the created Parquet file, or None on failure.
     """
     try:
@@ -108,59 +128,81 @@ def convert_to_parquet(
         return None
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"{file_type}_{month_key}.parquet"
+    output_path = output_dir / f"{file_type}_{day_key}.parquet"
 
-    # Read all messages from all files
-    all_rows: list[dict] = []
-    for filepath in files:
-        try:
-            with gzip.open(filepath, "rb") as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
+    schema = _get_parquet_schema()
+    total_rows = 0
+    writer = None
+
+    try:
+        for filepath in files:
+            batch_raw: list[str] = []
+            batch_received: list[str] = []
+            batch_type: list[str] = []
+            batch_mmsi: list[int | None] = []
+
+            try:
+                with gzip.open(filepath, "rb") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
                         try:
                             msg = json.loads(line)
-                            # Flatten to a simple dict with _raw preserving full fidelity
-                            row = {
-                                "_raw": line.decode("utf-8"),
-                                "_received_at": msg.get("_received_at", ""),
-                                "message_type": msg.get("MessageType", ""),
-                                "mmsi": (msg.get("MetaData") or {}).get("MMSI"),
-                            }
-                            all_rows.append(row)
+                            batch_raw.append(line.decode("utf-8"))
+                            batch_received.append(msg.get("_received_at", ""))
+                            batch_type.append(msg.get("MessageType", ""))
+                            batch_mmsi.append((msg.get("MetaData") or {}).get("MMSI"))
                         except (json.JSONDecodeError, ValueError):
                             continue
-        except (gzip.BadGzipFile, OSError, zlib.error) as e:
-            logger.warning("Failed to read %s: %s", filepath, e)
 
-    if not all_rows:
-        logger.info("No rows to write for %s %s", file_type, month_key)
+                        if len(batch_raw) >= BATCH_SIZE:
+                            table = pa.table(
+                                {"_raw": batch_raw, "_received_at": batch_received,
+                                 "message_type": batch_type, "mmsi": pa.array(batch_mmsi, type=pa.int32())},
+                                schema=schema,
+                            )
+                            if writer is None:
+                                writer = pq.ParquetWriter(str(output_path), schema,
+                                                          compression=settings.cold_storage.compression)
+                            writer.write_table(table)
+                            total_rows += len(batch_raw)
+                            batch_raw.clear()
+                            batch_received.clear()
+                            batch_type.clear()
+                            batch_mmsi.clear()
+
+            except (gzip.BadGzipFile, OSError, zlib.error) as e:
+                logger.warning("Failed to read %s: %s", filepath, e)
+
+            # Flush remaining rows from this file
+            if batch_raw:
+                table = pa.table(
+                    {"_raw": batch_raw, "_received_at": batch_received,
+                     "message_type": batch_type, "mmsi": pa.array(batch_mmsi, type=pa.int32())},
+                    schema=schema,
+                )
+                if writer is None:
+                    writer = pq.ParquetWriter(str(output_path), schema,
+                                              compression=settings.cold_storage.compression)
+                writer.write_table(table)
+                total_rows += len(batch_raw)
+
+    finally:
+        if writer is not None:
+            writer.close()
+
+    if total_rows == 0:
+        logger.info("No rows to write for %s %s", file_type, day_key)
+        # Clean up empty file if created
+        if output_path.exists():
+            output_path.unlink()
         return None
-
-    # Create Arrow table and write to Parquet
-    table = pa.table(
-        {
-            "_raw": pa.array([r["_raw"] for r in all_rows], type=pa.string()),
-            "_received_at": pa.array(
-                [r["_received_at"] for r in all_rows], type=pa.string()
-            ),
-            "message_type": pa.array(
-                [r["message_type"] for r in all_rows], type=pa.string()
-            ),
-            "mmsi": pa.array([r["mmsi"] for r in all_rows], type=pa.int32()),
-        }
-    )
-
-    pq.write_table(
-        table,
-        output_path,
-        compression=settings.cold_storage.compression,
-    )
 
     logger.info(
         "Created Parquet file: %s (%d rows, %.1f MB)",
         output_path,
-        len(all_rows),
+        total_rows,
         output_path.stat().st_size / (1024 * 1024),
     )
     return output_path
