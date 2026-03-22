@@ -214,29 +214,28 @@ async def list_eez_countries():
     ]
 
 
-def _compute_presence(positions: list, in_bbox) -> dict:
-    """Walk chronological positions to find entry/exit times and total time inside."""
+def _compute_presence(positions: list) -> dict:
+    """Walk chronological positions using their in_zone flag to find entry/exit and total time."""
     if not positions:
-        return {"entered_at": None, "exited_at": None, "total_hours": 0, "was_inside_at_start": False}
+        return {"entered_at": None, "exited_at": None, "total_hours": 0,
+                "was_inside_at_start": False, "still_inside": False}
 
-    inside_segments: list[tuple] = []  # (enter_time, exit_time)
-    was_inside = in_bbox(positions[0]["lon"], positions[0]["lat"])
+    inside_segments: list[tuple] = []
+    was_inside = bool(positions[0]["in_zone"])
     was_inside_at_start = was_inside
     segment_start = positions[0]["timestamp"] if was_inside else None
     first_entry = positions[0]["timestamp"] if was_inside else None
     last_exit = None
 
     for i in range(1, len(positions)):
-        now_inside = in_bbox(positions[i]["lon"], positions[i]["lat"])
+        now_inside = bool(positions[i]["in_zone"])
         ts = positions[i]["timestamp"]
 
         if not was_inside and now_inside:
-            # Entered the EEZ
             segment_start = ts
             if first_entry is None:
                 first_entry = ts
         elif was_inside and not now_inside:
-            # Exited the EEZ
             if segment_start is not None:
                 inside_segments.append((segment_start, ts))
             last_exit = ts
@@ -244,13 +243,10 @@ def _compute_presence(positions: list, in_bbox) -> dict:
 
         was_inside = now_inside
 
-    # Close open segment (still inside at end of range)
     if was_inside and segment_start is not None:
         inside_segments.append((segment_start, positions[-1]["timestamp"]))
 
-    total_seconds = sum(
-        (seg[1] - seg[0]).total_seconds() for seg in inside_segments
-    )
+    total_seconds = sum((s[1] - s[0]).total_seconds() for s in inside_segments)
 
     return {
         "entered_at": first_entry.isoformat() if first_entry else None,
@@ -374,46 +370,84 @@ async def eez_sanctioned_report(
                 "vessels": [],
             }
 
-        # Step 2: Compute entry/exit times and total time inside for each vessel.
-        # Fetch positions for the small set of matched MMSIs, then walk
-        # chronologically checking bbox membership to detect transitions.
-        bbox = (zone_row["west"], zone_row["south"], zone_row["east"], zone_row["north"])
+        # Step 2: Get all zone IDs for this country (for precise ST_Intersects)
+        zone_ids_result = await session.execute(
+            text("SELECT id FROM maritime_zones WHERE zone_type = 'eez' AND iso_sov = :iso_sov"),
+            {"iso_sov": iso_sov.upper()},
+        )
+        zone_ids = [r["id"] for r in zone_ids_result.mappings().all()]
 
+        # Step 3: Compute entry/exit times using precise polygon check.
+        # For each position, ST_Intersects against the actual EEZ polygon(s).
+        # This is feasible because we only have a small number of candidate vessels.
         presence_query = text(
-            "SELECT mmsi, timestamp, "
-            "ST_X(position::geometry) AS lon, ST_Y(position::geometry) AS lat "
-            "FROM vessel_positions "
-            "WHERE mmsi = ANY(:mmsis) "
-            "  AND timestamp BETWEEN :start AND :end "
-            "ORDER BY mmsi, timestamp"
+            "SELECT vp_pos.mmsi, vp_pos.timestamp, "
+            "ST_X(vp_pos.position::geometry) AS lon, "
+            "ST_Y(vp_pos.position::geometry) AS lat, "
+            "EXISTS("
+            "  SELECT 1 FROM maritime_zones mz "
+            "  WHERE mz.id = ANY(:zone_ids) "
+            "    AND ST_Intersects(vp_pos.position, mz.geometry)"
+            ") AS in_zone "
+            "FROM vessel_positions vp_pos "
+            "WHERE vp_pos.mmsi = ANY(:mmsis) "
+            "  AND vp_pos.timestamp BETWEEN :start AND :end "
+            "  AND ST_Intersects("
+            "    vp_pos.position::geometry, "
+            "    ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
+            "  ) "
+            "ORDER BY vp_pos.mmsi, vp_pos.timestamp"
         )
         presence_result = await session.execute(presence_query, {
             "mmsis": mmsis,
+            "zone_ids": zone_ids,
             "start": t_start,
             "end": t_end,
+            "west": zone_row["west"],
+            "south": zone_row["south"],
+            "east": zone_row["east"],
+            "north": zone_row["north"],
         })
         pos_rows = presence_result.mappings().all()
 
-        # Group positions by MMSI and compute presence intervals
-        def in_bbox(lon: float, lat: float) -> bool:
-            return bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]
-
+        # Group positions by MMSI and compute presence intervals.
+        # Only keep vessels that actually had at least one position inside the EEZ polygon.
         presence_by_mmsi: dict[int, dict] = {}
+        confirmed_mmsis: list[int] = []
         current_mmsi = None
         positions: list = []
 
         for pr in pos_rows:
             if pr["mmsi"] != current_mmsi:
                 if current_mmsi is not None:
-                    presence_by_mmsi[current_mmsi] = _compute_presence(positions, in_bbox)
+                    if any(p["in_zone"] for p in positions):
+                        confirmed_mmsis.append(current_mmsi)
+                        presence_by_mmsi[current_mmsi] = _compute_presence(positions)
                 current_mmsi = pr["mmsi"]
                 positions = []
             positions.append(pr)
 
         if current_mmsi is not None:
-            presence_by_mmsi[current_mmsi] = _compute_presence(positions, in_bbox)
+            if any(p["in_zone"] for p in positions):
+                confirmed_mmsis.append(current_mmsi)
+                presence_by_mmsi[current_mmsi] = _compute_presence(positions)
 
-        # Step 3: Get vessel details for all found MMSIs
+        # Use only confirmed MMSIs (actually inside the EEZ polygon, not just bbox)
+        mmsis = confirmed_mmsis
+
+        if not mmsis:
+            return {
+                "zone": {
+                    "iso_sov": iso_sov.upper(),
+                    "name": zone_row["geoname"],
+                    "sovereign": zone_row["sovereign"],
+                },
+                "time_range": {"start": t_start.isoformat(), "end": t_end.isoformat()},
+                "total_sanctioned_vessels": 0,
+                "vessels": [],
+            }
+
+        # Step 4: Get vessel details for confirmed MMSIs
         detail_query = text(
             "SELECT mmsi, imo, ship_name, ship_type_text, flag_country, "
             "risk_tier, risk_score, sanctions_status, "
@@ -425,7 +459,7 @@ async def eez_sanctioned_report(
         detail_result = await session.execute(detail_query, {"mmsis": mmsis})
         vessel_rows = detail_result.mappings().all()
 
-        # Step 3: Get port calls for these vessels in the time range
+        # Step 5: Get port calls for these vessels in the time range
         port_query = text(
             "SELECT mmsi, port_name, lat, lon, start_time, end_time, details "
             "FROM gfw_events "
