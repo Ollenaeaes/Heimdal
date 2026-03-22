@@ -244,52 +244,83 @@ async def eez_sanctioned_report(
 
     session_factory = get_session()
     async with session_factory() as session:
-        # Set a generous timeout — this query touches a lot of data
-        await session.execute(text("SET LOCAL statement_timeout = '60s'"))
+        await session.execute(text("SET LOCAL statement_timeout = '90s'"))
 
-        # Step 1: Find unique sanctioned MMSIs with positions in this EEZ
-        vessel_query = text(
-            "SELECT DISTINCT vp_pos.mmsi "
-            "FROM vessel_positions vp_pos "
-            "JOIN maritime_zones mz ON ST_Intersects(vp_pos.position, mz.geometry) "
-            "JOIN vessel_profiles vp ON vp_pos.mmsi = vp.mmsi "
-            "WHERE mz.zone_type = 'eez' "
-            "  AND mz.iso_sov = :iso_sov "
-            "  AND vp_pos.timestamp BETWEEN :start AND :end "
-            "  AND vp.sanctions_status IS NOT NULL "
-            "  AND vp.sanctions_status != '{}' "
-            "  AND jsonb_array_length(COALESCE(vp.sanctions_status->'matches', '[]'::jsonb)) > 0"
+        # Step 0: Get EEZ zone id, metadata, and bounding box for fast pre-filtering
+        zone_meta = await session.execute(
+            text(
+                "SELECT id, geoname, sovereign, "
+                "ST_XMin(geometry::geometry) AS west, "
+                "ST_YMin(geometry::geometry) AS south, "
+                "ST_XMax(geometry::geometry) AS east, "
+                "ST_YMax(geometry::geometry) AS north "
+                "FROM maritime_zones "
+                "WHERE zone_type = 'eez' AND iso_sov = :iso_sov "
+                "LIMIT 1"
+            ),
+            {"iso_sov": iso_sov.upper()},
         )
+        zone_row = zone_meta.mappings().first()
+        if not zone_row:
+            raise HTTPException(status_code=404, detail=f"No EEZ found for {iso_sov.upper()}")
 
-        try:
-            result = await session.execute(vessel_query, {
-                "iso_sov": iso_sov.upper(),
-                "start": t_start,
-                "end": t_end,
-            })
-            mmsis = [row["mmsi"] for row in result.mappings().all()]
-        except Exception as exc:
-            logger.warning("EEZ report query failed: %s", exc)
-            raise HTTPException(
-                status_code=504,
-                detail="Query timed out — try a shorter time range",
+        zone_id = zone_row["id"]
+
+        # Step 1: Get sanctioned vessel MMSIs (small set — typically dozens)
+        sanctioned_q = await session.execute(
+            text(
+                "SELECT mmsi FROM vessel_profiles "
+                "WHERE sanctions_status IS NOT NULL "
+                "  AND sanctions_status != '{}' "
+                "  AND jsonb_array_length(COALESCE(sanctions_status->'matches', '[]'::jsonb)) > 0"
             )
+        )
+        sanctioned_mmsis = [r["mmsi"] for r in sanctioned_q.mappings().all()]
+
+        if not sanctioned_mmsis:
+            mmsis: list[int] = []
+        else:
+            # Step 2: Check which sanctioned vessels had positions inside the EEZ bbox + precise check
+            # First bbox filter (cheap), then ST_Intersects with the specific zone (precise)
+            vessel_query = text(
+                "SELECT DISTINCT vp_pos.mmsi "
+                "FROM vessel_positions vp_pos "
+                "WHERE vp_pos.mmsi = ANY(:sanctioned_mmsis) "
+                "  AND vp_pos.timestamp BETWEEN :start AND :end "
+                "  AND ST_Intersects("
+                "    vp_pos.position::geometry, "
+                "    ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
+                "  ) "
+                "  AND ST_Intersects("
+                "    vp_pos.position, "
+                "    (SELECT geometry FROM maritime_zones WHERE id = :zone_id)"
+                "  )"
+            )
+            try:
+                result = await session.execute(vessel_query, {
+                    "sanctioned_mmsis": sanctioned_mmsis,
+                    "start": t_start,
+                    "end": t_end,
+                    "west": zone_row["west"],
+                    "south": zone_row["south"],
+                    "east": zone_row["east"],
+                    "north": zone_row["north"],
+                    "zone_id": zone_id,
+                })
+                mmsis = [row["mmsi"] for row in result.mappings().all()]
+            except Exception as exc:
+                logger.warning("EEZ report query failed: %s", exc)
+                raise HTTPException(
+                    status_code=504,
+                    detail="Query timed out — try a shorter time range",
+                )
 
         if not mmsis:
-            # Get zone name for the response even if no vessels found
-            zone_result = await session.execute(
-                text(
-                    "SELECT geoname, sovereign FROM maritime_zones "
-                    "WHERE zone_type = 'eez' AND iso_sov = :iso_sov LIMIT 1"
-                ),
-                {"iso_sov": iso_sov.upper()},
-            )
-            zone_row = zone_result.mappings().first()
             return {
                 "zone": {
                     "iso_sov": iso_sov.upper(),
-                    "name": zone_row["geoname"] if zone_row else iso_sov.upper(),
-                    "sovereign": zone_row["sovereign"] if zone_row else iso_sov.upper(),
+                    "name": zone_row["geoname"],
+                    "sovereign": zone_row["sovereign"],
                 },
                 "time_range": {"start": t_start.isoformat(), "end": t_end.isoformat()},
                 "total_sanctioned_vessels": 0,
@@ -337,16 +368,6 @@ async def eez_sanctioned_report(
                 "start_time": pr["start_time"].isoformat() if pr["start_time"] else None,
                 "end_time": pr["end_time"].isoformat() if pr["end_time"] else None,
             })
-
-        # Get zone metadata
-        zone_result = await session.execute(
-            text(
-                "SELECT geoname, sovereign FROM maritime_zones "
-                "WHERE zone_type = 'eez' AND iso_sov = :iso_sov LIMIT 1"
-            ),
-            {"iso_sov": iso_sov.upper()},
-        )
-        zone_row = zone_result.mappings().first()
 
     # Build response
     vessels = []
