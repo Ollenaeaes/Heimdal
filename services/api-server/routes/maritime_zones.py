@@ -380,6 +380,8 @@ async def eez_sanctioned_report(
         # Step 3: Compute entry/exit times using precise polygon check.
         # For each position, ST_Intersects against the actual EEZ polygon(s).
         # This is feasible because we only have a small number of candidate vessels.
+        # Fetch ALL positions for candidate vessels (not just bbox) so we can
+        # detect when they exit the EEZ. Each position is tagged with in_zone.
         presence_query = text(
             "SELECT vp_pos.mmsi, vp_pos.timestamp, "
             "ST_X(vp_pos.position::geometry) AS lon, "
@@ -392,10 +394,6 @@ async def eez_sanctioned_report(
             "FROM vessel_positions vp_pos "
             "WHERE vp_pos.mmsi = ANY(:mmsis) "
             "  AND vp_pos.timestamp BETWEEN :start AND :end "
-            "  AND ST_Intersects("
-            "    vp_pos.position::geometry, "
-            "    ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
-            "  ) "
             "ORDER BY vp_pos.mmsi, vp_pos.timestamp"
         )
         presence_result = await session.execute(presence_query, {
@@ -403,10 +401,6 @@ async def eez_sanctioned_report(
             "zone_ids": zone_ids,
             "start": t_start,
             "end": t_end,
-            "west": zone_row["west"],
-            "south": zone_row["south"],
-            "east": zone_row["east"],
-            "north": zone_row["north"],
         })
         pos_rows = presence_result.mappings().all()
 
