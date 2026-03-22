@@ -2,6 +2,9 @@
 
 Queries the 4Wings API for SAR detections within configured AOIs and
 lookback window, then upserts results into the sar_detections table.
+
+Uses group-by=VESSEL_ID to get per-vessel detection records including
+MMSI, IMO, ship name, flag, and gear type.
 """
 
 from __future__ import annotations
@@ -24,9 +27,6 @@ SAR_ENDPOINT = "/v3/4wings/report"
 # GFW dataset for SAR detections
 SAR_DATASET = "public-global-sar-presence:latest"
 
-# Event types to filter for vessel detections
-SAR_EVENT_TYPE = "detect"
-
 
 def _build_date_range(lookback_days: int | None = None) -> tuple[str, str]:
     """Build ISO date strings for the lookback window.
@@ -39,50 +39,63 @@ def _build_date_range(lookback_days: int | None = None) -> tuple[str, str]:
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
-def _build_spatial_filter(aois: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Convert AOI configs into GeoJSON features for the 4Wings spatial filter.
+def _extract_entries(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract detection entries from the 4Wings response.
 
-    Each AOI should have: name, coordinates (list of [lon, lat] pairs forming a polygon).
+    The API nests results under the dataset version key inside each
+    entry, e.g. entries[0]["public-global-sar-presence:v4.0"] = [...].
+    This extracts and flattens all nested detection records.
     """
-    features = []
-    for aoi in aois:
-        coords = aoi.get("coordinates", [])
-        # Ensure the polygon is closed
-        if coords and coords[0] != coords[-1]:
-            coords = coords + [coords[0]]
-        features.append({
-            "type": "Feature",
-            "properties": {"name": aoi.get("name", "aoi")},
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [coords],
-            },
-        })
-    return features
+    raw_entries = data.get("entries", [])
+    detections: list[dict[str, Any]] = []
+    for entry in raw_entries:
+        if isinstance(entry, dict):
+            for key, records in entry.items():
+                if key.startswith("public-global-sar-presence") and isinstance(records, list):
+                    detections.extend(records)
+    return detections
 
 
-def parse_detection(raw: dict[str, Any]) -> dict[str, Any]:
+def parse_detection(raw: dict[str, Any], aoi_name: str = "") -> dict[str, Any]:
     """Parse a raw GFW SAR detection into the format expected by bulk_upsert_sar_detections.
 
-    Maps GFW API fields to our sar_detections table columns.
+    Maps GFW 4Wings API fields to our sar_detections table columns.
+    The API returns per-vessel records with: vesselId, date, detections count,
+    lat, lon, mmsi, imo, shipName, flag, geartype, callsign, vesselType.
     """
-    matched_category = raw.get("matchedCategory") or raw.get("matched_category")
+    mmsi_str = raw.get("mmsi") or ""
+    matched_mmsi = int(mmsi_str) if mmsi_str and mmsi_str.isdigit() else None
+
+    # A vessel is "dark" if it has no MMSI (unmatched to AIS)
+    is_dark = not bool(matched_mmsi)
+
+    # Build a stable detection ID from vesselId + date + location
+    vessel_id = raw.get("vesselId", "")
+    date_str = raw.get("date", "")
+    lat = raw.get("lat")
+    lon = raw.get("lon")
+    gfw_detection_id = f"sar-{vessel_id}-{date_str}" if vessel_id else None
+
+    # Determine matched_category from vesselType/geartype
+    vessel_type = raw.get("vesselType") or raw.get("geartype") or ""
+    matched_category = vessel_type.lower() if vessel_type and not is_dark else ("unmatched" if is_dark else None)
+
     return {
-        "gfw_detection_id": raw.get("id") or raw.get("detectionId"),
-        "detection_time": raw.get("timestamp") or raw.get("date"),
-        "lat": raw.get("lat") or raw.get("latitude"),
-        "lon": raw.get("lon") or raw.get("longitude"),
-        "length_m": raw.get("estimatedLength") or raw.get("length"),
-        "width_m": raw.get("estimatedWidth") or raw.get("width"),
-        "heading_deg": raw.get("heading"),
-        "confidence": raw.get("confidence"),
-        "is_dark": matched_category == "unmatched" if matched_category else not bool(raw.get("matchedMmsi") or raw.get("matched_mmsi")),
-        "matched_mmsi": raw.get("matchedMmsi") or raw.get("matched_mmsi"),
+        "gfw_detection_id": gfw_detection_id,
+        "detection_time": raw.get("entryTimestamp") or date_str,
+        "lat": lat,
+        "lon": lon,
+        "length_m": None,
+        "width_m": None,
+        "heading_deg": None,
+        "confidence": None,
+        "is_dark": is_dark,
+        "matched_mmsi": matched_mmsi,
         "matched_category": matched_category,
-        "match_distance_m": raw.get("matchDistance") or raw.get("match_distance"),
+        "match_distance_m": None,
         "source": "gfw",
-        "matching_score": raw.get("matchingScore") or raw.get("matching_score"),
-        "fishing_score": raw.get("fishingScore") or raw.get("fishing_score"),
+        "matching_score": None,
+        "fishing_score": None,
     }
 
 
@@ -123,8 +136,8 @@ async def fetch_sar_detections(
         if coords and coords[0] != coords[-1]:
             coords = coords + [coords[0]]
 
-        # Build the spatial region body for the 4Wings report endpoint
-        region = {
+        # Build GeoJSON body — the API requires the "geojson" key for raw polygons
+        geojson = {
             "type": "Polygon",
             "coordinates": [coords],
         }
@@ -132,19 +145,21 @@ async def fetch_sar_detections(
         params = {
             "datasets[0]": SAR_DATASET,
             "date-range": f"{start_date},{end_date}",
-            "spatial-resolution": "low",
-            "temporal-resolution": "daily",
+            "spatial-resolution": "HIGH",
+            "temporal-resolution": "HOURLY",
+            "format": "JSON",
+            "group-by": "VESSEL_ID",
+            "spatial-aggregation": "true",
         }
 
         try:
             data = await client.post(
                 SAR_ENDPOINT,
                 params=params,
-                json_body={"region": region},
+                json_body={"geojson": geojson},
             )
 
-            # The 4Wings API returns detections in an 'entries' key or directly as a list
-            entries = data.get("entries", []) if isinstance(data, dict) else data
+            entries = _extract_entries(data)
             if not entries:
                 logger.info(
                     "No SAR detections found for AOI '%s' in date range %s to %s",
@@ -154,7 +169,8 @@ async def fetch_sar_detections(
                 )
                 continue
 
-            parsed = [parse_detection(entry) for entry in entries]
+            aoi_name = aoi.get("name", "")
+            parsed = [parse_detection(entry, aoi_name) for entry in entries]
             # Filter out detections without a valid ID
             parsed = [d for d in parsed if d["gfw_detection_id"]]
             all_detections.extend(parsed)

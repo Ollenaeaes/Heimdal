@@ -20,6 +20,7 @@ from sar_fetcher import (
     SAR_DATASET,
     SAR_ENDPOINT,
     _build_date_range,
+    _extract_entries,
     fetch_and_store_sar_detections,
     fetch_sar_detections,
     parse_detection,
@@ -27,7 +28,7 @@ from sar_fetcher import (
 
 
 # ===================================================================
-# Sample Data
+# Sample Data — matches real GFW 4Wings API response structure
 # ===================================================================
 
 SAMPLE_AOI = {
@@ -40,50 +41,128 @@ SAMPLE_AOI = {
     ],
 }
 
-SAMPLE_DETECTION_RAW = {
-    "id": "det-abc-123",
-    "timestamp": "2026-03-05T12:00:00Z",
-    "lat": 65.5,
-    "lon": 10.2,
-    "estimatedLength": 85.0,
-    "estimatedWidth": 12.0,
-    "heading": 180.0,
-    "confidence": 0.92,
-    "matchedMmsi": 273456789,
-    "matchDistance": 500.0,
-    "matchingScore": 0.88,
-    "fishingScore": 0.15,
+# Matched vessel (has MMSI)
+SAMPLE_VESSEL_MATCHED = {
+    "callsign": "9LS2098",
+    "dataset": "public-global-vessel-identity:v4.0",
+    "date": "2026-03-05 04:00",
+    "detections": 1,
+    "entryTimestamp": "2026-03-05T04:40:41Z",
+    "exitTimestamp": "2026-03-05T04:40:41Z",
+    "firstTransmissionDate": "2024-12-25T11:26:17Z",
+    "flag": "SLE",
+    "geartype": "OTHER",
+    "imo": "9292503",
+    "lastTransmissionDate": "2025-06-08T16:44:50Z",
+    "mmsi": "667002395",
+    "shipName": "BULL",
+    "vesselId": "a30abd69a-af79-add7-fc44-2c394b098667",
+    "vesselType": "OTHER",
 }
 
-SAMPLE_DETECTION_DARK = {
-    "id": "det-xyz-456",
-    "timestamp": "2026-03-06T08:30:00Z",
-    "lat": 66.1,
-    "lon": 11.5,
-    "estimatedLength": 45.0,
-    "estimatedWidth": None,
-    "heading": 90.0,
-    "confidence": 0.78,
-    "matchedMmsi": None,
-    "matchDistance": None,
-    "matchingScore": None,
-    "fishingScore": 0.65,
+# Dark vessel (no MMSI)
+SAMPLE_VESSEL_DARK = {
+    "dataset": "public-global-vessel-identity:v4.0",
+    "date": "2026-03-06 08:00",
+    "detections": 1,
+    "entryTimestamp": "2026-03-06T08:30:00Z",
+    "exitTimestamp": "2026-03-06T08:30:00Z",
+    "flag": "",
+    "geartype": "",
+    "imo": "",
+    "mmsi": "",
+    "shipName": "",
+    "vesselId": "dark-vessel-xyz-456",
+    "vesselType": "",
 }
 
-SAMPLE_DETECTION_ALT_KEYS = {
-    "detectionId": "det-alt-789",
-    "date": "2026-03-07T15:00:00Z",
-    "latitude": 67.2,
-    "longitude": 12.3,
-    "length": 120.0,
-    "width": 18.0,
-    "heading": None,
-    "confidence": 0.95,
-    "matched_mmsi": 351123456,
-    "match_distance": 200.0,
-    "matching_score": 0.99,
-    "fishing_score": 0.01,
+# Cargo vessel with full details
+SAMPLE_VESSEL_CARGO = {
+    "callsign": "V4VE4",
+    "dataset": "public-global-vessel-identity:v4.0",
+    "date": "2026-03-07 04:00",
+    "detections": 1,
+    "entryTimestamp": "2026-03-07T16:32:02Z",
+    "exitTimestamp": "2026-03-07T22:40:40Z",
+    "firstTransmissionDate": "2022-10-14T06:51:26Z",
+    "flag": "KNA",
+    "geartype": "CARGO",
+    "imo": "8918708",
+    "lastTransmissionDate": "2026-03-20T23:59:02Z",
+    "mmsi": "341639000",
+    "shipName": "ASMAR",
+    "vesselId": "ec99b591c-cc33-acad-9b1b-d0878489e603",
+    "vesselType": "CARGO",
 }
+
+
+def _wrap_api_response(detections: list[dict]) -> dict:
+    """Wrap detections in the real 4Wings API response structure."""
+    return {
+        "total": 1,
+        "limit": None,
+        "offset": None,
+        "nextOffset": None,
+        "metadata": {},
+        "entries": [
+            {"public-global-sar-presence:v4.0": detections}
+        ],
+    }
+
+
+def _empty_api_response() -> dict:
+    """Empty 4Wings API response."""
+    return {
+        "total": 0,
+        "limit": None,
+        "offset": None,
+        "nextOffset": None,
+        "metadata": {},
+        "entries": [],
+    }
+
+
+# ===================================================================
+# Extract Entries Tests
+# ===================================================================
+
+
+class TestExtractEntries:
+    """Test extraction of detections from nested API response."""
+
+    def test_extracts_from_nested_dataset_key(self):
+        """Entries nested under dataset version key are extracted."""
+        data = _wrap_api_response([SAMPLE_VESSEL_MATCHED, SAMPLE_VESSEL_DARK])
+        entries = _extract_entries(data)
+        assert len(entries) == 2
+
+    def test_empty_entries_returns_empty_list(self):
+        """Empty entries list returns empty."""
+        entries = _extract_entries(_empty_api_response())
+        assert entries == []
+
+    def test_handles_different_dataset_versions(self):
+        """Works with any sar-presence version string."""
+        data = {
+            "entries": [
+                {"public-global-sar-presence:v5.0": [SAMPLE_VESSEL_MATCHED]}
+            ]
+        }
+        entries = _extract_entries(data)
+        assert len(entries) == 1
+
+    def test_ignores_non_sar_keys(self):
+        """Keys not starting with the SAR dataset prefix are ignored."""
+        data = {
+            "entries": [
+                {
+                    "public-global-sar-presence:v4.0": [SAMPLE_VESSEL_MATCHED],
+                    "some-other-dataset:v1.0": [{"unrelated": True}],
+                }
+            ]
+        }
+        entries = _extract_entries(data)
+        assert len(entries) == 1
 
 
 # ===================================================================
@@ -94,52 +173,54 @@ SAMPLE_DETECTION_ALT_KEYS = {
 class TestParseDetection:
     """Test detection parsing and field mapping."""
 
-    def test_parses_standard_detection(self):
-        """Standard detection fields are correctly mapped."""
-        result = parse_detection(SAMPLE_DETECTION_RAW)
+    def test_parses_matched_vessel(self):
+        """Matched vessel fields are correctly mapped."""
+        result = parse_detection(SAMPLE_VESSEL_MATCHED)
 
-        assert result["gfw_detection_id"] == "det-abc-123"
-        assert result["detection_time"] == "2026-03-05T12:00:00Z"
-        assert result["lat"] == 65.5
-        assert result["lon"] == 10.2
-        assert result["length_m"] == 85.0
-        assert result["width_m"] == 12.0
-        assert result["heading_deg"] == 180.0
-        assert result["confidence"] == 0.92
+        assert result["gfw_detection_id"] == "sar-a30abd69a-af79-add7-fc44-2c394b098667-2026-03-05 04:00"
+        assert result["detection_time"] == "2026-03-05T04:40:41Z"
         assert result["is_dark"] is False
-        assert result["matched_mmsi"] == 273456789
-        assert result["match_distance_m"] == 500.0
+        assert result["matched_mmsi"] == 667002395
+        assert result["matched_category"] == "other"
         assert result["source"] == "gfw"
-        assert result["matching_score"] == 0.88
-        assert result["fishing_score"] == 0.15
 
-    def test_dark_detection_no_mmsi(self):
-        """Detection without matched_mmsi is marked as dark."""
-        result = parse_detection(SAMPLE_DETECTION_DARK)
+    def test_dark_vessel_no_mmsi(self):
+        """Vessel without MMSI is marked as dark."""
+        result = parse_detection(SAMPLE_VESSEL_DARK)
 
-        assert result["gfw_detection_id"] == "det-xyz-456"
+        assert result["gfw_detection_id"].startswith("sar-dark-vessel-xyz-456")
         assert result["is_dark"] is True
         assert result["matched_mmsi"] is None
-        assert result["match_distance_m"] is None
-        assert result["matching_score"] is None
+        assert result["matched_category"] == "unmatched"
 
-    def test_alternative_field_names(self):
-        """Alternative GFW field names (detectionId, latitude, etc.) are handled."""
-        result = parse_detection(SAMPLE_DETECTION_ALT_KEYS)
+    def test_cargo_vessel_type_mapped(self):
+        """Vessel type is used as matched_category."""
+        result = parse_detection(SAMPLE_VESSEL_CARGO)
 
-        assert result["gfw_detection_id"] == "det-alt-789"
-        assert result["detection_time"] == "2026-03-07T15:00:00Z"
-        assert result["lat"] == 67.2
-        assert result["lon"] == 12.3
-        assert result["length_m"] == 120.0
+        assert result["matched_mmsi"] == 341639000
+        assert result["matched_category"] == "cargo"
         assert result["is_dark"] is False
-        assert result["matched_mmsi"] == 351123456
-        assert result["matching_score"] == 0.99
 
-    def test_missing_id_returns_none_gfw_detection_id(self):
-        """Detection with no ID field returns None for gfw_detection_id."""
+    def test_uses_entry_timestamp_over_date(self):
+        """entryTimestamp is preferred over date for detection_time."""
+        result = parse_detection(SAMPLE_VESSEL_CARGO)
+        assert result["detection_time"] == "2026-03-07T16:32:02Z"
+
+    def test_missing_vessel_id_returns_none_detection_id(self):
+        """Detection with no vesselId returns None for gfw_detection_id."""
         result = parse_detection({"lat": 60.0, "lon": 10.0})
         assert result["gfw_detection_id"] is None
+
+    def test_unavailable_fields_are_none(self):
+        """Fields not provided by 4Wings API are None."""
+        result = parse_detection(SAMPLE_VESSEL_MATCHED)
+        assert result["length_m"] is None
+        assert result["width_m"] is None
+        assert result["heading_deg"] is None
+        assert result["confidence"] is None
+        assert result["match_distance_m"] is None
+        assert result["matching_score"] is None
+        assert result["fishing_score"] is None
 
 
 # ===================================================================
@@ -153,13 +234,11 @@ class TestDateRange:
     def test_default_lookback_from_settings(self):
         """Default lookback uses settings.gfw.sar_lookback_days."""
         start, end = _build_date_range()
-        # We can't check exact dates, but start should be before end
         assert start < end
 
     def test_custom_lookback_override(self):
         """Custom lookback_days overrides the default."""
         start, end = _build_date_range(lookback_days=3)
-        # Both should be valid date strings
         assert len(start) == 10  # YYYY-MM-DD
         assert len(end) == 10
 
@@ -173,64 +252,58 @@ class TestFetchSarDetections:
     """Test the SAR detection fetching logic."""
 
     @pytest.mark.asyncio
-    async def test_builds_correct_request_with_aoi_and_date_range(self):
-        """4Wings API query includes AOI geometry and date range."""
+    async def test_builds_correct_request_with_geojson_key(self):
+        """4Wings API request uses 'geojson' key, not 'region'."""
         mock_client = AsyncMock()
-        mock_client.post.return_value = {"entries": [SAMPLE_DETECTION_RAW]}
+        mock_client.post.return_value = _wrap_api_response([SAMPLE_VESSEL_MATCHED])
 
         await fetch_sar_detections(mock_client, [SAMPLE_AOI], lookback_days=7)
 
-        # Verify the post was called with correct endpoint
         mock_client.post.assert_called_once()
         call_args = mock_client.post.call_args
 
-        # Check endpoint
         assert call_args[0][0] == SAR_ENDPOINT
 
-        # Check params contain dataset and date range
         params = call_args[1].get("params") or call_args.kwargs.get("params", {})
         assert params["datasets[0]"] == SAR_DATASET
         assert "date-range" in params
+        assert params["group-by"] == "VESSEL_ID"
 
-        # Check json_body contains region geometry
         body = call_args[1].get("json_body") or call_args.kwargs.get("json_body", {})
-        region = body["region"]
-        assert region["type"] == "Polygon"
-        assert len(region["coordinates"][0]) == 5  # 4 points + closing point
+        assert "geojson" in body
+        assert "region" not in body
+        assert body["geojson"]["type"] == "Polygon"
+        assert len(body["geojson"]["coordinates"][0]) == 5  # 4 points + closing
 
     @pytest.mark.asyncio
-    async def test_detections_correctly_parsed(self):
-        """Detections from the API are correctly parsed into SarDetection format."""
+    async def test_detections_correctly_parsed_from_nested_response(self):
+        """Detections nested under dataset key are correctly extracted and parsed."""
         mock_client = AsyncMock()
-        mock_client.post.return_value = {
-            "entries": [SAMPLE_DETECTION_RAW, SAMPLE_DETECTION_DARK],
-        }
+        mock_client.post.return_value = _wrap_api_response(
+            [SAMPLE_VESSEL_MATCHED, SAMPLE_VESSEL_DARK]
+        )
 
         results = await fetch_sar_detections(mock_client, [SAMPLE_AOI])
 
         assert len(results) == 2
-        assert results[0]["gfw_detection_id"] == "det-abc-123"
+        assert results[0]["matched_mmsi"] == 667002395
         assert results[0]["is_dark"] is False
-        assert results[1]["gfw_detection_id"] == "det-xyz-456"
         assert results[1]["is_dark"] is True
 
     @pytest.mark.asyncio
     async def test_empty_response_handled_gracefully(self):
         """Empty API response returns empty list without errors."""
         mock_client = AsyncMock()
-        mock_client.post.return_value = {"entries": []}
+        mock_client.post.return_value = _empty_api_response()
 
         results = await fetch_sar_detections(mock_client, [SAMPLE_AOI])
-
         assert results == []
 
     @pytest.mark.asyncio
     async def test_empty_aoi_list_returns_empty(self):
         """No AOIs means no API calls and empty result."""
         mock_client = AsyncMock()
-
         results = await fetch_sar_detections(mock_client, [])
-
         assert results == []
         mock_client.post.assert_not_called()
 
@@ -238,11 +311,9 @@ class TestFetchSarDetections:
     async def test_aoi_without_coordinates_skipped(self):
         """AOI with empty coordinates is skipped."""
         mock_client = AsyncMock()
-
         results = await fetch_sar_detections(
             mock_client, [{"name": "Empty AOI", "coordinates": []}]
         )
-
         assert results == []
         mock_client.post.assert_not_called()
 
@@ -251,8 +322,8 @@ class TestFetchSarDetections:
         """Detections from multiple AOIs are combined."""
         mock_client = AsyncMock()
         mock_client.post.side_effect = [
-            {"entries": [SAMPLE_DETECTION_RAW]},
-            {"entries": [SAMPLE_DETECTION_DARK]},
+            _wrap_api_response([SAMPLE_VESSEL_MATCHED]),
+            _wrap_api_response([SAMPLE_VESSEL_DARK]),
         ]
 
         aoi2 = {
@@ -266,20 +337,18 @@ class TestFetchSarDetections:
         assert mock_client.post.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_detections_without_id_filtered_out(self):
-        """Detections that have no ID are filtered out."""
+    async def test_detections_without_vessel_id_filtered_out(self):
+        """Detections that have no vesselId are filtered out."""
         mock_client = AsyncMock()
-        mock_client.post.return_value = {
-            "entries": [
-                SAMPLE_DETECTION_RAW,
-                {"lat": 60.0, "lon": 10.0},  # No ID
-            ],
-        }
+        mock_client.post.return_value = _wrap_api_response([
+            SAMPLE_VESSEL_MATCHED,
+            {"lat": 60.0, "lon": 10.0, "date": "2026-03-05"},  # No vesselId
+        ])
 
         results = await fetch_sar_detections(mock_client, [SAMPLE_AOI])
 
         assert len(results) == 1
-        assert results[0]["gfw_detection_id"] == "det-abc-123"
+        assert results[0]["matched_mmsi"] == 667002395
 
     @pytest.mark.asyncio
     async def test_api_error_handled_gracefully(self):
@@ -288,7 +357,6 @@ class TestFetchSarDetections:
         mock_client.post.side_effect = Exception("Connection timeout")
 
         results = await fetch_sar_detections(mock_client, [SAMPLE_AOI])
-
         assert results == []
 
 
@@ -304,9 +372,9 @@ class TestFetchAndStoreSarDetections:
     async def test_upsert_called_with_parsed_detections(self):
         """Parsed detections are passed to bulk_upsert_sar_detections."""
         mock_client = AsyncMock()
-        mock_client.post.return_value = {
-            "entries": [SAMPLE_DETECTION_RAW, SAMPLE_DETECTION_DARK],
-        }
+        mock_client.post.return_value = _wrap_api_response(
+            [SAMPLE_VESSEL_MATCHED, SAMPLE_VESSEL_DARK]
+        )
         mock_session = AsyncMock()
         mock_upsert = AsyncMock(return_value=2)
 
@@ -323,7 +391,7 @@ class TestFetchAndStoreSarDetections:
     async def test_no_upsert_on_empty_results(self):
         """No DB call is made when there are no detections."""
         mock_client = AsyncMock()
-        mock_client.post.return_value = {"entries": []}
+        mock_client.post.return_value = _empty_api_response()
         mock_session = AsyncMock()
         mock_upsert = AsyncMock()
 
@@ -335,10 +403,10 @@ class TestFetchAndStoreSarDetections:
         mock_upsert.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_upsert_prevents_duplicates(self):
-        """Detections use gfw_detection_id as unique key for upsert."""
+    async def test_upsert_uses_stable_detection_id(self):
+        """Detections use vesselId+date composite as gfw_detection_id for upsert."""
         mock_client = AsyncMock()
-        mock_client.post.return_value = {"entries": [SAMPLE_DETECTION_RAW]}
+        mock_client.post.return_value = _wrap_api_response([SAMPLE_VESSEL_MATCHED])
         mock_session = AsyncMock()
         mock_upsert = AsyncMock(return_value=1)
 
@@ -346,6 +414,6 @@ class TestFetchAndStoreSarDetections:
             mock_client, mock_session, [SAMPLE_AOI], _upsert_fn=mock_upsert
         )
 
-        # Verify the detection has gfw_detection_id set
         detections = mock_upsert.call_args[0][1]
-        assert detections[0]["gfw_detection_id"] == "det-abc-123"
+        assert detections[0]["gfw_detection_id"].startswith("sar-")
+        assert "a30abd69a" in detections[0]["gfw_detection_id"]
