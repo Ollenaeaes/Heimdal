@@ -40,6 +40,23 @@ shell-db: ## Open a psql shell to the database
 fetch-sanctions: ## Download/update OpenSanctions data
 	docker compose exec enrichment python -m scripts.fetch_sanctions
 
+# -- IACS Tracker -------------------------------------------------------------
+
+iacs-bootstrap: ## Bootstrap IACS tracker: import all 3 available weekly files
+	docker compose --profile batch run --rm iacs-tracker --bootstrap
+
+iacs-update: ## Run IACS tracker: download and import latest weekly file
+	docker compose --profile batch run --rm iacs-tracker
+
+iacs-check: ## Check IACS status for a vessel (usage: make iacs-check IMO=9123456)
+	docker compose --profile batch run --rm iacs-tracker --check-vessel $(IMO)
+
+iacs-risk: ## List all vessels with Withdrawn/Suspended IACS class
+	docker compose --profile batch run --rm iacs-tracker --risk-vessels
+
+iacs-changes: ## Show IACS changes in last 7 days
+	docker compose --profile batch run --rm iacs-tracker --recent-changes
+
 # -- Testing ------------------------------------------------------------------
 
 test: ## Run the test suite inside the api-server container
@@ -112,5 +129,6 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: up down reset logs logs-ingest logs-scoring migrate shell-db fetch-sanctions test shell-api help \
+        iacs-bootstrap iacs-update iacs-check iacs-risk iacs-changes \
         dev-up dev-down sync-data dev-load dev-logs \
         oci-check oci-provision oci-setup oci-deploy oci-deploy-full oci-ssh oci-logs oci-status oci-ip

@@ -1,4 +1,5 @@
 import { useLookbackStore } from '../../hooks/useLookbackStore';
+import { useMenuClose } from '../Controls/MenuDropdown';
 
 /** Button to activate area lookback drawing mode. */
 export function AreaLookbackButton() {
@@ -6,19 +7,28 @@ export function AreaLookbackButton() {
   const isActive = useLookbackStore((s) => s.isActive);
   const startDrawing = useLookbackStore((s) => s.startDrawing);
   const cancelDrawing = useLookbackStore((s) => s.cancelDrawing);
+  const closeMenu = useMenuClose();
 
-  if (isActive) return null; // Don't show button during active lookback
+  if (isActive) return null;
+
+  const handleClick = () => {
+    if (isDrawing) {
+      cancelDrawing();
+    } else {
+      startDrawing();
+    }
+    closeMenu?.();
+  };
 
   return (
     <button
-      onClick={() => (isDrawing ? cancelDrawing() : startDrawing())}
-      className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors border ${
+      onClick={handleClick}
+      className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
         isDrawing
-          ? 'bg-red-600 hover:bg-red-700 text-white border-red-500/30'
-          : 'bg-[#0A0E17]/80 text-slate-400 hover:text-white hover:bg-[#111827]/90 border-[#1F2937]'
+          ? 'bg-red-600/20 text-red-400'
+          : 'text-slate-300 hover:bg-[#1F2937] hover:text-white'
       }`}
       data-testid="area-lookback-button"
-      aria-label={isDrawing ? 'Cancel drawing' : 'Area Lookback'}
     >
       {isDrawing ? 'Cancel Drawing' : 'Area Lookback'}
     </button>

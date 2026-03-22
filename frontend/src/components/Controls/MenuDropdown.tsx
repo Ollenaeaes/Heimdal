@@ -1,4 +1,11 @@
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useEffect, createContext, useContext, type ReactNode } from 'react';
+
+const MenuCloseContext = createContext<(() => void) | null>(null);
+
+/** Hook for children to close their parent MenuDropdown. */
+export function useMenuClose() {
+  return useContext(MenuCloseContext);
+}
 
 interface MenuDropdownProps {
   label: string;
@@ -31,6 +38,8 @@ export function MenuDropdown({ label, icon, children, countBadge }: MenuDropdown
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  const close = () => setOpen(false);
+
   // Close on click outside
   useEffect(() => {
     if (!open) return;
@@ -44,31 +53,33 @@ export function MenuDropdown({ label, icon, children, countBadge }: MenuDropdown
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors ${
-          open
-            ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-            : 'bg-[#0A0E17]/80 text-slate-400 hover:text-white hover:bg-[#111827]/90 border border-[#1F2937]'
-        }`}
-      >
-        {ICONS[icon]}
-        <span className="font-medium">{label}</span>
-        {countBadge != null && countBadge > 0 && (
-          <span className="px-1 py-0.5 rounded text-[0.55rem] font-mono bg-blue-500/20 text-blue-400 leading-none">
-            {countBadge}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div
-          className="absolute top-full left-0 mt-1 min-w-[220px] rounded-lg border border-slate-700/50 shadow-xl overflow-hidden"
-          style={{ backgroundColor: 'rgba(10, 14, 23, 0.95)' }}
+    <MenuCloseContext.Provider value={close}>
+      <div ref={ref} className="relative">
+        <button
+          onClick={() => setOpen(!open)}
+          className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors ${
+            open
+              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+              : 'bg-[#0A0E17]/80 text-slate-400 hover:text-white hover:bg-[#111827]/90 border border-[#1F2937]'
+          }`}
         >
-          {children}
-        </div>
-      )}
-    </div>
+          {ICONS[icon]}
+          <span className="font-medium">{label}</span>
+          {countBadge != null && countBadge > 0 && (
+            <span className="px-1 py-0.5 rounded text-[0.55rem] font-mono bg-blue-500/20 text-blue-400 leading-none">
+              {countBadge}
+            </span>
+          )}
+        </button>
+        {open && (
+          <div
+            className="absolute top-full left-0 mt-1 min-w-[220px] rounded-lg border border-slate-700/50 shadow-xl overflow-hidden"
+            style={{ backgroundColor: 'rgba(10, 14, 23, 0.95)' }}
+          >
+            {children}
+          </div>
+        )}
+      </div>
+    </MenuCloseContext.Provider>
   );
 }

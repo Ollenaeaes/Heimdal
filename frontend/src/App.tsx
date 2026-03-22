@@ -254,8 +254,12 @@ function AppInner() {
             }>
               <OverlayToggles state={overlays} onChange={setOverlays} inline />
             </MenuDropdown>
-            <AreaLookbackButton />
-            <EezReportButton />
+            <MenuDropdown label="Tools" icon="tools">
+              <div className="p-1.5 space-y-0.5">
+                <AreaLookbackButton />
+                <EezReportButton />
+              </div>
+            </MenuDropdown>
           </div>
         </div>
 

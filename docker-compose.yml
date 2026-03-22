@@ -128,6 +128,23 @@ services:
           cpus: '1.0'
           memory: 3G
 
+  iacs-tracker:
+    build: ./services/iacs-tracker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+    volumes:
+      - ./shared:/app/shared:ro
+    profiles:
+      - batch
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
   cold-archiver:
     build: ./services/cold-archiver
     depends_on:
