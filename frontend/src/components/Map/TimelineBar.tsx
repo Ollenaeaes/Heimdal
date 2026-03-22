@@ -107,8 +107,8 @@ export function TimelineBar() {
 
   return (
     <div
-      className="absolute bottom-0 left-0 right-0 z-50 flex flex-col"
-      style={{ backgroundColor: 'rgba(10, 14, 23, 0.95)' }}
+      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col rounded-lg border border-slate-700/50 shadow-2xl overflow-hidden"
+      style={{ backgroundColor: 'rgba(10, 14, 23, 0.92)', width: 'clamp(400px, 55%, 900px)' }}
       data-testid="timeline-bar"
     >
       {/* Scrubber track */}
