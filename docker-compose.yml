@@ -144,8 +144,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 2G
+          cpus: '1.0'
+          memory: 4G
 
 # =============================================================================
 # Persistent Volumes
