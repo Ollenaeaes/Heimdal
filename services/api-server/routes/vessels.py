@@ -542,57 +542,53 @@ def _read_parquet_positions(
     start: datetime,
     end: datetime,
 ) -> list[dict]:
-    """Read positions from monthly Parquet files in cold storage."""
+    """Read positions from daily Parquet files in cold storage."""
     positions: list[dict] = []
 
-    # Iterate over each month in the range
-    current = start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Iterate over each day in the range
+    current = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    one_day = timedelta(days=1)
     while current <= end:
-        year = current.year
-        month = current.month
         # Build path from validated date components only (no user input)
-        parquet_path = (
+        day_dir = (
             base_path
             / "cold"
             / "ais"
-            / f"{year:04d}"
-            / f"{month:02d}"
-            / f"positions_{year:04d}-{month:02d}.parquet"
+            / f"{current.year:04d}"
+            / f"{current.month:02d}"
+            / f"{current.day:02d}"
         )
 
-        if parquet_path.exists():
-            try:
-                table = pq.read_table(
-                    str(parquet_path),
-                    filters=[("mmsi", "=", mmsi)],
-                )
-                df = table.to_pandas()
+        if day_dir.is_dir():
+            parquet_path = day_dir / f"positions_{current.year:04d}-{current.month:02d}-{current.day:02d}.parquet"
+            if parquet_path.exists():
+                try:
+                    table = pq.read_table(
+                        str(parquet_path),
+                        filters=[("mmsi", "=", mmsi)],
+                    )
+                    df = table.to_pandas()
 
-                if not df.empty:
-                    # Filter by timestamp range
-                    if "timestamp" in df.columns:
-                        ts = df["timestamp"]
-                        mask = (ts >= start) & (ts <= end)
-                        df = df[mask]
+                    if not df.empty:
+                        if "timestamp" in df.columns:
+                            ts = df["timestamp"]
+                            mask = (ts >= start) & (ts <= end)
+                            df = df[mask]
 
-                    for _, row in df.iterrows():
-                        ts_val = row.get("timestamp")
-                        positions.append({
-                            "timestamp": ts_val.isoformat() if hasattr(ts_val, "isoformat") else str(ts_val),
-                            "lat": row.get("lat"),
-                            "lon": row.get("lon"),
-                            "sog": row.get("sog"),
-                            "cog": row.get("cog"),
-                            "heading": row.get("heading"),
-                        })
-            except Exception:
-                logger.warning("Failed to read parquet file %s", parquet_path, exc_info=True)
+                        for _, row in df.iterrows():
+                            ts_val = row.get("timestamp")
+                            positions.append({
+                                "timestamp": ts_val.isoformat() if hasattr(ts_val, "isoformat") else str(ts_val),
+                                "lat": row.get("lat"),
+                                "lon": row.get("lon"),
+                                "sog": row.get("sog"),
+                                "cog": row.get("cog"),
+                                "heading": row.get("heading"),
+                            })
+                except Exception:
+                    logger.warning("Failed to read parquet file %s", parquet_path, exc_info=True)
 
-        # Advance to next month
-        if month == 12:
-            current = current.replace(year=year + 1, month=1)
-        else:
-            current = current.replace(month=month + 1)
+        current += one_day
 
     # Sort by timestamp
     positions.sort(key=lambda p: p["timestamp"] or "")

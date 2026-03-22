@@ -72,19 +72,24 @@ def find_old_jsonl_files(base_path: str, age_days: int) -> list[Path]:
     return old_files
 
 
-def group_files_by_month(files: list[Path]) -> dict[str, list[Path]]:
-    """Group files by YYYY-MM for monthly Parquet output."""
+def group_files_by_day(files: list[Path]) -> dict[str, list[Path]]:
+    """Group files by YYYY-MM-DD for daily Parquet output.
+
+    Daily grouping keeps memory usage bounded — processing an entire month
+    at once can OOM on the cold-archiver's 2 GB memory limit.
+    """
     groups: dict[str, list[Path]] = defaultdict(list)
     for f in files:
-        # Extract YYYY/MM from the directory path: .../ais/YYYY/MM/DD/...
+        # Extract YYYY/MM/DD from the directory path: .../ais/YYYY/MM/DD/...
         parts = f.parts
         try:
             ais_idx = parts.index("ais")
             year = parts[ais_idx + 1]
             month = parts[ais_idx + 2]
-            groups[f"{year}-{month}"].append(f)
+            day = parts[ais_idx + 3]
+            groups[f"{year}-{month}-{day}"].append(f)
         except (ValueError, IndexError):
-            logger.warning("Cannot determine month for file: %s", f)
+            logger.warning("Cannot determine day for file: %s", f)
     return dict(groups)
 
 
@@ -192,22 +197,23 @@ async def main():
     if not old_files:
         logger.info("No files old enough to archive")
     else:
-        # Group by month and file type
-        by_month = group_files_by_month(old_files)
+        # Group by day to keep memory usage bounded
+        by_day = group_files_by_day(old_files)
 
-        for month_key, month_files in sorted(by_month.items()):
+        for day_key, day_files in sorted(by_day.items()):
             # Separate by file type (positions, static, other)
             by_type: dict[str, list[Path]] = defaultdict(list)
-            for f in month_files:
+            for f in day_files:
                 name = f.stem.replace(".jsonl", "")
                 file_type = name.split("_", 1)[0]  # positions, static, other
                 by_type[file_type].append(f)
 
-            cold_dir = Path(base_path) / "cold" / "ais" / month_key.replace("-", "/")
+            # Output: /data/raw/cold/ais/YYYY/MM/DD/
+            cold_dir = Path(base_path) / "cold" / "ais" / day_key.replace("-", "/")
 
             for file_type, type_files in by_type.items():
                 parquet_path = convert_to_parquet(
-                    type_files, cold_dir, month_key, file_type
+                    type_files, cold_dir, day_key, file_type
                 )
                 if parquet_path is not None:
                     # Delete original JSONL files only after:
