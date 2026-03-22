@@ -69,7 +69,7 @@ class GfwConfig(BaseSettings):
 
 class RetentionConfig(BaseSettings):
     positions_days: int = 365
-    compression_days: int = 30
+    compression_days: int = 2
 
 
 class RawStorageConfig(BaseSettings):

@@ -12,10 +12,10 @@ export function AreaLookbackButton() {
   return (
     <button
       onClick={() => (isDrawing ? cancelDrawing() : startDrawing())}
-      className={`px-3 py-1.5 text-xs rounded transition-colors ${
+      className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
         isDrawing
           ? 'bg-red-600 hover:bg-red-700 text-white'
-          : 'bg-[#1F2937] hover:bg-[#374151] text-gray-300 hover:text-white border border-[#374151]'
+          : 'text-slate-300 hover:bg-[#1F2937] hover:text-white'
       }`}
       data-testid="area-lookback-button"
       aria-label={isDrawing ? 'Cancel drawing' : 'Area Lookback'}

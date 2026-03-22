@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { SearchBar, RiskFilter, TypeFilter, TimeRangeFilter, HealthIndicator, WatchlistPanel, EquasisImport, STATS_REFETCH_INTERVAL } from './components/Controls';
+import { MenuDropdown } from './components/Controls/MenuDropdown';
 import type { StatsResponse } from './components/Controls';
 import { useWatchlistAlerts } from './hooks/useWatchlist';
 import { usePositionPolling } from './hooks/usePositionPolling';
@@ -226,22 +227,40 @@ function AppInner() {
           />
         </Suspense>
 
-        {/* Left side layer control panel */}
-        <div className="absolute top-3 left-3 z-40 flex flex-col gap-2" style={{ maxHeight: 'calc(100vh - 80px)' }}>
+        {/* Left side control panel */}
+        <div className="absolute top-3 left-3 z-40 flex flex-col gap-1.5" style={{ maxHeight: 'calc(100vh - 80px)' }}>
           {/* Search */}
           <SearchBar />
 
-          {/* Filters */}
-          <div className="flex items-center gap-2">
+          {/* Vessel counts + compact menu bar */}
+          <div className="flex items-center gap-1.5">
             <RiskFilter />
-            <TypeFilter />
-            <TimeRangeFilter />
-            <AreaLookbackButton />
-            <EezReportButton />
+            <MenuDropdown label="Filters" icon="filter">
+              <div className="p-2 space-y-2">
+                <div>
+                  <span className="text-[0.6rem] text-slate-500 uppercase tracking-wider block mb-1">Vessel Type</span>
+                  <TypeFilter />
+                </div>
+                <div>
+                  <span className="text-[0.6rem] text-slate-500 uppercase tracking-wider block mb-1">Active Since</span>
+                  <TimeRangeFilter />
+                </div>
+              </div>
+            </MenuDropdown>
+            <MenuDropdown label="Layers" icon="layers" countBadge={
+              [overlays.showStsZones, overlays.showTerminals, overlays.showSeaBorders,
+               overlays.showSarDetections, overlays.showGfwEvents, overlays.showInfrastructure,
+               overlays.showGnssZones, overlays.showNetwork].filter(Boolean).length
+            }>
+              <OverlayToggles state={overlays} onChange={setOverlays} inline />
+            </MenuDropdown>
+            <MenuDropdown label="Tools" icon="tools">
+              <div className="p-2 space-y-1">
+                <AreaLookbackButton />
+                <EezReportButton />
+              </div>
+            </MenuDropdown>
           </div>
-
-          {/* Layer toggles — self-collapsing */}
-          <OverlayToggles state={overlays} onChange={setOverlays} />
         </div>
 
         <TrackLegend />
