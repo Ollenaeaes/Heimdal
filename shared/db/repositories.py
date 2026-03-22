@@ -7,12 +7,14 @@ queries for simple CRUD.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Optional, Sequence
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.constants import normalize_flag
 from shared.db.connection import get_session
 
 
@@ -805,6 +807,21 @@ async def get_equasis_scoring_data(session: AsyncSession, mmsi: int) -> dict[str
     return dict(row)
 
 
+def _sanitize_profile_field(field_name: str, value: Any) -> Any:
+    """Clean up text fields extracted from PDFs — strip newlines, normalize flags."""
+    if not isinstance(value, str):
+        return value
+    value = value.replace("\n", " ").replace("\r", " ").strip()
+    value = re.sub(r"\s+FALSE$", "", value)
+    if field_name == "flag_country":
+        value = normalize_flag(value)
+    if field_name == "class_society":
+        parts = value.split()
+        if len(parts) > 1:
+            value = parts[0]
+    return value or None
+
+
 async def update_vessel_profile_from_equasis(
     session: AsyncSession, mmsi: int, equasis_data: dict[str, Any]
 ) -> None:
@@ -835,8 +852,10 @@ async def update_vessel_profile_from_equasis(
     for field_name, col_name in field_map.items():
         value = equasis_data.get(field_name)
         if value is not None:
-            set_clauses.append(f"{col_name} = :{field_name}")
-            params[field_name] = value
+            value = _sanitize_profile_field(field_name, value)
+            if value is not None:
+                set_clauses.append(f"{col_name} = :{field_name}")
+                params[field_name] = value
 
     if not set_clauses:
         return
@@ -909,8 +928,11 @@ async def upsert_fleet_vessel(
         mmsi = existing["mmsi"]
         update_fields = {}
         for field in ["ship_name", "gross_tonnage", "flag_country", "build_year", "class_society", "ship_type_text"]:
-            if data.get(field) is not None:
-                update_fields[field] = data[field]
+            value = data.get(field)
+            if value is not None:
+                value = _sanitize_profile_field(field, value)
+                if value is not None:
+                    update_fields[field] = value
 
         if update_fields:
             set_clauses = [f"{k} = :{k}" for k in update_fields]
