@@ -286,9 +286,8 @@ async def eez_sanctioned_report(
         if not sanctioned_mmsis:
             mmsis: list[int] = []
         else:
-            # Step 2: Check which sanctioned vessels had positions inside the EEZ bbox + precise check
-            # First bbox filter (cheap), then ST_Intersects with the specific zone (precise)
-            vessel_query = text(
+            # Step 2: Fast bbox scan to find candidate MMSIs
+            bbox_query = text(
                 "SELECT DISTINCT vp_pos.mmsi "
                 "FROM vessel_positions vp_pos "
                 "WHERE vp_pos.mmsi = ANY(:sanctioned_mmsis) "
@@ -296,14 +295,10 @@ async def eez_sanctioned_report(
                 "  AND ST_Intersects("
                 "    vp_pos.position::geometry, "
                 "    ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
-                "  ) "
-                "  AND ST_Intersects("
-                "    vp_pos.position, "
-                "    (SELECT geometry FROM maritime_zones WHERE id = :zone_id)"
                 "  )"
             )
             try:
-                result = await session.execute(vessel_query, {
+                result = await session.execute(bbox_query, {
                     "sanctioned_mmsis": sanctioned_mmsis,
                     "start": t_start,
                     "end": t_end,
@@ -311,7 +306,6 @@ async def eez_sanctioned_report(
                     "south": zone_row["south"],
                     "east": zone_row["east"],
                     "north": zone_row["north"],
-                    "zone_id": zone_id,
                 })
                 mmsis = [row["mmsi"] for row in result.mappings().all()]
             except Exception as exc:
