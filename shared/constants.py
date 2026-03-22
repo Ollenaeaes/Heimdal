@@ -38,6 +38,7 @@ MAX_PER_RULE: dict[str, int] = {
     "ais_spoofing": 0,          # informational — feeds GNSS/Spoofing layer only
     "ownership_risk": 60,
     "insurance_class_risk": 60,
+    "iacs_class_status": 60,
     # AIS spoofing detection rules — informational only (0 points).
     # These are environmental/regional events, not vessel-level risk.
     # A spoofed vessel is a victim, not a suspect.
@@ -386,6 +387,7 @@ REALTIME_RULE_IDS: list[str] = [
     "ais_spoofing",
     "ownership_risk",
     "insurance_class_risk",
+    "iacs_class_status",
     "cable_slow_transit",
     "cable_alignment",
     "infra_speed_anomaly",
@@ -534,7 +536,8 @@ _NAME_TO_ALPHA2: dict[str, str] = {
     "REPUBLIC OF THE CONGO": "CG", "IVORY COAST": "CI",
     "COTE D'IVOIRE": "CI", "CABO VERDE": "CV", "CAPE VERDE": "CV",
     "TIMOR-LESTE": "TL", "EAST TIMOR": "TL", "BRUNEI": "BN",
-    "HONG KONG SAR": "HK", "MACAU": "MO", "MACAO": "MO",
+    "HONG KONG SAR": "HK", "HONG KONG, CHINA": "HK",
+    "MACAU": "MO", "MACAO": "MO", "MACAO, CHINA": "MO", "MACAU, CHINA": "MO",
     "CURACAO": "CW", "ARUBA": "AW", "SURINAME": "SR", "GUYANA": "GY",
     "ALGERIA": "DZ", "LIBYA": "LY", "SUDAN": "SD", "SOUTH SUDAN": "SS",
     "ERITREA": "ER", "ETHIOPIA": "ET", "DJIBOUTI": "DJ", "SOMALIA": "SO",
