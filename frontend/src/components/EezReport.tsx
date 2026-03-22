@@ -133,14 +133,14 @@ export function EezReportButton() {
     <>
       <button
         onClick={() => setOpen(!open)}
-        className={`w-full text-left px-3 py-1.5 text-xs rounded transition-colors ${
+        className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-colors border ${
           open
-            ? 'bg-blue-600/20 text-blue-400'
-            : 'text-slate-300 hover:bg-[#1F2937] hover:text-white'
+            ? 'bg-blue-600/20 text-blue-400 border-blue-500/30'
+            : 'bg-[#0A0E17]/80 text-slate-400 hover:text-white hover:bg-[#111827]/90 border-[#1F2937]'
         }`}
         data-testid="eez-report-button"
       >
-        EEZ Sanctions Report
+        EEZ Report
       </button>
       {open && <EezReportPanel onClose={() => setOpen(false)} />}
     </>
