@@ -85,10 +85,10 @@ class BatchPipelineConfig(BaseSettings):
 
 
 class ColdStorageConfig(BaseSettings):
-    age_days: int = 30
+    age_days: int = 1
     format: str = "parquet"
     compression: str = "snappy"
-    retain_jsonl_days: int = 7  # keep JSONL for 7 days after Parquet creation
+    retain_jsonl_days: int = 0  # delete JSONL immediately after Parquet creation
 
 
 class FrontendConfig(BaseSettings):

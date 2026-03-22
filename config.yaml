@@ -246,10 +246,10 @@ batch_pipeline:
 # -- Cold Storage -------------------------------------------------------------
 # Compresses old JSONL to Parquet for long-term archival.
 cold_storage:
-  age_days: 30               # compress to Parquet after 30 days
+  age_days: 1                # compress to Parquet after 1 day
   format: parquet
   compression: snappy
-  retain_jsonl_days: 7       # keep JSONL for 7 days after Parquet creation
+  retain_jsonl_days: 0       # delete JSONL immediately after Parquet creation
 
 # -- Data Retention -----------------------------------------------------------
 retention:

@@ -486,7 +486,7 @@ async def export_vessel_track(
     """Export vessel track data as JSON or CSV, reading from cold Parquet storage for older data."""
     settings = load_settings()
     base_path = Path(settings.raw_storage.base_path)
-    cold_age = timedelta(days=30)
+    cold_age = timedelta(days=settings.retention.positions_days)
     now = datetime.now(timezone.utc)
     cutoff = now - cold_age
 

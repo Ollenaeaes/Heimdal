@@ -3,6 +3,9 @@
 Runs daily via cron.  Finds JSONL files older than cold_storage.age_days,
 converts them to monthly Parquet files, deletes the originals, and drops
 TimescaleDB chunks for positions older than the retention window.
+
+Safety: JSONL files are only deleted if they have been loaded into the DB
+by the batch-pipeline (tracked via /data/raw/meta/last_loaded.json).
 """
 
 from __future__ import annotations
@@ -25,6 +28,21 @@ from shared.config import settings
 from shared.logging import setup_logging
 
 logger = logging.getLogger("cold-archiver")
+
+LAST_LOADED_PATH = Path("/data/raw/meta/last_loaded.json")
+
+
+def get_loaded_files() -> set[str]:
+    """Read the set of files the batch-pipeline has already loaded into the DB."""
+    if not LAST_LOADED_PATH.exists():
+        return set()
+    try:
+        with open(LAST_LOADED_PATH) as f:
+            data = json.load(f)
+        return set(data.get("loaded_files", []))
+    except (json.JSONDecodeError, OSError):
+        logger.warning("Failed to read last_loaded.json — treating all files as unloaded")
+        return set()
 
 
 def find_old_jsonl_files(base_path: str, age_days: int) -> list[Path]:
@@ -160,6 +178,14 @@ async def main():
     age_days = settings.cold_storage.age_days
     retain_jsonl_days = settings.cold_storage.retain_jsonl_days
 
+    # Load the set of files already ingested into the DB by batch-pipeline
+    loaded_files = get_loaded_files()
+    if not loaded_files:
+        logger.warning(
+            "No loaded files tracked in last_loaded.json — will archive to "
+            "Parquet but will NOT delete any JSONL files (safety guard)"
+        )
+
     # Find old JSONL files
     old_files = find_old_jsonl_files(base_path, age_days)
     if not old_files:
@@ -183,8 +209,10 @@ async def main():
                     type_files, cold_dir, month_key, file_type
                 )
                 if parquet_path is not None:
-                    # Delete original JSONL files only after successful Parquet creation
-                    # But respect retain_jsonl_days — only delete files older than that
+                    # Delete original JSONL files only after:
+                    # 1. Successful Parquet creation (above)
+                    # 2. File age exceeds age_days + retain_jsonl_days
+                    # 3. SAFETY: batch-pipeline has loaded the file into the DB
                     delete_cutoff = datetime.now(timezone.utc) - timedelta(
                         days=age_days + retain_jsonl_days
                     )
@@ -195,9 +223,16 @@ async def main():
                             file_date = datetime.strptime(
                                 date_part, "%Y-%m-%dT%H"
                             ).replace(tzinfo=timezone.utc)
-                            if file_date < delete_cutoff:
-                                f.unlink()
-                                logger.info("Deleted archived JSONL: %s", f)
+                            if file_date >= delete_cutoff:
+                                continue
+                            if str(f) not in loaded_files:
+                                logger.warning(
+                                    "SKIPPING deletion of %s — not yet loaded into DB",
+                                    f,
+                                )
+                                continue
+                            f.unlink()
+                            logger.info("Deleted archived JSONL: %s", f)
                         except (ValueError, IndexError, OSError) as e:
                             logger.warning("Failed to process %s: %s", f, e)
 
