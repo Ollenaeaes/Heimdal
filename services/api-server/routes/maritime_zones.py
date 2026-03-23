@@ -329,24 +329,42 @@ async def eez_sanctioned_report(
         if not sanctioned_mmsis:
             mmsis: list[int] = []
         else:
-            # Step 2: Confirm which sanctioned vessels are currently inside the EEZ.
-            # Checks last known position against simplified EEZ polygon (0.01° ≈ 1km).
-            # No bbox fallback — bbox covers too much area (e.g. Sweden's bbox
-            # spans the entire Baltic, causing false positives for vessels between
-            # Finland and Latvia).
+            # Step 2: Find all sanctioned vessels that were inside the EEZ
+            # at any point during the time range.
+            #
+            # Two-phase approach to avoid scanning all positions against
+            # complex polygons:
+            #   a) Fast bbox pre-filter on vessel_positions → candidate MMSIs
+            #   b) For each candidate, check ONE position (via LATERAL LIMIT 1)
+            #      against the precise simplified polygon to confirm
+            #
+            # This catches both vessels currently inside AND those that
+            # transited through and left, without false positives from bbox.
             confirm_query = text(
-                "SELECT vp.mmsi "
-                "FROM vessel_profiles vp "
-                "WHERE vp.mmsi = ANY(:sanctioned_mmsis) "
-                "  AND vp.last_lat IS NOT NULL "
-                "  AND vp.last_position_time BETWEEN :start AND :end "
-                "  AND EXISTS ("
-                "    SELECT 1 FROM maritime_zones mz "
-                "    WHERE mz.zone_type = 'eez' AND mz.iso_sov = :iso_sov "
-                "      AND ST_Intersects("
-                "        ST_SetSRID(ST_MakePoint(vp.last_lon, vp.last_lat), 4326)::geometry,"
-                "        ST_Simplify(mz.geometry::geometry, 0.01))"
-                "  )"
+                "WITH eez AS ("
+                "  SELECT id, ST_Simplify(geometry::geometry, 0.01) AS geom "
+                "  FROM maritime_zones "
+                "  WHERE zone_type = 'eez' AND iso_sov = :iso_sov"
+                "), "
+                "bbox_candidates AS ("
+                "  SELECT DISTINCT vp_pos.mmsi "
+                "  FROM vessel_positions vp_pos "
+                "  WHERE vp_pos.mmsi = ANY(:sanctioned_mmsis) "
+                "    AND vp_pos.timestamp BETWEEN :start AND :end "
+                "    AND ST_Intersects("
+                "      vp_pos.position::geometry, "
+                "      ST_MakeEnvelope(:west, :south, :east, :north, 4326))"
+                ") "
+                "SELECT candidate.mmsi "
+                "FROM bbox_candidates candidate "
+                "WHERE EXISTS ("
+                "  SELECT 1 FROM vessel_positions vp "
+                "  CROSS JOIN eez "
+                "  WHERE vp.mmsi = candidate.mmsi "
+                "    AND vp.timestamp BETWEEN :start AND :end "
+                "    AND ST_Intersects(vp.position::geometry, eez.geom) "
+                "  LIMIT 1"
+                ")"
             )
             try:
                 result = await session.execute(confirm_query, {
@@ -354,6 +372,10 @@ async def eez_sanctioned_report(
                     "iso_sov": iso_sov.upper(),
                     "start": t_start,
                     "end": t_end,
+                    "west": zone_row["west"],
+                    "south": zone_row["south"],
+                    "east": zone_row["east"],
+                    "north": zone_row["north"],
                 })
                 mmsis = [row["mmsi"] for row in result.mappings().all()]
             except Exception as exc:
