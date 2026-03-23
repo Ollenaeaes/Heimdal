@@ -329,10 +329,11 @@ async def eez_sanctioned_report(
         if not sanctioned_mmsis:
             mmsis: list[int] = []
         else:
-            # Step 2: Confirm which sanctioned vessels are inside the EEZ.
-            # Uses last known position from vessel_profiles (instant — no position scan).
-            # Then checks against simplified EEZ polygon (0.01° ≈ 1km tolerance,
-            # safe for EEZ boundaries which are 200nm offshore).
+            # Step 2: Confirm which sanctioned vessels are currently inside the EEZ.
+            # Checks last known position against simplified EEZ polygon (0.01° ≈ 1km).
+            # No bbox fallback — bbox covers too much area (e.g. Sweden's bbox
+            # spans the entire Baltic, causing false positives for vessels between
+            # Finland and Latvia).
             confirm_query = text(
                 "SELECT vp.mmsi "
                 "FROM vessel_profiles vp "
@@ -362,49 +363,6 @@ async def eez_sanctioned_report(
                     detail="Query timed out — try a shorter time range",
                 )
 
-            # Also check vessels that had any position in the bbox during
-            # the time range (catches vessels that transited through but
-            # whose last position is now elsewhere).
-            if mmsis:
-                # Already found some — add any bbox candidates not yet included
-                bbox_query = text(
-                    "SELECT DISTINCT vp_pos.mmsi "
-                    "FROM vessel_positions vp_pos "
-                    "WHERE vp_pos.mmsi = ANY(:sanctioned_mmsis) "
-                    "  AND vp_pos.mmsi != ALL(:already_found) "
-                    "  AND vp_pos.timestamp BETWEEN :start AND :end "
-                    "  AND ST_Intersects("
-                    "    vp_pos.position::geometry, "
-                    "    ST_MakeEnvelope(:west, :south, :east, :north, 4326))"
-                )
-            else:
-                bbox_query = text(
-                    "SELECT DISTINCT vp_pos.mmsi "
-                    "FROM vessel_positions vp_pos "
-                    "WHERE vp_pos.mmsi = ANY(:sanctioned_mmsis) "
-                    "  AND vp_pos.timestamp BETWEEN :start AND :end "
-                    "  AND ST_Intersects("
-                    "    vp_pos.position::geometry, "
-                    "    ST_MakeEnvelope(:west, :south, :east, :north, 4326))"
-                )
-            try:
-                bbox_result = await session.execute(bbox_query, {
-                    "sanctioned_mmsis": sanctioned_mmsis,
-                    "already_found": mmsis,
-                    "start": t_start,
-                    "end": t_end,
-                    "west": zone_row["west"],
-                    "south": zone_row["south"],
-                    "east": zone_row["east"],
-                    "north": zone_row["north"],
-                })
-                bbox_mmsis = [row["mmsi"] for row in bbox_result.mappings().all()]
-                mmsis = list(set(mmsis + bbox_mmsis))
-            except Exception as exc:
-                logger.warning("EEZ report bbox query failed: %s", exc)
-                # Continue with what we have from the confirm query
-
-
         if not mmsis:
             return {
                 "zone": {
@@ -418,16 +376,22 @@ async def eez_sanctioned_report(
             }
 
         # Step 3: Compute entry/exit times for confirmed vessels.
-        # Uses bbox for in_zone check — these vessels are already confirmed
-        # either by last position or by historical positions in the bbox.
+        # Uses a CTE to simplify the EEZ polygon once, then checks each
+        # position against it. Since we only have a small number of confirmed
+        # vessels (typically <30), the position count is manageable.
         presence_by_mmsi: dict[int, dict] = {}
         presence_query = text(
+            "WITH eez AS ("
+            "  SELECT ST_Simplify(geometry::geometry, 0.01) AS geom "
+            "  FROM maritime_zones "
+            "  WHERE zone_type = 'eez' AND iso_sov = :iso_sov"
+            ") "
             "SELECT vp_pos.mmsi, vp_pos.timestamp, "
             "ST_X(vp_pos.position::geometry) AS lon, "
             "ST_Y(vp_pos.position::geometry) AS lat, "
-            "ST_Intersects("
-            "  vp_pos.position::geometry, "
-            "  ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
+            "EXISTS("
+            "  SELECT 1 FROM eez "
+            "  WHERE ST_Intersects(vp_pos.position::geometry, eez.geom)"
             ") AS in_zone "
             "FROM vessel_positions vp_pos "
             "WHERE vp_pos.mmsi = ANY(:mmsis) "
@@ -437,12 +401,9 @@ async def eez_sanctioned_report(
         try:
             presence_result = await session.execute(presence_query, {
                 "mmsis": mmsis,
+                "iso_sov": iso_sov.upper(),
                 "start": t_start,
                 "end": t_end,
-                "west": zone_row["west"],
-                "south": zone_row["south"],
-                "east": zone_row["east"],
-                "north": zone_row["north"],
             })
             pos_rows = presence_result.mappings().all()
 
