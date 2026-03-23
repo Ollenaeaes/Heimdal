@@ -48,6 +48,22 @@ async def get_sar_detections(
             offset=offset,
         )
 
+        # Batch-fetch vessel info for matched MMSIs
+        matched_mmsis = [r["matched_mmsi"] for r in rows if r.get("matched_mmsi")]
+        vessel_lookup: dict = {}
+        if matched_mmsis:
+            from sqlalchemy import text
+            vp_result = await session.execute(
+                text(
+                    "SELECT mmsi, ship_name, flag_country, ship_type_text, risk_tier, "
+                    "risk_score, last_lat, last_lon, last_position_time "
+                    "FROM vessel_profiles WHERE mmsi = ANY(:mmsis)"
+                ),
+                {"mmsis": matched_mmsis},
+            )
+            for v in vp_result.mappings().all():
+                vessel_lookup[v["mmsi"]] = dict(v)
+
     # Apply bbox filter in-memory on the already-extracted lat/lon columns
     if bbox:
         parts = bbox.split(",")
@@ -71,6 +87,8 @@ async def get_sar_detections(
     # Transform to frontend-expected camelCase format
     items = []
     for r in rows:
+        mmsi = r.get("matched_mmsi")
+        vessel = vessel_lookup.get(mmsi) if mmsi else None
         items.append({
             "id": str(r.get("id", r.get("gfw_detection_id", ""))),
             "detectedAt": r["detection_time"].isoformat() if r.get("detection_time") else None,
@@ -80,9 +98,15 @@ async def get_sar_detections(
             "isDark": r.get("is_dark", False),
             "matchingScore": r.get("matching_score"),
             "fishingScore": r.get("fishing_score"),
-            "matchedMmsi": r.get("matched_mmsi"),
+            "matchedMmsi": mmsi,
             "matchedCategory": r.get("matched_category"),
-            "matchedVesselName": None,
+            "matchedVesselName": vessel["ship_name"] if vessel else None,
+            "matchedVesselFlag": vessel["flag_country"] if vessel else None,
+            "matchedVesselType": vessel["ship_type_text"] if vessel else None,
+            "matchedVesselRiskTier": vessel["risk_tier"] if vessel else None,
+            "matchedVesselLastLat": float(vessel["last_lat"]) if vessel and vessel.get("last_lat") else None,
+            "matchedVesselLastLon": float(vessel["last_lon"]) if vessel and vessel.get("last_lon") else None,
+            "matchedVesselLastSeen": vessel["last_position_time"].isoformat() if vessel and vessel.get("last_position_time") else None,
             "satellite": r.get("source"),
             "imageUrl": None,
         })

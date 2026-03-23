@@ -21,6 +21,15 @@ function formatTime(iso: string): string {
   });
 }
 
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return 'just now';
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 interface SarFeatureProperties {
   id: string;
   is_dark: boolean;
@@ -30,6 +39,13 @@ interface SarFeatureProperties {
   detected_at: string;
   matched_mmsi: number | null;
   matched_vessel_name: string | null;
+  matched_vessel_flag: string | null;
+  matched_vessel_type: string | null;
+  matched_vessel_risk_tier: string | null;
+  matched_vessel_last_lat: number | null;
+  matched_vessel_last_lon: number | null;
+  matched_vessel_last_seen: string | null;
+  matched_category: string | null;
 }
 
 /**
@@ -51,10 +67,24 @@ export function buildSarGeoJson(detections: any[], darkOnly: boolean) {
         detected_at: d.detectedAt,
         matched_mmsi: d.matchedMmsi,
         matched_vessel_name: d.matchedVesselName,
+        matched_vessel_flag: d.matchedVesselFlag,
+        matched_vessel_type: d.matchedVesselType,
+        matched_vessel_risk_tier: d.matchedVesselRiskTier,
+        matched_vessel_last_lat: d.matchedVesselLastLat,
+        matched_vessel_last_lon: d.matchedVesselLastLon,
+        matched_vessel_last_seen: d.matchedVesselLastSeen,
+        matched_category: d.matchedCategory,
       },
     }));
   return { type: 'FeatureCollection' as const, features };
 }
+
+const RISK_TIER_COLORS: Record<string, string> = {
+  green: 'text-green-400',
+  yellow: 'text-yellow-400',
+  red: 'text-red-400',
+  blacklisted: 'text-red-300',
+};
 
 /**
  * Renders SAR detection markers on a MapLibre map.
@@ -64,6 +94,7 @@ export function buildSarGeoJson(detections: any[], darkOnly: boolean) {
 export function SarDetectionLayer({ visible }: SarDetectionLayerProps) {
   const { current: map } = useMap();
   const darkShipsOnly = useVesselStore((s) => s.filters.darkShipsOnly);
+  const selectVessel = useVesselStore((s) => s.selectVessel);
   const [popup, setPopup] = useState<{
     lon: number;
     lat: number;
@@ -123,7 +154,25 @@ export function SarDetectionLayer({ visible }: SarDetectionLayerProps) {
     setPopup(null);
   }, []);
 
+  const handleGoToVessel = useCallback(() => {
+    if (!popup?.properties.matched_mmsi) return;
+    const mmsi = Number(popup.properties.matched_mmsi);
+    selectVessel(mmsi);
+    setPopup(null);
+
+    // Fly to vessel's last known position if available, otherwise stay at SAR location
+    if (map && popup.properties.matched_vessel_last_lat && popup.properties.matched_vessel_last_lon) {
+      map.flyTo({
+        center: [popup.properties.matched_vessel_last_lon, popup.properties.matched_vessel_last_lat],
+        zoom: Math.max(map.getZoom(), 10),
+        duration: 1500,
+      });
+    }
+  }, [popup, map, selectVessel]);
+
   if (!visible) return null;
+
+  const p = popup?.properties;
 
   return (
     <>
@@ -156,7 +205,7 @@ export function SarDetectionLayer({ visible }: SarDetectionLayerProps) {
         </Source>
       )}
 
-      {popup && (
+      {popup && p && (
         <Popup
           longitude={popup.lon}
           latitude={popup.lat}
@@ -165,34 +214,68 @@ export function SarDetectionLayer({ visible }: SarDetectionLayerProps) {
           closeOnClick={false}
           className="text-xs"
         >
-          <div className="bg-slate-800 text-white p-2 rounded text-xs">
-            <div className="font-bold mb-1">
-              {popup.properties.is_dark ? 'Dark Ship Detection' : 'SAR Detection'}
+          <div className="bg-slate-800 text-white p-2 rounded text-xs min-w-[200px]">
+            <div className="font-bold mb-1.5">
+              {p.is_dark ? 'Dark Ship Detection' : 'SAR Detection'}
             </div>
-            <div className="space-y-0.5">
-              {popup.properties.detected_at && (
-                <div>Detected: {formatTime(popup.properties.detected_at)}</div>
+
+            <div className="space-y-0.5 text-gray-400">
+              {p.detected_at && (
+                <div>Detected: <span className="text-gray-300">{formatTime(p.detected_at)}</span></div>
               )}
-              {popup.properties.length_m != null && (
-                <div>Est. Length: {popup.properties.length_m} m</div>
+              {p.length_m != null && (
+                <div>Est. length: <span className="text-gray-300">{p.length_m} m</span></div>
               )}
-              {popup.properties.matching_score != null && (
-                <div>Matching: {(popup.properties.matching_score * 100).toFixed(0)}%</div>
+              {p.matched_category && p.matched_category !== 'unmatched' && (
+                <div>Category: <span className="text-gray-300">{p.matched_category}</span></div>
               )}
-              {popup.properties.fishing_score != null && (
-                <div>Fishing: {(popup.properties.fishing_score * 100).toFixed(0)}%</div>
+              {p.matching_score != null && (
+                <div>Match confidence: <span className="text-gray-300">{(p.matching_score * 100).toFixed(0)}%</span></div>
               )}
-              {popup.properties.matched_mmsi != null && (
-                <div>
-                  Matched: {popup.properties.matched_vessel_name || popup.properties.matched_mmsi}
-                </div>
-              )}
-              {popup.properties.is_dark && (
-                <div className="mt-1 px-1.5 py-0.5 bg-red-900/40 border border-red-700/50 rounded text-red-300">
-                  No AIS transmission detected
-                </div>
+              {p.fishing_score != null && (
+                <div>Fishing score: <span className="text-gray-300">{(p.fishing_score * 100).toFixed(0)}%</span></div>
               )}
             </div>
+
+            {/* Matched vessel info */}
+            {p.matched_mmsi != null && (
+              <div className="mt-2 pt-2 border-t border-slate-700">
+                <div className="text-gray-500 text-[0.6rem] uppercase tracking-wider mb-1">Matched vessel</div>
+                <div className="space-y-0.5">
+                  <div className="text-gray-300 font-medium">
+                    {p.matched_vessel_name || `MMSI ${p.matched_mmsi}`}
+                    {p.matched_vessel_flag && (
+                      <span className="text-gray-500 ml-1">{p.matched_vessel_flag}</span>
+                    )}
+                  </div>
+                  {p.matched_vessel_type && (
+                    <div className="text-gray-500">{p.matched_vessel_type}</div>
+                  )}
+                  {p.matched_vessel_risk_tier && p.matched_vessel_risk_tier !== 'green' && (
+                    <div className={RISK_TIER_COLORS[p.matched_vessel_risk_tier] ?? 'text-gray-400'}>
+                      Risk: {p.matched_vessel_risk_tier}
+                    </div>
+                  )}
+                  {p.matched_vessel_last_seen && (
+                    <div className="text-gray-500">
+                      Last AIS: {timeAgo(p.matched_vessel_last_seen)}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleGoToVessel}
+                    className="mt-1.5 w-full text-center px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Open vessel →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {p.is_dark && (
+              <div className="mt-2 px-1.5 py-0.5 bg-red-900/40 border border-red-700/50 rounded text-red-300 text-center">
+                No AIS transmission detected
+              </div>
+            )}
           </div>
         </Popup>
       )}
