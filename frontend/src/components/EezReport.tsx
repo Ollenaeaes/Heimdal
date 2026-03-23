@@ -278,7 +278,7 @@ export function EezReportPanel({ onClose }: { onClose: () => void }) {
           className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 disabled:cursor-wait text-white text-xs font-medium rounded transition-colors"
           data-testid="eez-report-search"
         >
-          {isLoading ? 'Searching...' : 'Generate Report'}
+          {isLoading ? 'Building report, this can take up to a minute...' : 'Generate Report'}
         </button>
       </div>
 

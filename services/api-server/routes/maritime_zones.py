@@ -409,17 +409,18 @@ async def eez_sanctioned_report(
         if not confirmed_mmsis:
             mmsis = []
         else:
-            # Step 3b: Compute entry/exit times only for confirmed vessels.
-            # Now we only process positions for vessels we know are inside.
+            # Step 3b: Compute entry/exit times for confirmed vessels.
+            # Uses bbox for the in_zone check (not precise polygon) since
+            # we already confirmed these vessels are inside the EEZ.
+            # This is accurate enough for entry/exit approximation and
+            # avoids running ST_Intersects on tens of thousands of positions.
             presence_query = text(
                 "SELECT vp_pos.mmsi, vp_pos.timestamp, "
                 "ST_X(vp_pos.position::geometry) AS lon, "
                 "ST_Y(vp_pos.position::geometry) AS lat, "
-                "EXISTS("
-                "  SELECT 1 FROM maritime_zones mz "
-                "  WHERE mz.id = ANY(:zone_ids) "
-                "    AND ST_Intersects(vp_pos.position::geometry, "
-                "        ST_Simplify(mz.geometry::geometry, 0.01))"
+                "ST_Intersects("
+                "  vp_pos.position::geometry, "
+                "  ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
                 ") AS in_zone "
                 "FROM vessel_positions vp_pos "
                 "WHERE vp_pos.mmsi = ANY(:mmsis) "
@@ -428,9 +429,12 @@ async def eez_sanctioned_report(
             )
             presence_result = await session.execute(presence_query, {
                 "mmsis": confirmed_mmsis,
-                "zone_ids": zone_ids,
                 "start": t_start,
                 "end": t_end,
+                "west": zone_row["west"],
+                "south": zone_row["south"],
+                "east": zone_row["east"],
+                "north": zone_row["north"],
             })
             pos_rows = presence_result.mappings().all()
 
