@@ -393,6 +393,9 @@ async def eez_sanctioned_report(
         # for entry/exit approximation. Vessels are already polygon-confirmed
         # in step 2, so bbox is acceptable for timing approximation.
         presence_by_mmsi: dict[int, dict] = {}
+        # Sample 1 position per vessel per 3-hour bucket for entry/exit timing.
+        # Uses floor(extract(epoch)/10800) to bucket timestamps into 3h windows
+        # without the % operator (which SQLAlchemy text() interprets as param).
         presence_query = text(
             "SELECT sub.mmsi, sub.timestamp, sub.lon, sub.lat, "
             "ST_Intersects("
@@ -400,14 +403,16 @@ async def eez_sanctioned_report(
             "  ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
             ") AS in_zone "
             "FROM ("
-            "  SELECT DISTINCT ON (vp_pos.mmsi, date_trunc('day', vp_pos.timestamp)) "
+            "  SELECT DISTINCT ON (vp_pos.mmsi, "
+            "    floor(extract(epoch FROM vp_pos.timestamp) / 10800)) "
             "    vp_pos.mmsi, vp_pos.timestamp, "
             "    ST_X(vp_pos.position::geometry) AS lon, "
             "    ST_Y(vp_pos.position::geometry) AS lat "
             "  FROM vessel_positions vp_pos "
             "  WHERE vp_pos.mmsi = ANY(:mmsis) "
             "    AND vp_pos.timestamp BETWEEN :start AND :end "
-            "  ORDER BY vp_pos.mmsi, date_trunc('day', vp_pos.timestamp), "
+            "  ORDER BY vp_pos.mmsi, "
+            "    floor(extract(epoch FROM vp_pos.timestamp) / 10800), "
             "    vp_pos.timestamp DESC"
             ") sub "
             "ORDER BY sub.mmsi, sub.timestamp"
