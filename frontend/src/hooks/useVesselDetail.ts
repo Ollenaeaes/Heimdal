@@ -61,18 +61,34 @@ async function fetchVesselDetail(mmsi: number): Promise<VesselDetail> {
       ismManager: raw.technical_manager ?? undefined,
       beneficialOwner: raw.owner ?? undefined,
       managementEntries: (() => {
-        // ownership_data is JSONB from equasis upload
+        // ownership_data is JSONB — either Equasis format (array) or GFW format (object with owners)
         const od = raw.ownership_data;
         if (!od) return undefined;
-        const entries = typeof od === 'string' ? JSON.parse(od) : od;
-        if (!Array.isArray(entries) || entries.length === 0) return undefined;
-        return entries.map((e: Record<string, unknown>) => ({
-          role: String(e.role ?? ''),
-          companyName: String(e.company_name ?? ''),
-          companyImo: e.company_imo ? String(e.company_imo) : undefined,
-          address: e.address ? String(e.address) : undefined,
-          dateOfEffect: e.date_of_effect ? String(e.date_of_effect) : undefined,
-        }));
+        const parsed = typeof od === 'string' ? JSON.parse(od) : od;
+
+        // Equasis format: array of {role, company_name, company_imo, address, date_of_effect}
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((e: Record<string, unknown>) => ({
+            role: String(e.role ?? ''),
+            companyName: String(e.company_name ?? ''),
+            companyImo: e.company_imo ? String(e.company_imo) : undefined,
+            address: e.address ? String(e.address) : undefined,
+            dateOfEffect: e.date_of_effect ? String(e.date_of_effect) : undefined,
+          }));
+        }
+
+        // GFW format: {owners: [{name, country, role, fleet_size, incorporated_date}], ...}
+        if (parsed.owners && Array.isArray(parsed.owners) && parsed.owners.length > 0) {
+          return parsed.owners.map((e: Record<string, unknown>) => ({
+            role: String(e.role === 'owner' ? 'Registered owner' : e.role === 'operator' ? 'Operator' : e.role ?? ''),
+            companyName: String(e.name ?? ''),
+            companyImo: undefined,
+            address: e.country ? String(e.country) : undefined,
+            dateOfEffect: e.incorporated_date ? String(e.incorporated_date) : undefined,
+          }));
+        }
+
+        return undefined;
       })(),
       iacsClass: raw.iacs ? {
         classSociety: raw.iacs.class_society,

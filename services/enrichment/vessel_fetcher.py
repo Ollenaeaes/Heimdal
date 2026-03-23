@@ -733,6 +733,56 @@ async def fetch_vessel_by_imo(
     return parsed
 
 
+async def _fetch_vessel_with_raw(
+    client: Any,
+    mmsi: int,
+    *,
+    imo: int | None = None,
+    redis_client: Any = None,
+    cache_ttl_hours: int | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Fetch vessel identity and return both parsed identity and raw GFW entry.
+
+    Tries MMSI first, then IMO. Returns (parsed_identity, raw_entry) tuple.
+    """
+    for query_val, id_type in [(str(mmsi), "mmsi")] + ([(str(imo), "imo")] if imo else []):
+        cache_key = _cache_key(query_val, id_type)
+
+        # Check parsed cache
+        cached = await _get_cached(redis_client, cache_key)
+        if cached is not None:
+            # No raw entry available from cache — return None for raw
+            return cached, None
+
+        # Query GFW API
+        try:
+            data = await client.get(
+                VESSEL_SEARCH_ENDPOINT,
+                params={
+                    "query": query_val,
+                    "datasets[0]": VESSEL_DATASET,
+                    "limit": 1,
+                },
+            )
+        except Exception:
+            logger.exception("Error fetching vessel data for %s %s", id_type, query_val)
+            continue
+
+        entries = data.get("entries", [])
+        if not entries:
+            continue
+
+        raw_entry = entries[0]
+        parsed = parse_vessel_identity(raw_entry)
+        if "mmsi" not in parsed:
+            parsed["mmsi"] = mmsi
+
+        await _set_cached(redis_client, cache_key, parsed, cache_ttl_hours)
+        return parsed, raw_entry
+
+    return None, None
+
+
 async def fetch_and_update_vessel_profile(
     client: Any,
     session: Any,
@@ -771,19 +821,10 @@ async def fetch_and_update_vessel_profile(
         from shared.db.repositories import upsert_vessel_profile
         _upsert_fn = upsert_vessel_profile
 
-    # Try by MMSI first
-    identity = await fetch_vessel_by_mmsi(
-        client, mmsi, redis_client=redis_client, cache_ttl_hours=cache_ttl_hours
+    # Try by MMSI first — fetch raw entry alongside parsed identity
+    identity, raw_entry_fetched = await _fetch_vessel_with_raw(
+        client, mmsi, imo=imo, redis_client=redis_client, cache_ttl_hours=cache_ttl_hours
     )
-
-    # Fallback to IMO if no result
-    if identity is None and imo:
-        identity = await fetch_vessel_by_imo(
-            client, imo, redis_client=redis_client, cache_ttl_hours=cache_ttl_hours
-        )
-        if identity is not None:
-            # Ensure MMSI is set for the upsert
-            identity["mmsi"] = mmsi
 
     if identity is None:
         return None
@@ -808,9 +849,8 @@ async def fetch_and_update_vessel_profile(
     except Exception:
         logger.debug("Could not fetch manual enrichments for MMSI %d", mmsi)
 
-    # Build the raw GFW entry for classification/insurance extraction
-    # We need the original GFW response entry, not parsed identity
-    raw_entry = _raw_entry or {}
+    # Build the raw GFW entry for classification/insurance/ownership extraction
+    raw_entry = _raw_entry or raw_entry_fetched or {}
 
     # Build classification, insurance, and ownership data
     classification_data = build_classification_data(raw_entry, existing_profile)
