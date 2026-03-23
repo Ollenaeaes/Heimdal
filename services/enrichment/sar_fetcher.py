@@ -156,7 +156,6 @@ async def fetch_sar_detections(
             "temporal-resolution": "HOURLY",
             "format": "JSON",
             "group-by": "VESSEL_ID",
-            "spatial-aggregation": "true",
         }
 
         try:
@@ -178,8 +177,8 @@ async def fetch_sar_detections(
 
             aoi_name = aoi.get("name", "")
             parsed = [parse_detection(entry, aoi_name) for entry in entries]
-            # Filter out detections without a valid ID
-            parsed = [d for d in parsed if d["gfw_detection_id"]]
+            # Filter out detections without a valid ID or missing position
+            parsed = [d for d in parsed if d["gfw_detection_id"] and d["lat"] is not None and d["lon"] is not None]
             all_detections.extend(parsed)
 
             logger.info(

@@ -58,6 +58,8 @@ SAMPLE_VESSEL_MATCHED = {
     "shipName": "BULL",
     "vesselId": "a30abd69a-af79-add7-fc44-2c394b098667",
     "vesselType": "OTHER",
+    "lat": 65.5,
+    "lon": 10.2,
 }
 
 # Dark vessel (no MMSI)
@@ -74,6 +76,8 @@ SAMPLE_VESSEL_DARK = {
     "shipName": "",
     "vesselId": "dark-vessel-xyz-456",
     "vesselType": "",
+    "lat": 66.1,
+    "lon": 11.5,
 }
 
 # Cargo vessel with full details
