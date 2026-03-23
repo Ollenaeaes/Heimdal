@@ -859,7 +859,7 @@ async def update_vessel_profile_from_equasis(
 
     # JSONB fields (not sanitized as text)
     if equasis_data.get("ownership_data") is not None:
-        set_clauses.append("ownership_data = :ownership_data::jsonb")
+        set_clauses.append("ownership_data = CAST(:ownership_data AS jsonb)")
         params["ownership_data"] = equasis_data["ownership_data"]
 
     if not set_clauses:
@@ -932,7 +932,7 @@ async def upsert_fleet_vessel(
         # Update with any new data from the fleet list
         mmsi = existing["mmsi"]
         update_fields = {}
-        for field in ["ship_name", "gross_tonnage", "flag_country", "build_year", "class_society", "ship_type_text"]:
+        for field in ["ship_name", "gross_tonnage", "flag_country", "build_year", "class_society", "ship_type_text", "registered_owner", "technical_manager", "operator", "group_owner"]:
             value = data.get(field)
             if value is not None:
                 value = _sanitize_profile_field(field, value)
@@ -973,15 +973,15 @@ async def upsert_fleet_vessel(
         "pi_tier": None,
         "pi_details": None,
         "owner": data.get("registered_owner"),
-        "operator": None,
+        "operator": data.get("operator"),
         "insurer": None,
         "class_society": data.get("class_society"),
         "build_year": data.get("build_year"),
         "dwt": None,
         "gross_tonnage": data.get("gross_tonnage"),
-        "group_owner": None,
+        "group_owner": data.get("group_owner"),
         "registered_owner": data.get("registered_owner"),
-        "technical_manager": None,
+        "technical_manager": data.get("technical_manager"),
         "ownership_data": None,
         "classification_data": None,
         "insurance_data": None,

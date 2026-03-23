@@ -272,16 +272,28 @@ async def _handle_company_folder(request: Request, parsed: dict, mmsi: Optional[
             if not imo:
                 continue
 
-            # Prepare data for upsert
-            upsert_data = {
-                "ship_name": vessel_data.get("ship_name"),
+            # Prepare data for upsert — map company to correct role
+            acting_as = (vessel_data.get("acting_as") or "").lower()
+            upsert_data: dict = {
+                "ship_name": (vessel_data.get("ship_name") or "").replace("\n", " ").strip() or None,
                 "gross_tonnage": vessel_data.get("gross_tonnage"),
-                "ship_type_text": vessel_data.get("ship_type"),
+                "ship_type_text": (vessel_data.get("ship_type") or "").replace("\n", " ").strip() or None,
                 "flag_country": normalize_flag(vessel_data.get("current_flag")),
                 "build_year": vessel_data.get("year_of_build"),
                 "class_society": vessel_data.get("current_class"),
-                "registered_owner": company_name,
             }
+            # Map the company to the correct ownership role
+            if "registered owner" in acting_as:
+                upsert_data["registered_owner"] = company_name
+            elif "ism manager" in acting_as:
+                upsert_data["technical_manager"] = company_name
+            elif "ship manager" in acting_as:
+                upsert_data["operator"] = company_name
+            elif "commercial manager" in acting_as or "group" in acting_as:
+                upsert_data["group_owner"] = company_name
+            else:
+                # Default: store as registered_owner for backward compat
+                upsert_data["registered_owner"] = company_name
 
             vessel_mmsi, was_created = await upsert_fleet_vessel(session, imo, upsert_data)
             fleet_mmsis.append(vessel_mmsi)
