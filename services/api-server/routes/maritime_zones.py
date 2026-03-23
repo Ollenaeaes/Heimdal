@@ -388,35 +388,43 @@ async def eez_sanctioned_report(
                 "vessels": [],
             }
 
-        # Step 3: Compute entry/exit times for confirmed vessels.
-        # Uses a CTE to simplify the EEZ polygon once, then checks each
-        # position against it. Since we only have a small number of confirmed
-        # vessels (typically <30), the position count is manageable.
+        # Step 3: Compute approximate presence times for confirmed vessels.
+        # Uses sampled positions (1 per vessel per 6 hours) with bbox check
+        # for entry/exit approximation. Vessels are already polygon-confirmed
+        # in step 2, so bbox is acceptable for timing approximation.
         presence_by_mmsi: dict[int, dict] = {}
         presence_query = text(
-            "WITH eez AS ("
-            "  SELECT ST_Simplify(geometry::geometry, 0.01) AS geom "
-            "  FROM maritime_zones "
-            "  WHERE zone_type = 'eez' AND iso_sov = :iso_sov"
-            ") "
-            "SELECT vp_pos.mmsi, vp_pos.timestamp, "
-            "ST_X(vp_pos.position::geometry) AS lon, "
-            "ST_Y(vp_pos.position::geometry) AS lat, "
-            "EXISTS("
-            "  SELECT 1 FROM eez "
-            "  WHERE ST_Intersects(vp_pos.position::geometry, eez.geom)"
+            "SELECT sub.mmsi, sub.timestamp, sub.lon, sub.lat, "
+            "ST_Intersects("
+            "  ST_SetSRID(ST_MakePoint(sub.lon, sub.lat), 4326), "
+            "  ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
             ") AS in_zone "
-            "FROM vessel_positions vp_pos "
-            "WHERE vp_pos.mmsi = ANY(:mmsis) "
-            "  AND vp_pos.timestamp BETWEEN :start AND :end "
-            "ORDER BY vp_pos.mmsi, vp_pos.timestamp"
+            "FROM ("
+            "  SELECT DISTINCT ON (vp_pos.mmsi, "
+            "    date_trunc('hour', vp_pos.timestamp) - "
+            "    (extract(hour FROM vp_pos.timestamp)::int %% 6) * interval '1 hour') "
+            "    vp_pos.mmsi, vp_pos.timestamp, "
+            "    ST_X(vp_pos.position::geometry) AS lon, "
+            "    ST_Y(vp_pos.position::geometry) AS lat "
+            "  FROM vessel_positions vp_pos "
+            "  WHERE vp_pos.mmsi = ANY(:mmsis) "
+            "    AND vp_pos.timestamp BETWEEN :start AND :end "
+            "  ORDER BY vp_pos.mmsi, "
+            "    date_trunc('hour', vp_pos.timestamp) - "
+            "    (extract(hour FROM vp_pos.timestamp)::int %% 6) * interval '1 hour', "
+            "    vp_pos.timestamp DESC"
+            ") sub "
+            "ORDER BY sub.mmsi, sub.timestamp"
         )
         try:
             presence_result = await session.execute(presence_query, {
                 "mmsis": mmsis,
-                "iso_sov": iso_sov.upper(),
                 "start": t_start,
                 "end": t_end,
+                "west": zone_row["west"],
+                "south": zone_row["south"],
+                "east": zone_row["east"],
+                "north": zone_row["north"],
             })
             pos_rows = presence_result.mappings().all()
 
