@@ -393,14 +393,21 @@ async def eez_sanctioned_report(
         # for entry/exit approximation. Vessels are already polygon-confirmed
         # in step 2, so bbox is acceptable for timing approximation.
         presence_by_mmsi: dict[int, dict] = {}
-        # Sample 1 position per vessel per 3-hour bucket for entry/exit timing.
-        # Uses floor(extract(epoch)/10800) to bucket timestamps into 3h windows
-        # without the % operator (which SQLAlchemy text() interprets as param).
+        # Sample 1 position per vessel per 3-hour bucket, then check each
+        # sampled position against the actual simplified EEZ polygon (not bbox).
+        # With ~20 confirmed vessels × ~56 samples per week = ~1,120 polygon
+        # checks — fast enough with the simplified geometry.
         presence_query = text(
+            "WITH eez AS ("
+            "  SELECT ST_Simplify(geometry::geometry, 0.01) AS geom "
+            "  FROM maritime_zones "
+            "  WHERE zone_type = 'eez' AND iso_sov = :iso_sov"
+            ") "
             "SELECT sub.mmsi, sub.timestamp, sub.lon, sub.lat, "
-            "ST_Intersects("
-            "  ST_SetSRID(ST_MakePoint(sub.lon, sub.lat), 4326), "
-            "  ST_MakeEnvelope(:west, :south, :east, :north, 4326)"
+            "EXISTS("
+            "  SELECT 1 FROM eez "
+            "  WHERE ST_Intersects("
+            "    ST_SetSRID(ST_MakePoint(sub.lon, sub.lat), 4326), eez.geom)"
             ") AS in_zone "
             "FROM ("
             "  SELECT DISTINCT ON (vp_pos.mmsi, "
@@ -420,12 +427,9 @@ async def eez_sanctioned_report(
         try:
             presence_result = await session.execute(presence_query, {
                 "mmsis": mmsis,
+                "iso_sov": iso_sov.upper(),
                 "start": t_start,
                 "end": t_end,
-                "west": zone_row["west"],
-                "south": zone_row["south"],
-                "east": zone_row["east"],
-                "north": zone_row["north"],
             })
             pos_rows = presence_result.mappings().all()
 
