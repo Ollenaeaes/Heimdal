@@ -377,58 +377,80 @@ async def eez_sanctioned_report(
         )
         zone_ids = [r["id"] for r in zone_ids_result.mappings().all()]
 
-        # Step 3: Compute entry/exit times using polygon check.
-        # For each position, ST_Intersects against a simplified EEZ polygon
-        # (0.01° tolerance ≈ 1km — sufficient for EEZ boundaries which are
-        # far from coastlines). This avoids timeouts on complex geometries
-        # like Norway (94k vertices → ~2k after simplification).
-        presence_query = text(
-            "SELECT vp_pos.mmsi, vp_pos.timestamp, "
-            "ST_X(vp_pos.position::geometry) AS lon, "
-            "ST_Y(vp_pos.position::geometry) AS lat, "
-            "EXISTS("
-            "  SELECT 1 FROM maritime_zones mz "
-            "  WHERE mz.id = ANY(:zone_ids) "
-            "    AND ST_Intersects(vp_pos.position::geometry, "
-            "        ST_Simplify(mz.geometry::geometry, 0.01))"
-            ") AS in_zone "
-            "FROM vessel_positions vp_pos "
-            "WHERE vp_pos.mmsi = ANY(:mmsis) "
-            "  AND vp_pos.timestamp BETWEEN :start AND :end "
-            "ORDER BY vp_pos.mmsi, vp_pos.timestamp"
+        # Step 3a: Fast confirmation — which bbox candidates actually have
+        # at least one position inside the precise EEZ polygon?
+        # Uses ST_Simplify (0.01° ≈ 1km) to reduce vertex count on complex
+        # geometries (e.g. Norway: 94k → ~2k vertices). No false positives
+        # at EEZ scale since boundaries are far from coastlines.
+        # Uses LATERAL + LIMIT 1 so Postgres stops scanning positions as soon
+        # as one match is found per vessel — avoids checking all 98k+ rows.
+        confirm_query = text(
+            "SELECT DISTINCT candidate.mmsi "
+            "FROM unnest(:mmsis::int[]) AS candidate(mmsi) "
+            "CROSS JOIN LATERAL ("
+            "  SELECT 1 FROM vessel_positions vp "
+            "  CROSS JOIN maritime_zones mz "
+            "  WHERE vp.mmsi = candidate.mmsi "
+            "    AND vp.timestamp BETWEEN :start AND :end "
+            "    AND mz.id = ANY(:zone_ids) "
+            "    AND ST_Intersects(vp.position::geometry, "
+            "        ST_Simplify(mz.geometry::geometry, 0.01)) "
+            "  LIMIT 1"
+            ") AS hit"
         )
-        presence_result = await session.execute(presence_query, {
+        confirm_result = await session.execute(confirm_query, {
             "mmsis": mmsis,
             "zone_ids": zone_ids,
             "start": t_start,
             "end": t_end,
         })
-        pos_rows = presence_result.mappings().all()
+        confirmed_mmsis = [r["mmsi"] for r in confirm_result.mappings().all()]
 
-        # Group positions by MMSI and compute presence intervals.
-        # Only keep vessels that actually had at least one position inside the EEZ polygon.
-        presence_by_mmsi: dict[int, dict] = {}
-        confirmed_mmsis: list[int] = []
-        current_mmsi = None
-        positions: list = []
+        if not confirmed_mmsis:
+            mmsis = []
+        else:
+            # Step 3b: Compute entry/exit times only for confirmed vessels.
+            # Now we only process positions for vessels we know are inside.
+            presence_query = text(
+                "SELECT vp_pos.mmsi, vp_pos.timestamp, "
+                "ST_X(vp_pos.position::geometry) AS lon, "
+                "ST_Y(vp_pos.position::geometry) AS lat, "
+                "EXISTS("
+                "  SELECT 1 FROM maritime_zones mz "
+                "  WHERE mz.id = ANY(:zone_ids) "
+                "    AND ST_Intersects(vp_pos.position::geometry, "
+                "        ST_Simplify(mz.geometry::geometry, 0.01))"
+                ") AS in_zone "
+                "FROM vessel_positions vp_pos "
+                "WHERE vp_pos.mmsi = ANY(:mmsis) "
+                "  AND vp_pos.timestamp BETWEEN :start AND :end "
+                "ORDER BY vp_pos.mmsi, vp_pos.timestamp"
+            )
+            presence_result = await session.execute(presence_query, {
+                "mmsis": confirmed_mmsis,
+                "zone_ids": zone_ids,
+                "start": t_start,
+                "end": t_end,
+            })
+            pos_rows = presence_result.mappings().all()
 
-        for pr in pos_rows:
-            if pr["mmsi"] != current_mmsi:
-                if current_mmsi is not None:
-                    if any(p["in_zone"] for p in positions):
-                        confirmed_mmsis.append(current_mmsi)
+            # Group positions by MMSI and compute presence intervals
+            presence_by_mmsi: dict[int, dict] = {}
+            current_mmsi = None
+            positions: list = []
+
+            for pr in pos_rows:
+                if pr["mmsi"] != current_mmsi:
+                    if current_mmsi is not None:
                         presence_by_mmsi[current_mmsi] = _compute_presence(positions)
-                current_mmsi = pr["mmsi"]
-                positions = []
-            positions.append(pr)
+                    current_mmsi = pr["mmsi"]
+                    positions = []
+                positions.append(pr)
 
-        if current_mmsi is not None:
-            if any(p["in_zone"] for p in positions):
-                confirmed_mmsis.append(current_mmsi)
+            if current_mmsi is not None:
                 presence_by_mmsi[current_mmsi] = _compute_presence(positions)
 
-        # Use only confirmed MMSIs (actually inside the EEZ polygon, not just bbox)
-        mmsis = confirmed_mmsis
+            mmsis = confirmed_mmsis
 
         if not mmsis:
             return {
