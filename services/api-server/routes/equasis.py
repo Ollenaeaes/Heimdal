@@ -194,6 +194,19 @@ async def _handle_ship_folder(request: Request, parsed: dict, mmsi: Optional[int
         if p_and_i and isinstance(p_and_i, list):
             insurer = p_and_i[0].get("insurer")
 
+        # Build structured ownership_data JSONB from full management entries
+        ownership_entries = []
+        for entry in management:
+            ownership_entries.append({
+                "role": (entry.get("role") or "").strip(),
+                "company_name": entry.get("company_name"),
+                "company_imo": entry.get("company_imo"),
+                "address": entry.get("address"),
+                "date_of_effect": entry.get("date_of_effect"),
+            })
+
+        ownership_data_json = json.dumps(ownership_entries) if ownership_entries else None
+
         update_data = {
             "registered_owner": registered_owner,
             "technical_manager": technical_manager,
@@ -207,6 +220,7 @@ async def _handle_ship_folder(request: Request, parsed: dict, mmsi: Optional[int
             "ship_name": ship_particulars.get("name"),
             "call_sign": ship_particulars.get("call_sign"),
             "ship_type_text": ship_particulars.get("ship_type"),
+            "ownership_data": ownership_data_json,
         }
         await update_vessel_profile_from_equasis(session, resolved_mmsi, update_data)
 

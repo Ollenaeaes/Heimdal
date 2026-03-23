@@ -379,6 +379,29 @@ async def get_vessel(mmsi: int):
         pos_row = pos_result.mappings().first()
         last_pos = dict(pos_row) if pos_row else {}
 
+        # IACS class data (join by IMO)
+        iacs_data = None
+        vessel_imo = profile.get("imo")
+        if vessel_imo:
+            iacs_result = await session.execute(
+                text(
+                    "SELECT class_society, status, date_of_survey, "
+                    "date_of_next_survey, date_of_latest_status, reason "
+                    "FROM iacs_vessels_current WHERE imo = :imo"
+                ),
+                {"imo": vessel_imo},
+            )
+            iacs_row = iacs_result.mappings().first()
+            if iacs_row:
+                iacs_data = {
+                    "class_society": iacs_row["class_society"],
+                    "status": iacs_row["status"],
+                    "date_of_survey": iacs_row["date_of_survey"].isoformat() if iacs_row["date_of_survey"] else None,
+                    "date_of_next_survey": iacs_row["date_of_next_survey"].isoformat() if iacs_row["date_of_next_survey"] else None,
+                    "date_of_latest_status": iacs_row["date_of_latest_status"].isoformat() if iacs_row["date_of_latest_status"] else None,
+                    "reason": iacs_row["reason"],
+                }
+
         # Equasis data
         equasis_latest_result = await session.execute(
             text(
@@ -422,6 +445,7 @@ async def get_vessel(mmsi: int):
         "active_anomaly_count": active_anomaly_count,
         "anomalies": anomalies,
         "latest_enrichment": latest_enrichment,
+        "iacs": iacs_data,
         "equasis": {
             "latest": dict(equasis_latest_row) if equasis_latest_row else None,
             "upload_count": equasis_count,

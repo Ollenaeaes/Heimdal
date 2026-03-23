@@ -12,11 +12,28 @@ export interface SanctionsMatch {
   entityUrl?: string;
 }
 
+export interface ManagementEntry {
+  role: string;
+  companyName: string;
+  companyImo?: string;
+  address?: string;
+  dateOfEffect?: string;
+}
+
+export interface IacsClassData {
+  classSociety: string;
+  status?: string;
+  dateOfSurvey?: string;
+  dateOfNextSurvey?: string;
+}
+
 export interface OwnershipData {
   registeredOwner?: string;
   commercialManager?: string;
   ismManager?: string;
   beneficialOwner?: string;
+  managementEntries?: ManagementEntry[];
+  iacsClass?: IacsClassData;
 }
 
 export interface ManualEnrichment {

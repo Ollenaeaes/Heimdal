@@ -857,6 +857,11 @@ async def update_vessel_profile_from_equasis(
                 set_clauses.append(f"{col_name} = :{field_name}")
                 params[field_name] = value
 
+    # JSONB fields (not sanitized as text)
+    if equasis_data.get("ownership_data") is not None:
+        set_clauses.append("ownership_data = :ownership_data::jsonb")
+        params["ownership_data"] = equasis_data["ownership_data"]
+
     if not set_clauses:
         return
 

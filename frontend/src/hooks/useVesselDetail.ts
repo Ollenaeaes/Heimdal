@@ -60,6 +60,26 @@ async function fetchVesselDetail(mmsi: number): Promise<VesselDetail> {
       commercialManager: raw.group_owner ?? undefined,
       ismManager: raw.technical_manager ?? undefined,
       beneficialOwner: raw.owner ?? undefined,
+      managementEntries: (() => {
+        // ownership_data is JSONB from equasis upload
+        const od = raw.ownership_data;
+        if (!od) return undefined;
+        const entries = typeof od === 'string' ? JSON.parse(od) : od;
+        if (!Array.isArray(entries) || entries.length === 0) return undefined;
+        return entries.map((e: Record<string, unknown>) => ({
+          role: String(e.role ?? ''),
+          companyName: String(e.company_name ?? ''),
+          companyImo: e.company_imo ? String(e.company_imo) : undefined,
+          address: e.address ? String(e.address) : undefined,
+          dateOfEffect: e.date_of_effect ? String(e.date_of_effect) : undefined,
+        }));
+      })(),
+      iacsClass: raw.iacs ? {
+        classSociety: raw.iacs.class_society,
+        status: raw.iacs.status ?? undefined,
+        dateOfSurvey: raw.iacs.date_of_survey ?? undefined,
+        dateOfNextSurvey: raw.iacs.date_of_next_survey ?? undefined,
+      } : undefined,
     },
     manualEnrichment: raw.latest_enrichment ?? undefined,
     manualEnrichments: [],
