@@ -285,9 +285,12 @@ async def eez_sanctioned_report(
     if t_end - t_start > max_range:
         t_start = t_end - max_range
 
+    import time as _time
+
     session_factory = get_session()
     async with session_factory() as session:
         await session.execute(text("SET LOCAL statement_timeout = '90s'"))
+        _t0 = _time.monotonic()
 
         # Step 0: Get combined bbox across ALL EEZ zones for this country
         # Countries can have multiple zones (e.g., Norway has mainland + joint regime areas)
@@ -325,6 +328,7 @@ async def eez_sanctioned_report(
             )
         )
         sanctioned_mmsis = [r["mmsi"] for r in sanctioned_q.mappings().all()]
+        logger.info("EEZ step1 sanctioned: %d vessels in %.1fms", len(sanctioned_mmsis), (_time.monotonic()-_t0)*1000)
 
         if not sanctioned_mmsis:
             mmsis: list[int] = []
@@ -404,6 +408,8 @@ async def eez_sanctioned_report(
                 logger.warning("EEZ report bbox query failed: %s", exc)
                 # Continue with what we have from the confirm query
 
+        logger.info("EEZ step2 confirmed: %d vessels in %.1fms", len(mmsis), (_time.monotonic()-_t0)*1000)
+
         if not mmsis:
             return {
                 "zone": {
@@ -472,6 +478,8 @@ async def eez_sanctioned_report(
                 "total_sanctioned_vessels": 0,
                 "vessels": [],
             }
+
+        logger.info("EEZ step3 presence done in %.1fms", (_time.monotonic()-_t0)*1000)
 
         # Step 4: Get vessel details for confirmed MMSIs
         detail_query = text(
