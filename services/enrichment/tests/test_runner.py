@@ -50,8 +50,44 @@ def mock_redis():
 
 @pytest.fixture
 def mock_session():
-    """Create a mock async DB session."""
+    """Create a mock async DB session.
+
+    enrich_batch queries the DB for elevated/stale vessels. run_cycle
+    queries for vessel profiles with risk_tier. We inspect the SQL
+    to return appropriate row shapes.
+    """
     session = AsyncMock()
+
+    def _make_result(*args, **kwargs):
+        result = MagicMock()
+        sql = str(args[0]) if args else ""
+        # Extract MMSIs from bound params if available
+        params = kwargs.get("parameters") or (args[1] if len(args) > 1 else {})
+        bound_mmsis = params.get("mmsis", [273456789]) if isinstance(params, dict) else [273456789]
+
+        if "SELECT mmsi, risk_tier" in sql:
+            # run_cycle: get_all_enrichable_mmsis — returns (mmsi, tier)
+            result.fetchall.return_value = [(m, "yellow") for m in bound_mmsis]
+        elif "SELECT mmsi FROM vessel_profiles" in sql and "risk_tier IN" in sql:
+            # enrich_batch step 2: yellow+ vessels for events
+            result.fetchall.return_value = [(m,) for m in bound_mmsis]
+        elif "enriched_at" in sql:
+            # enrich_batch step 3: stale vessels for identity
+            result.fetchall.return_value = [(m,) for m in bound_mmsis]
+        elif "GROUP BY risk_tier" in sql:
+            # _log_enrichment_coverage — return empty to skip logging
+            result.fetchall.return_value = []
+        elif "SELECT mmsi FROM vessel_profiles" in sql:
+            # get_all_mmsis
+            result.fetchall.return_value = [(m,) for m in bound_mmsis]
+        else:
+            result.fetchall.return_value = []
+        # For queries using mappings()
+        result.mappings.return_value.first.return_value = None
+        result.mappings.return_value.all.return_value = []
+        return result
+
+    session.execute = AsyncMock(side_effect=_make_result)
     return session
 
 
@@ -411,14 +447,30 @@ class TestRunCycle:
         self, mock_gfw_client, mock_session, mock_redis
     ):
         """Cycle queries DB for vessels and filters by enrichment state."""
-        # Setup: 3 vessels, 2 unenriched
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [
+        all_vessels = [
             (273456789, "green"),
             (351123456, "green"),
             (211234567, "green"),
         ]
-        mock_session.execute.return_value = mock_result
+
+        def _result(*args, **kwargs):
+            r = MagicMock()
+            sql = str(args[0]) if args else ""
+            if "SELECT mmsi, risk_tier" in sql:
+                r.fetchall.return_value = all_vessels
+            elif "risk_tier IN" in sql:
+                # No yellow+ vessels — events should be skipped for green
+                r.fetchall.return_value = []
+            elif "enriched_at" in sql:
+                params = kwargs.get("parameters") or (args[1] if len(args) > 1 else {})
+                batch = params.get("mmsis", []) if isinstance(params, dict) else []
+                r.fetchall.return_value = [(m,) for m in batch]
+            else:
+                r.fetchall.return_value = []
+            r.mappings.return_value.first.return_value = None
+            r.mappings.return_value.all.return_value = []
+            return r
+        mock_session.execute = AsyncMock(side_effect=_result)
 
         # MMSI 351123456 was recently enriched
         async def hget_side_effect(key, mmsi_str):
@@ -454,9 +506,7 @@ class TestRunCycle:
         self, mock_gfw_client, mock_session, mock_redis
     ):
         """last_enriched_at is updated after enrichment via Redis hash."""
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [(273456789, "green")]
-        mock_session.execute.return_value = mock_result
+        # mock_session fixture handles all queries — default returns 273456789
 
         async def mock_events(*a, **kw):
             return 3
@@ -483,9 +533,7 @@ class TestRunCycle:
         self, mock_gfw_client, mock_session, mock_redis
     ):
         """enrichment_complete event is published to Redis after cycle."""
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [(273456789, "green")]
-        mock_session.execute.return_value = mock_result
+        # mock_session fixture handles all queries — default returns 273456789
 
         async def mock_events(*a, **kw):
             return 5
@@ -513,9 +561,13 @@ class TestRunCycle:
         self, mock_gfw_client, mock_session, mock_redis
     ):
         """When no vessels need enrichment, cycle completes with zero counts."""
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_session.execute.return_value = mock_result
+        def _empty_result(*args, **kwargs):
+            r = MagicMock()
+            r.fetchall.return_value = []
+            r.mappings.return_value.first.return_value = None
+            r.mappings.return_value.all.return_value = []
+            return r
+        mock_session.execute = AsyncMock(side_effect=_empty_result)
 
         result = await run_cycle(
             gfw_client=mock_gfw_client,
@@ -533,11 +585,33 @@ class TestRunCycle:
         self, mock_gfw_client, mock_session, mock_redis
     ):
         """Vessels are processed in batches of the configured size."""
-        # Create 5 vessels with batch size of 2
-        mmsis = [(i, "green") for i in range(100000000, 100000005)]
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = mmsis
-        mock_session.execute.return_value = mock_result
+        # Create 5 yellow vessels with batch size of 2
+        test_mmsis = list(range(100000000, 100000005))
+        call_idx = [0]
+
+        def _batch_result(*args, **kwargs):
+            r = MagicMock()
+            sql = str(args[0]) if args else ""
+            if "SELECT mmsi, risk_tier" in sql:
+                # Initial query: return all 5 as yellow
+                r.fetchall.return_value = [(m, "yellow") for m in test_mmsis]
+            elif "risk_tier IN" in sql:
+                # Events filter: return all queried MMSIs as yellow+
+                params = kwargs.get("parameters") or (args[1] if len(args) > 1 else {})
+                batch = params.get("mmsis", []) if isinstance(params, dict) else []
+                r.fetchall.return_value = [(m,) for m in batch]
+            elif "enriched_at" in sql:
+                # Stale filter: return all queried as stale
+                params = kwargs.get("parameters") or (args[1] if len(args) > 1 else {})
+                batch = params.get("mmsis", []) if isinstance(params, dict) else []
+                r.fetchall.return_value = [(m,) for m in batch]
+            else:
+                r.fetchall.return_value = []
+            r.mappings.return_value.first.return_value = None
+            r.mappings.return_value.all.return_value = []
+            return r
+
+        mock_session.execute = AsyncMock(side_effect=_batch_result)
 
         events_calls = []
 

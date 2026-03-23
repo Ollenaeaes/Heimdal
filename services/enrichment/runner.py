@@ -402,30 +402,70 @@ async def enrich_batch(
             except Exception:
                 logger.exception("GFW SAR pipeline failed for batch")
 
-        # Step 2: GFW Events
+        # Step 2: GFW Events (only for yellow+ risk vessels — STS transfers, encounters, etc.)
         if not gfw_quota_hit:
-            try:
-                count = await _events_fn(gfw_client, session, mmsis, redis_client=redis_client)
-                gfw_events_count = count
-                logger.info("GFW Events: fetched %d events for %d vessels", count, len(mmsis))
-            except GFWQuotaExceeded as e:
-                logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
-                gfw_quota_hit = True
-            except Exception:
-                logger.exception("GFW Events pipeline failed for batch")
+            from sqlalchemy import text as _text_ev
 
-        # Step 3: GFW Vessel Identity
-        if not gfw_quota_hit:
-            for mmsi in mmsis:
+            ev_result = await session.execute(
+                _text_ev("""
+                    SELECT mmsi FROM vessel_profiles
+                    WHERE mmsi = ANY(:mmsis)
+                      AND risk_tier IN ('yellow', 'red', 'blacklisted')
+                """),
+                {"mmsis": mmsis},
+            )
+            elevated_mmsis = [row[0] for row in ev_result.fetchall()]
+
+            if elevated_mmsis:
+                logger.info(
+                    "GFW Events: fetching for %d/%d yellow+ vessels",
+                    len(elevated_mmsis), len(mmsis),
+                )
                 try:
-                    await _vessel_fn(
-                        gfw_client, session, mmsi, redis_client=redis_client
-                    )
+                    count = await _events_fn(gfw_client, session, elevated_mmsis, redis_client=redis_client)
+                    gfw_events_count = count
+                    logger.info("GFW Events: fetched %d events for %d vessels", count, len(elevated_mmsis))
                 except GFWQuotaExceeded as e:
-                    logger.warning("GFW quota exceeded at vessel identity step: %s", e)
-                    break
+                    logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
+                    gfw_quota_hit = True
                 except Exception:
-                    logger.warning("GFW Vessel Identity failed for MMSI %d", mmsi, exc_info=True)
+                    logger.exception("GFW Events pipeline failed for batch")
+            else:
+                logger.info("GFW Events: no yellow+ vessels, skipping")
+
+        # Step 3: GFW Vessel Identity (only for vessels with stale data)
+        if not gfw_quota_hit:
+            from datetime import timedelta
+            from sqlalchemy import text as _text
+
+            stale_cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+            result = await session.execute(
+                _text("""
+                    SELECT mmsi FROM vessel_profiles
+                    WHERE mmsi = ANY(:mmsis)
+                      AND (enriched_at IS NULL OR enriched_at < :cutoff)
+                """),
+                {"mmsis": mmsis, "cutoff": stale_cutoff},
+            )
+            stale_mmsis = [row[0] for row in result.fetchall()]
+
+            if stale_mmsis:
+                logger.info(
+                    "GFW Vessel Identity: %d/%d vessels have stale data (>14 days), fetching",
+                    len(stale_mmsis), len(mmsis),
+                )
+                for mmsi in stale_mmsis:
+                    try:
+                        await _vessel_fn(
+                            gfw_client, session, mmsi, redis_client=redis_client
+                        )
+                    except GFWQuotaExceeded as e:
+                        logger.warning("GFW quota exceeded at vessel identity step: %s", e)
+                        break
+                    except Exception:
+                        logger.warning("GFW Vessel Identity failed for MMSI %d", mmsi, exc_info=True)
+            else:
+                logger.info("GFW Vessel Identity: all %d vessels have fresh data, skipping", len(mmsis))
 
     # Track vessels that failed critical enrichment — don't mark as enriched
     failed_mmsis: set[int] = set()
