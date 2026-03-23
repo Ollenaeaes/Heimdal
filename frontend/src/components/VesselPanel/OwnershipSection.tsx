@@ -44,6 +44,12 @@ export function OwnershipSection({ ownershipData, manualEnrichment }: OwnershipS
                     }`}>{ownershipData!.iacsClass!.status}</span>
                   )}
                 </div>
+                {ownershipData!.iacsClass!.dateOfLatestStatus && ownershipData!.iacsClass!.status !== 'Delivered' && (
+                  <div>{ownershipData!.iacsClass!.status ?? 'Status change'}: <span className="text-gray-300">{ownershipData!.iacsClass!.dateOfLatestStatus}</span></div>
+                )}
+                {ownershipData!.iacsClass!.reason && ownershipData!.iacsClass!.status !== 'Delivered' && (
+                  <div className="text-gray-500 italic">{ownershipData!.iacsClass!.reason}</div>
+                )}
                 {ownershipData!.iacsClass!.dateOfSurvey && (
                   <div>Last survey: <span className="text-gray-300">{ownershipData!.iacsClass!.dateOfSurvey}</span></div>
                 )}

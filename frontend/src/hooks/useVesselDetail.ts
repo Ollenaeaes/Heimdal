@@ -95,6 +95,8 @@ async function fetchVesselDetail(mmsi: number): Promise<VesselDetail> {
         status: raw.iacs.status ?? undefined,
         dateOfSurvey: raw.iacs.date_of_survey ?? undefined,
         dateOfNextSurvey: raw.iacs.date_of_next_survey ?? undefined,
+        dateOfLatestStatus: raw.iacs.date_of_latest_status ?? undefined,
+        reason: raw.iacs.reason ?? undefined,
       } : undefined,
     },
     manualEnrichment: raw.latest_enrichment ?? undefined,

@@ -25,6 +25,8 @@ export interface IacsClassData {
   status?: string;
   dateOfSurvey?: string;
   dateOfNextSurvey?: string;
+  dateOfLatestStatus?: string;
+  reason?: string;
 }
 
 export interface OwnershipData {
