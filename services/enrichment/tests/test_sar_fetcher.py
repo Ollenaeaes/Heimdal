@@ -178,7 +178,8 @@ class TestParseDetection:
         result = parse_detection(SAMPLE_VESSEL_MATCHED)
 
         assert result["gfw_detection_id"] == "sar-a30abd69a-af79-add7-fc44-2c394b098667-2026-03-05 04:00"
-        assert result["detection_time"] == "2026-03-05T04:40:41Z"
+        from datetime import datetime, timezone
+        assert result["detection_time"] == datetime(2026, 3, 5, 4, 40, 41, tzinfo=timezone.utc)
         assert result["is_dark"] is False
         assert result["matched_mmsi"] == 667002395
         assert result["matched_category"] == "other"
@@ -203,8 +204,9 @@ class TestParseDetection:
 
     def test_uses_entry_timestamp_over_date(self):
         """entryTimestamp is preferred over date for detection_time."""
+        from datetime import datetime, timezone
         result = parse_detection(SAMPLE_VESSEL_CARGO)
-        assert result["detection_time"] == "2026-03-07T16:32:02Z"
+        assert result["detection_time"] == datetime(2026, 3, 7, 16, 32, 2, tzinfo=timezone.utc)
 
     def test_missing_vessel_id_returns_none_detection_id(self):
         """Detection with no vesselId returns None for gfw_detection_id."""

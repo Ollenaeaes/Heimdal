@@ -80,9 +80,16 @@ def parse_detection(raw: dict[str, Any], aoi_name: str = "") -> dict[str, Any]:
     vessel_type = raw.get("vesselType") or raw.get("geartype") or ""
     matched_category = vessel_type.lower() if vessel_type and not is_dark else ("unmatched" if is_dark else None)
 
+    # Parse detection_time to a datetime object (asyncpg requires it)
+    time_str = raw.get("entryTimestamp") or date_str
+    try:
+        detection_time = datetime.fromisoformat(time_str.replace("Z", "+00:00")) if time_str else None
+    except (ValueError, AttributeError):
+        detection_time = None
+
     return {
         "gfw_detection_id": gfw_detection_id,
-        "detection_time": raw.get("entryTimestamp") or date_str,
+        "detection_time": detection_time,
         "lat": lat,
         "lon": lon,
         "length_m": None,
