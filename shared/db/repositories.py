@@ -641,7 +641,21 @@ async def bulk_upsert_sar_detections(
     """Bulk upsert SAR detections by gfw_detection_id. Returns count processed."""
     if not detections:
         return 0
+
+    # Collect all matched_mmsi values and check which exist in vessel_profiles
+    all_mmsis = {d["matched_mmsi"] for d in detections if d.get("matched_mmsi")}
+    existing_mmsis: set[int] = set()
+    if all_mmsis:
+        result = await session.execute(
+            text("SELECT mmsi FROM vessel_profiles WHERE mmsi = ANY(:mmsis)"),
+            {"mmsis": list(all_mmsis)},
+        )
+        existing_mmsis = {row[0] for row in result.fetchall()}
+
     for det in detections:
+        # Nullify matched_mmsi if the vessel doesn't exist (FK constraint)
+        if det.get("matched_mmsi") and det["matched_mmsi"] not in existing_mmsis:
+            det["matched_mmsi"] = None
         await session.execute(
             text("""
                 INSERT INTO sar_detections (

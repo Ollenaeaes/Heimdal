@@ -401,6 +401,7 @@ async def enrich_batch(
                 gfw_quota_hit = True
             except Exception:
                 logger.exception("GFW SAR pipeline failed for batch")
+                await session.rollback()
 
         # Step 2: GFW Events (only for yellow+ risk vessels — STS transfers, encounters, etc.)
         if not gfw_quota_hit:
@@ -430,6 +431,7 @@ async def enrich_batch(
                     gfw_quota_hit = True
                 except Exception:
                     logger.exception("GFW Events pipeline failed for batch")
+                    await session.rollback()
             else:
                 logger.info("GFW Events: no yellow+ vessels, skipping")
 
