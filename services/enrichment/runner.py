@@ -395,6 +395,7 @@ async def enrich_batch(
             try:
                 count = await _sar_fn(gfw_client, session, aois)
                 sar_detections_count = count
+                await session.commit()
                 logger.info("GFW SAR: fetched %d detections", count)
             except GFWQuotaExceeded as e:
                 logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
@@ -425,6 +426,7 @@ async def enrich_batch(
                 try:
                     count = await _events_fn(gfw_client, session, elevated_mmsis, redis_client=redis_client)
                     gfw_events_count = count
+                    await session.commit()
                     logger.info("GFW Events: fetched %d events for %d vessels", count, len(elevated_mmsis))
                 except GFWQuotaExceeded as e:
                     logger.warning("GFW quota exceeded, skipping remaining GFW steps: %s", e)
