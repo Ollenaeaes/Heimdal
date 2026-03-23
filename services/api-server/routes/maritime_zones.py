@@ -495,6 +495,33 @@ async def eez_sanctioned_report(
                 "end_time": pr["end_time"].isoformat() if pr["end_time"] else None,
             })
 
+    # Step 6: Check which vessels are CURRENTLY inside the EEZ using their
+    # last known position against the precise simplified polygon.
+    # This overrides the bbox-based still_inside from step 3.
+    async with session_factory() as session2:
+        currently_inside_q = await session2.execute(
+            text(
+                "SELECT vp.mmsi "
+                "FROM vessel_profiles vp "
+                "WHERE vp.mmsi = ANY(:mmsis) "
+                "  AND vp.last_lat IS NOT NULL "
+                "  AND EXISTS ("
+                "    SELECT 1 FROM maritime_zones mz "
+                "    WHERE mz.zone_type = 'eez' AND mz.iso_sov = :iso_sov "
+                "      AND ST_Intersects("
+                "        ST_SetSRID(ST_MakePoint(vp.last_lon, vp.last_lat), 4326)::geometry,"
+                "        ST_Simplify(mz.geometry::geometry, 0.01))"
+                "  )"
+            ),
+            {"mmsis": mmsis, "iso_sov": iso_sov.upper()},
+        )
+        currently_inside_mmsis = {r["mmsi"] for r in currently_inside_q.mappings().all()}
+
+    # Override still_inside in presence data with polygon-accurate check
+    for m in mmsis:
+        if m in presence_by_mmsi:
+            presence_by_mmsi[m]["still_inside"] = m in currently_inside_mmsis
+
     # Build response
     vessels = []
     for vr in vessel_rows:
