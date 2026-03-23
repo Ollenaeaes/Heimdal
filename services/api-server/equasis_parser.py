@@ -1163,11 +1163,24 @@ def _parse_fleet_from_tables(tables: list, text: str) -> list:
             vessel["imo"] = imo
             fleet.append(vessel)
 
-    # If table extraction found vessels, return them
+    # If table extraction found vessels, supplement with text-based extraction
+    # for any IMOs missed due to pdfplumber table boundary issues
     if fleet:
+        # Find company IMO to exclude it from fleet
+        company_imo = None
+        company_match = re.search(r"imo\s*(?:company\s*)?(?:number)?\s*:?\s*(\d{7})", text, re.IGNORECASE)
+        if company_match:
+            company_imo = int(company_match.group(1))
+
+        text_fleet = _parse_fleet_from_text(text)
+        for vessel in text_fleet:
+            vimo = vessel.get("imo")
+            if vimo and vimo not in seen_imos and vimo != company_imo:
+                fleet.append(vessel)
+                seen_imos.add(vimo)
         return fleet
 
-    # Fallback: text-based extraction
+    # Fallback: text-based extraction only
     return _parse_fleet_from_text(text)
 
 
@@ -1233,10 +1246,24 @@ def _parse_fleet_from_text(text: str) -> list:
 
         vessel = {"imo": imo}
 
-        # Extract ship name (ALL CAPS word(s) after IMO)
-        name_match = re.search(r"\d{7}\s+([A-Z][A-Z\s]+?)(?:\s+\d|\n)", block)
+        # Extract ship name (ALL CAPS word(s) after IMO, may wrap across lines)
+        name_match = re.search(r"\d{7}\s+([A-Z][A-Z\s]+?)(?:\s+\d)", block)
         if name_match:
-            vessel["ship_name"] = name_match.group(1).strip()
+            raw_name = name_match.group(1).strip()
+            # Check if name continues on next line (e.g. "VLADIMIR\nVIZE")
+            after_imo = block[len(str(imo)):].lstrip()
+            name_lines = []
+            for line in after_imo.split("\n"):
+                line = line.strip()
+                # Name lines are ALL CAPS and don't contain digits
+                if line and re.match(r"^[A-Z][A-Z\s\-\.]+$", line):
+                    name_lines.append(line)
+                else:
+                    break
+            if name_lines:
+                vessel["ship_name"] = " ".join(name_lines)
+            else:
+                vessel["ship_name"] = raw_name
 
         # Gross tonnage
         gt_match = re.search(r"(\d{4,6})\s+(?:Crude|Oil|Chemical|Bulk|Container|General)", block)
@@ -1278,7 +1305,14 @@ def _parse_fleet_from_text(text: str) -> list:
                     "since": date_m.group(1) if date_m else None,
                 })
         if roles:
-            vessel["acting_as"] = roles
+            # Format as string matching the table-extraction format
+            parts = []
+            for r in roles:
+                part = r["role"]
+                if r.get("since"):
+                    part += f"\n(since\n{r['since']})"
+                parts.append(part)
+            vessel["acting_as"] = "\n".join(parts)
 
         fleet.append(vessel)
 

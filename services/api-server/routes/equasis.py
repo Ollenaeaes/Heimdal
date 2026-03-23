@@ -224,6 +224,45 @@ async def _handle_ship_folder(request: Request, parsed: dict, mmsi: Optional[int
         }
         await update_vessel_profile_from_equasis(session, resolved_mmsi, update_data)
 
+        # Create network edges to other vessels sharing the same companies
+        company_names = set()
+        if registered_owner:
+            company_names.add(registered_owner)
+        if technical_manager:
+            company_names.add(technical_manager)
+        if operator:
+            company_names.add(operator)
+
+        edges_created = 0
+        for cname in company_names:
+            # Find other vessels managed by the same company
+            peer_result = await session.execute(
+                text(
+                    "SELECT mmsi FROM vessel_profiles "
+                    "WHERE mmsi != :mmsi AND ("
+                    "  registered_owner = :cname OR "
+                    "  technical_manager = :cname OR "
+                    "  operator = :cname OR "
+                    "  group_owner = :cname"
+                    ") LIMIT 500"
+                ),
+                {"mmsi": resolved_mmsi, "cname": cname},
+            )
+            peer_mmsis = [r["mmsi"] for r in peer_result.mappings().all()]
+            for peer_mmsi in peer_mmsis:
+                await upsert_network_edge(
+                    session,
+                    resolved_mmsi,
+                    peer_mmsi,
+                    edge_type="ownership",
+                    confidence=0.9,
+                    details={
+                        "company_name": cname,
+                        "source": "equasis_ship_folder",
+                    },
+                )
+                edges_created += 1
+
         await session.commit()
 
     # Publish re-scoring event
