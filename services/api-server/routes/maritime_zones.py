@@ -330,41 +330,32 @@ async def eez_sanctioned_report(
             mmsis: list[int] = []
         else:
             # Step 2: Find all sanctioned vessels that were inside the EEZ
-            # at any point during the time range.
+            # at any point during the time range (currently inside OR transited).
             #
-            # Two-phase approach to avoid scanning all positions against
-            # complex polygons:
+            # Three-phase approach for speed without false positives:
             #   a) Fast bbox pre-filter on vessel_positions → candidate MMSIs
-            #   b) For each candidate, check ONE position (via LATERAL LIMIT 1)
-            #      against the precise simplified polygon to confirm
-            #
-            # This catches both vessels currently inside AND those that
-            # transited through and left, without false positives from bbox.
+            #   b) Sample 1 position per vessel per day (reduces 98k → ~500 rows)
+            #   c) Check sampled positions against precise simplified polygon
             confirm_query = text(
                 "WITH eez AS ("
-                "  SELECT id, ST_Simplify(geometry::geometry, 0.01) AS geom "
+                "  SELECT ST_Simplify(geometry::geometry, 0.01) AS geom "
                 "  FROM maritime_zones "
                 "  WHERE zone_type = 'eez' AND iso_sov = :iso_sov"
                 "), "
-                "bbox_candidates AS ("
-                "  SELECT DISTINCT vp_pos.mmsi "
-                "  FROM vessel_positions vp_pos "
-                "  WHERE vp_pos.mmsi = ANY(:sanctioned_mmsis) "
-                "    AND vp_pos.timestamp BETWEEN :start AND :end "
-                "    AND ST_Intersects("
-                "      vp_pos.position::geometry, "
-                "      ST_MakeEnvelope(:west, :south, :east, :north, 4326))"
-                ") "
-                "SELECT candidate.mmsi "
-                "FROM bbox_candidates candidate "
-                "WHERE EXISTS ("
-                "  SELECT 1 FROM vessel_positions vp "
-                "  CROSS JOIN eez "
-                "  WHERE vp.mmsi = candidate.mmsi "
+                "sampled AS ("
+                "  SELECT DISTINCT ON (vp.mmsi, date_trunc('day', vp.timestamp)) "
+                "    vp.mmsi, vp.position "
+                "  FROM vessel_positions vp "
+                "  WHERE vp.mmsi = ANY(:sanctioned_mmsis) "
                 "    AND vp.timestamp BETWEEN :start AND :end "
-                "    AND ST_Intersects(vp.position::geometry, eez.geom) "
-                "  LIMIT 1"
-                ")"
+                "    AND ST_Intersects("
+                "      vp.position::geometry, "
+                "      ST_MakeEnvelope(:west, :south, :east, :north, 4326)) "
+                "  ORDER BY vp.mmsi, date_trunc('day', vp.timestamp), vp.timestamp DESC"
+                ") "
+                "SELECT DISTINCT s.mmsi "
+                "FROM sampled s "
+                "JOIN eez ON ST_Intersects(s.position::geometry, eez.geom)"
             )
             try:
                 result = await session.execute(confirm_query, {
