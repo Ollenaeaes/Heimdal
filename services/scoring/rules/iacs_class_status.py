@@ -18,6 +18,21 @@ from shared.models.anomaly import RuleResult
 
 from .base import ScoringRule
 
+# National maritime authorities that legitimately class domestic vessels.
+# Vessels classed by these authorities (passenger type 60-69, or small <60m)
+# are not expected to have IACS member classification.
+NATIONAL_MARITIME_AUTHORITIES: frozenset[str] = frozenset({
+    "NV",                # Norway — Sjøfartsdirektoratet (Norwegian Maritime Authority)
+    "DMA",               # Denmark — Danish Maritime Authority
+    "STA",               # Sweden — Transportstyrelsen
+    "TRAFICOM",          # Finland — Finnish Transport and Communications Agency
+    "ISA",               # Ireland — Irish Maritime Administration
+    "MCA",               # UK — Maritime and Coastguard Agency
+    "BSH",               # Germany — Bundesamt für Seeschifffahrt und Hydrographie
+    "IVW",               # Netherlands — Inspectie Leefomgeving en Transport
+    "DMAIB",             # Denmark — alternate code
+})
+
 
 class IACSClassStatusRule(ScoringRule):
     """Fire when IACS tracker data indicates classification risk."""
@@ -59,6 +74,19 @@ class IACSClassStatusRule(ScoringRule):
         risk_signal = iacs_data.get("risk_signal", "none")
         reason = iacs_data.get("reason", "")
         class_society = iacs_data.get("class_society")
+
+        # --- Domestic vessel exemption ---
+        # Passenger vessels (type 60-69) and small vessels (<60m) classed by
+        # national maritime authorities are exempt — they are not expected
+        # to have IACS member classification.
+        if class_society and class_society.upper() in {s.upper() for s in NATIONAL_MARITIME_AUTHORITIES}:
+            ship_type = profile.get("ship_type")
+            length = profile.get("length") or profile.get("dim_a", 0) + profile.get("dim_b", 0)
+            is_passenger = isinstance(ship_type, (int, float)) and 60 <= int(ship_type) <= 69
+            is_small = isinstance(length, (int, float)) and 0 < length < 60
+            if is_passenger or is_small:
+                return RuleResult(fired=False, rule_id=self.rule_id)
+
         changes = iacs_data.get("changes", [])
 
         # --- 1. No IACS class at all (15 pts moderate) ---
