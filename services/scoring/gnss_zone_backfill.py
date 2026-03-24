@@ -1,14 +1,13 @@
 """Backfill gnss_interference_zones from gnss_spoofed_positions.
 
-Reclassifies all positions by bearing before creating zones:
-  - spoofing: non-cardinal jump where multiple vessels get dragged to the
-              SAME target (clustered spoofed positions with spread-out real
-              positions confirms it's a spoofing target, not bad data)
-  - jamming:  cardinal-direction jumps (within 5° of N/S/E/W) — GPS loss
-              causing predictable drift. Zones at the vessel's REAL position.
-
-Interference area is NOT created — it just shows "where ships sail" which
-is not useful geographic information.
+Classification logic (default = jamming):
+  - jamming:  DEFAULT for all GNSS anomalies. GPS interference causing
+              position errors. This is cheap, common, and covers ~95% of
+              real-world GNSS interference. Zones at real vessel positions.
+  - spoofing: ONLY when spoofed positions cluster tightly at a target that
+              is far (>200km) from the real vessel positions. This means
+              vessels were deliberately dragged to a fake location.
+              Known hotspots: Kaliningrad, Syria/Lebanon, Iran, Black Sea.
 
 Usage:
     python -m gnss_zone_backfill
@@ -28,13 +27,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 # Clustering parameters
-CLUSTER_RADIUS_DEG = 0.25     # ~15nm for spoofing target clusters
-JAMMING_CLUSTER_RADIUS_DEG = 0.5  # ~30nm for jamming clusters
+SPOOFING_CLUSTER_RADIUS_DEG = 0.2   # ~12nm — spoofing targets cluster tightly
+JAMMING_CLUSTER_RADIUS_DEG = 0.5    # ~30nm — jamming zones are broader
 MIN_CLUSTER_POINTS = 5
-ZONE_DURATION_HOURS = 0.75    # 45min per zone
+MIN_CLUSTER_VESSELS = 3
+ZONE_DURATION_HOURS = 0.75          # 45min per zone
 TIME_WINDOW_HOURS = 3
-CARDINAL_THRESHOLD_DEG = 5    # Max deviation from N/S/E/W to classify as jamming
-MIN_REAL_SPREAD_KM = 50       # Real positions must be spread >50km to confirm spoofing
+# The key threshold: how far must spoofed positions be from real positions
+# to qualify as spoofing (deliberate drag to a remote target)?
+MIN_SPOOFING_DISPLACEMENT_KM = 200
 
 
 async def backfill_zones(session: AsyncSession) -> int:
@@ -43,57 +44,45 @@ async def backfill_zones(session: AsyncSession) -> int:
     await session.execute(text("DELETE FROM gnss_interference_zones"))
     logger.info("Cleared existing zones")
 
-    # First: reclassify all positions by bearing
-    await session.execute(text("""
-        UPDATE gnss_spoofed_positions
-        SET event_type = CASE
-            WHEN real_lat IS NOT NULL AND real_lon IS NOT NULL
-                 AND ABS(
-                     DEGREES(ATAN2(spoofed_lon - real_lon, spoofed_lat - real_lat))
-                     - ROUND(DEGREES(ATAN2(spoofed_lon - real_lon, spoofed_lat - real_lat)) / 90.0) * 90
-                 ) < :threshold
-            THEN 'jamming'
-            ELSE 'spoofing'
-        END
-    """), {"threshold": CARDINAL_THRESHOLD_DEG})
-    await session.commit()
-
-    # Count after reclassification
-    result = await session.execute(text("""
-        SELECT event_type, COUNT(*) FROM gnss_spoofed_positions GROUP BY event_type
-    """))
-    for r in result.mappings().all():
-        logger.info("  %s: %d positions", r["event_type"], r["count"])
-
     # Get time range
     result = await session.execute(text("""
-        SELECT MIN(detected_at) AS min_t, MAX(detected_at) AS max_t
+        SELECT MIN(detected_at) AS min_t, MAX(detected_at) AS max_t, COUNT(*) AS cnt
         FROM gnss_spoofed_positions
     """))
     row = result.mappings().first()
     if not row or not row["min_t"]:
         return 0
 
-    min_t = row["min_t"]
-    max_t = row["max_t"]
+    min_t, max_t, total = row["min_t"], row["max_t"], row["cnt"]
+    logger.info("Processing %d positions from %s to %s", total, min_t, max_t)
+
     zones_created = 0
+    spoofing_zones = 0
+    jamming_zones = 0
 
     window_start = min_t.replace(minute=0, second=0, microsecond=0)
     while window_start < max_t:
         window_end = window_start + timedelta(hours=TIME_WINDOW_HOURS)
 
-        # --- Spoofing targets (red): cluster spoofed positions, verify spread ---
+        # Step 1: Try to find spoofing targets — tight clusters of spoofed
+        # positions that are far from real positions
         n = await _create_spoofing_zones(session, window_start, window_end)
         zones_created += n
+        spoofing_zones += n
 
-        # --- Jamming zones (purple): cluster real positions of jamming victims ---
+        # Step 2: Everything else becomes jamming — cluster real positions
+        # of ALL anomalous vessels (regardless of bearing)
         n = await _create_jamming_zones(session, window_start, window_end)
         zones_created += n
+        jamming_zones += n
 
         window_start = window_end
 
     await session.commit()
-    logger.info("Backfill complete: %d zones created", zones_created)
+    logger.info(
+        "Backfill complete: %d zones (%d spoofing, %d jamming)",
+        zones_created, spoofing_zones, jamming_zones,
+    )
     return zones_created
 
 
@@ -102,28 +91,27 @@ async def _create_spoofing_zones(
     window_start: datetime,
     window_end: datetime,
 ) -> int:
-    """Create spoofing target zones.
+    """Create spoofing zones ONLY where spoofed positions are far from real ones.
 
-    Clusters spoofed positions (where GPS says vessels are). Only keeps
-    clusters where the real positions are geographically spread out — this
-    confirms multiple vessels from different locations were dragged to the
-    same target (real spoofing), vs vessels just being in the same area
-    with bad data.
+    This catches deliberate GPS drag attacks (e.g. vessels near Kaliningrad
+    showing positions at airports). The key signal: average distance between
+    real and spoofed centroids > 200km.
     """
     result = await session.execute(
         text("""
             WITH pts AS (
-                SELECT mmsi, detected_at, spoofed_lat AS lat, spoofed_lon AS lon,
+                SELECT mmsi, detected_at,
+                       spoofed_lat, spoofed_lon,
                        real_lat, real_lon, deviation_km
                 FROM gnss_spoofed_positions
                 WHERE detected_at >= :ws AND detected_at < :we
-                  AND event_type = 'spoofing'
                   AND spoofed_lat IS NOT NULL AND spoofed_lon IS NOT NULL
+                  AND real_lat IS NOT NULL AND real_lon IS NOT NULL
             ),
             clustered AS (
                 SELECT *,
                     ST_ClusterDBSCAN(
-                        ST_SetSRID(ST_MakePoint(lon, lat), 4326),
+                        ST_SetSRID(ST_MakePoint(spoofed_lon, spoofed_lat), 4326),
                         eps := :radius,
                         minpoints := :min_pts
                     ) OVER () AS cluster_id
@@ -133,47 +121,56 @@ async def _create_spoofing_zones(
                    array_agg(DISTINCT mmsi) AS mmsis,
                    COUNT(*) AS point_count,
                    COUNT(DISTINCT mmsi) AS vessel_count,
-                   AVG(lat) AS centroid_lat,
-                   AVG(lon) AS centroid_lon,
+                   -- Spoofed centroid (the alleged target)
+                   AVG(spoofed_lat) AS spoof_centroid_lat,
+                   AVG(spoofed_lon) AS spoof_centroid_lon,
+                   -- Real centroid (where vessels actually are)
+                   AVG(real_lat) AS real_centroid_lat,
+                   AVG(real_lon) AS real_centroid_lon,
+                   -- Distance between real and spoofed centroids (in km, approximate)
+                   ST_Distance(
+                       ST_SetSRID(ST_MakePoint(AVG(spoofed_lon), AVG(spoofed_lat)), 4326)::geography,
+                       ST_SetSRID(ST_MakePoint(AVG(real_lon), AVG(real_lat)), 4326)::geography
+                   ) / 1000.0 AS displacement_km,
                    MAX(deviation_km) AS max_deviation_km,
                    MIN(detected_at) AS first_seen,
                    MAX(detected_at) AS last_seen,
                    ST_AsText(ST_ConvexHull(
-                       ST_Collect(ST_SetSRID(ST_MakePoint(lon, lat), 4326))
-                   )) AS hull_wkt,
-                   -- Measure spread of real positions to confirm spoofing
-                   CASE WHEN COUNT(*) FILTER (WHERE real_lat IS NOT NULL) >= 2
-                        THEN ST_MaxDistance(
-                            ST_Collect(ST_SetSRID(ST_MakePoint(real_lon, real_lat), 4326))
-                                FILTER (WHERE real_lat IS NOT NULL),
-                            ST_Collect(ST_SetSRID(ST_MakePoint(real_lon, real_lat), 4326))
-                                FILTER (WHERE real_lat IS NOT NULL)
-                        ) * 111  -- rough deg-to-km
-                        ELSE 0
-                   END AS real_spread_km
+                       ST_Collect(ST_SetSRID(ST_MakePoint(spoofed_lon, spoofed_lat), 4326))
+                   )) AS hull_wkt
             FROM clustered
             WHERE cluster_id IS NOT NULL
             GROUP BY cluster_id
-            HAVING COUNT(DISTINCT mmsi) >= 3
+            HAVING COUNT(DISTINCT mmsi) >= :min_vessels
             ORDER BY cluster_id
         """),
-        {"ws": window_start, "we": window_end,
-         "radius": CLUSTER_RADIUS_DEG, "min_pts": MIN_CLUSTER_POINTS},
+        {
+            "ws": window_start, "we": window_end,
+            "radius": SPOOFING_CLUSTER_RADIUS_DEG,
+            "min_pts": MIN_CLUSTER_POINTS,
+            "min_vessels": MIN_CLUSTER_VESSELS,
+        },
     )
     clusters = result.mappings().all()
 
     zones = 0
     for c in clusters:
-        # Only create zone if real positions are spread out (confirms spoofing)
-        if (c["real_spread_km"] or 0) < MIN_REAL_SPREAD_KM:
-            logger.debug(
-                "Skipping cluster near (%.2f, %.2f): real spread only %.0fkm (need %dkm)",
-                float(c["centroid_lat"]), float(c["centroid_lon"]),
-                float(c["real_spread_km"] or 0), MIN_REAL_SPREAD_KM,
-            )
+        displacement = float(c["displacement_km"] or 0)
+
+        if displacement < MIN_SPOOFING_DISPLACEMENT_KM:
+            # Not far enough from real positions — this is jamming/drift, not spoofing
             continue
 
-        zones += await _insert_zone(session, c, "spoofing")
+        logger.info(
+            "SPOOFING: target (%.2f, %.2f), real centroid (%.2f, %.2f), "
+            "displacement %.0fkm, %d vessels",
+            float(c["spoof_centroid_lat"]), float(c["spoof_centroid_lon"]),
+            float(c["real_centroid_lat"]), float(c["real_centroid_lon"]),
+            displacement, c["vessel_count"],
+        )
+        zones += await _insert_zone(session, c, "spoofing",
+                                     float(c["spoof_centroid_lat"]),
+                                     float(c["spoof_centroid_lon"]))
     return zones
 
 
@@ -182,14 +179,17 @@ async def _create_jamming_zones(
     window_start: datetime,
     window_end: datetime,
 ) -> int:
-    """Create jamming zones at real vessel positions (where jamming occurs)."""
+    """Create jamming zones at real vessel positions.
+
+    ALL anomalous positions become jamming zones (the default). Real
+    positions are clustered to show WHERE interference is happening.
+    """
     result = await session.execute(
         text("""
             WITH pts AS (
                 SELECT mmsi, detected_at, real_lat AS lat, real_lon AS lon, deviation_km
                 FROM gnss_spoofed_positions
                 WHERE detected_at >= :ws AND detected_at < :we
-                  AND event_type = 'jamming'
                   AND real_lat IS NOT NULL AND real_lon IS NOT NULL
             ),
             clustered AS (
@@ -216,17 +216,23 @@ async def _create_jamming_zones(
             FROM clustered
             WHERE cluster_id IS NOT NULL
             GROUP BY cluster_id
-            HAVING COUNT(DISTINCT mmsi) >= 3
+            HAVING COUNT(DISTINCT mmsi) >= :min_vessels
             ORDER BY cluster_id
         """),
-        {"ws": window_start, "we": window_end,
-         "radius": JAMMING_CLUSTER_RADIUS_DEG, "min_pts": MIN_CLUSTER_POINTS},
+        {
+            "ws": window_start, "we": window_end,
+            "radius": JAMMING_CLUSTER_RADIUS_DEG,
+            "min_pts": MIN_CLUSTER_POINTS,
+            "min_vessels": MIN_CLUSTER_VESSELS,
+        },
     )
     clusters = result.mappings().all()
 
     zones = 0
     for c in clusters:
-        zones += await _insert_zone(session, c, "jamming")
+        zones += await _insert_zone(session, c, "jamming",
+                                     float(c["centroid_lat"]),
+                                     float(c["centroid_lon"]))
     return zones
 
 
@@ -234,6 +240,8 @@ async def _insert_zone(
     session: AsyncSession,
     c: Any,
     event_type: str,
+    centroid_lat: float,
+    centroid_lon: float,
 ) -> int:
     midpoint = c["first_seen"] + (c["last_seen"] - c["first_seen"]) / 2
     hull_wkt = c["hull_wkt"]
@@ -273,19 +281,11 @@ async def _insert_zone(
                 "backfilled": True,
                 "point_count": c["point_count"],
                 "vessel_count": c["vessel_count"],
-                "centroid": {
-                    "lat": round(float(c["centroid_lat"]), 4),
-                    "lon": round(float(c["centroid_lon"]), 4),
-                },
+                "centroid": {"lat": round(centroid_lat, 4), "lon": round(centroid_lon, 4)},
                 "max_deviation_km": round(float(c["max_deviation_km"] or 0), 1),
-                "real_spread_km": round(float(c.get("real_spread_km") or 0), 1),
+                "displacement_km": round(float(c.get("displacement_km") or 0), 1),
             }),
         },
-    )
-    logger.info(
-        "Created %s zone near (%.2f, %.2f): %d vessels, %d points",
-        event_type, float(c["centroid_lat"]), float(c["centroid_lon"]),
-        c["vessel_count"], c["point_count"],
     )
     return 1
 

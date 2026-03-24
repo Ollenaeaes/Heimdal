@@ -5,7 +5,7 @@ export function GnssLegend({ visible }: { visible: boolean }) {
   if (!visible) return null;
 
   return (
-    <div className="absolute top-16 left-4 z-[1000] bg-slate-900/90 backdrop-blur-sm rounded-lg px-3 py-2.5 border border-slate-700/50 text-xs pointer-events-auto">
+    <div className="absolute top-1/2 -translate-y-1/2 left-4 z-[1000] bg-slate-900/90 backdrop-blur-sm rounded-lg px-3 py-2.5 border border-slate-700/50 text-xs pointer-events-auto">
       <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">GNSS Zones</div>
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
