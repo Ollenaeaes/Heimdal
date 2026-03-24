@@ -69,6 +69,8 @@ def discover_rules() -> list[ScoringRule]:
     ):
         if ispkg:
             continue
+        if '.disabled.' in modname or modname.endswith('.disabled'):
+            continue
         try:
             module = importlib.import_module(modname)
         except Exception:

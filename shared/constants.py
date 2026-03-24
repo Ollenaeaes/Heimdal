@@ -32,10 +32,8 @@ MAX_PER_RULE: dict[str, int] = {
     "flag_hopping": 40,
     "sanctions_match": 100,
     "vessel_age": 10,
-    "speed_anomaly": 10,
     "identity_mismatch": 100,
     "flag_of_convenience": 10,
-    "ais_spoofing": 0,          # informational — feeds GNSS/Spoofing layer only
     "ownership_risk": 60,
     "insurance_class_risk": 60,
     "iacs_class_status": 60,
@@ -43,9 +41,7 @@ MAX_PER_RULE: dict[str, int] = {
     # These are environmental/regional events, not vessel-level risk.
     # A spoofed vessel is a victim, not a suspect.
     "spoof_land_position": 0,
-    "spoof_impossible_speed": 0,
     "spoof_duplicate_mmsi": 0,
-    "spoof_frozen_position": 0,
     "spoof_identity_mismatch": 0,
     # GFW-sourced enrichment rule
     "voyage_pattern": 80,
@@ -381,10 +377,8 @@ REALTIME_RULE_IDS: list[str] = [
     "flag_hopping",
     "sanctions_match",
     "vessel_age",
-    "speed_anomaly",
     "identity_mismatch",
     "flag_of_convenience",
-    "ais_spoofing",
     "ownership_risk",
     "insurance_class_risk",
     "iacs_class_status",
@@ -392,9 +386,7 @@ REALTIME_RULE_IDS: list[str] = [
     "cable_alignment",
     "infra_speed_anomaly",
     "spoof_land_position",
-    "spoof_impossible_speed",
     "spoof_duplicate_mmsi",
-    "spoof_frozen_position",
     "spoof_identity_mismatch",
 ]
 
