@@ -27,11 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 # Clustering parameters
-CLUSTER_RADIUS_DEG = 0.3      # ~20nm for spoofing target clusters
-CLUSTER_RADIUS_WIDE_DEG = 1.5 # ~90nm for interference area / jamming clusters
+CLUSTER_RADIUS_DEG = 0.25     # ~15nm for spoofing target clusters (tight)
+CLUSTER_RADIUS_WIDE_DEG = 0.5 # ~30nm for interference area / jamming clusters
 MIN_CLUSTER_POINTS = 5        # Minimum points per cluster
-ZONE_DURATION_HOURS = 24      # Each zone lasts 24h from its midpoint time
-TIME_WINDOW_HOURS = 6         # Group positions into 6-hour windows
+ZONE_DURATION_HOURS = 3       # Each zone lasts 3h from its midpoint time
+TIME_WINDOW_HOURS = 3         # Group positions into 3-hour windows
 
 
 async def backfill_zones(session: AsyncSession) -> int:
@@ -181,14 +181,14 @@ async def _create_zones_from_positions(
         if hull_wkt.startswith("POINT") or hull_wkt.startswith("LINESTRING"):
             geom_sql = f"""ST_Buffer(
                 ST_SetSRID(ST_GeomFromText(:hull_wkt), 4326)::geography,
-                18520
-            )"""  # 10nm buffer for point/line hulls
+                5556
+            )"""  # 3nm buffer for point/line hulls
         else:
-            # For actual polygons, apply a small buffer on the centroid for smoothness
+            # For actual polygons, apply minimal buffer for smoothness
             geom_sql = f"""ST_Buffer(
                 ST_ConvexHull(ST_SetSRID(ST_GeomFromText(:hull_wkt), 4326))::geography,
-                9260
-            )"""  # 5nm buffer
+                1852
+            )"""  # 1nm buffer
 
         severity = "critical" if (c["max_deviation_km"] or 0) > 200 else \
                    "high" if (c["max_deviation_km"] or 0) > 100 else \
