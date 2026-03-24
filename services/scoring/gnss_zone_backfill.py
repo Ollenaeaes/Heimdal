@@ -107,6 +107,8 @@ async def _create_spoofing_zones(
                 WHERE detected_at >= :ws AND detected_at < :we
                   AND spoofed_lat IS NOT NULL AND spoofed_lon IS NOT NULL
                   AND real_lat IS NOT NULL AND real_lon IS NOT NULL
+                  -- Filter out null island (0,0) GPS resets
+                  AND NOT (ABS(spoofed_lat) < 1 AND ABS(spoofed_lon) < 1)
             ),
             clustered AS (
                 SELECT *,
