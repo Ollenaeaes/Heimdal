@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Map } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { MapRef, MapLayerMouseEvent } from 'react-map-gl/maplibre';
@@ -10,6 +10,7 @@ import { VesselLayer } from './VesselLayer';
 import { StaticOverlays } from './StaticOverlays';
 import { InfrastructureLayer } from './InfrastructureLayer';
 import { GnssHeatmap } from './GnssHeatmap';
+import { GnssTimeBar } from './SpoofingTimeControls';
 import { DuplicateMmsiLayer } from './DuplicateMmsiLayer';
 import { NetworkLayer } from './NetworkLayer';
 import { GfwEventLayer } from './GfwEventLayer';
@@ -42,6 +43,10 @@ const VESSEL_LAYER_IDS = ['vessel-dots-stationary', 'vessel-arrows', 'vessel-hul
 function MapView(props: MapViewProps) {
   const lookbackActive = useLookbackStore((s) => s.isActive);
   const selectVessel = useVesselStore((s) => s.selectVessel);
+
+  // GNSS heatmap time state — shared between GnssHeatmap and GnssTimeBar
+  const [gnssCenterTime, setGnssCenterTime] = useState(() => new Date());
+  const [gnssWindowSize, setGnssWindowSize] = useState('24h');
 
   // Fetch tracks when lookback activates
   useLookbackTracks();
@@ -93,7 +98,7 @@ function MapView(props: MapViewProps) {
       {!lookbackActive && <VesselLayer />}
       {!lookbackActive && <TrackTrails />}
       {!lookbackActive && <TrackTrail />}
-      <GnssHeatmap visible={props.showGnssZones ?? false} />
+      <GnssHeatmap visible={props.showGnssZones ?? false} centerTime={gnssCenterTime} windowSize={gnssWindowSize} />
       <DuplicateMmsiLayer visible={props.showGnssZones ?? false} />
       <NetworkLayer visible={props.showNetwork ?? false} />
       <GfwEventLayer visible={props.showGfwEvents ?? false} />
@@ -102,6 +107,13 @@ function MapView(props: MapViewProps) {
       <AreaDrawingTool />
       <HoverTooltip />
       {lookbackActive && <TimelineBar />}
+      <GnssTimeBar
+        visible={props.showGnssZones ?? false}
+        centerTime={gnssCenterTime}
+        windowSize={gnssWindowSize}
+        onCenterTimeChange={setGnssCenterTime}
+        onWindowSizeChange={setGnssWindowSize}
+      />
     </Map>
   );
 }
