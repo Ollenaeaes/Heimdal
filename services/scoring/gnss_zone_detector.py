@@ -244,7 +244,8 @@ async def _cluster_anomalous_positions(
     }
     for i, row in enumerate(anomalous):
         values_parts.append(
-            f"(:mmsi_{i}::int, :lat_{i}::float8, :lon_{i}::float8, :ts_{i}::timestamptz, :speed_{i}::float8, :ptype_{i}::text)"
+            f"(CAST(:mmsi_{i} AS int), CAST(:lat_{i} AS float8), CAST(:lon_{i} AS float8), "
+            f"CAST(:ts_{i} AS timestamptz), CAST(:speed_{i} AS float8), CAST(:ptype_{i} AS text))"
         )
         params[f"mmsi_{i}"] = row["mmsi"]
         params[f"lat_{i}"] = float(row["lat"])
