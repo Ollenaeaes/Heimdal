@@ -72,14 +72,38 @@ async def detect_gnss_zones(session: AsyncSession) -> int:
         logger.info("No anomalous positions found in the last %d minutes", LOOKBACK_MINUTES)
         return 0
 
-    clusters = await _cluster_anomalous_positions(session, anomalous)
+    # Separate spoofed and pre-jump positions
+    spoofed = [p for p in anomalous if p.get("position_type") == "spoofed"]
+    pre_jump_by_mmsi: dict[int, dict[str, Any]] = {}
+    for p in anomalous:
+        if p.get("position_type") == "pre_jump":
+            pre_jump_by_mmsi[p["mmsi"]] = p
+
+    # Cluster only the spoofed positions (finding target clusters like Kaliningrad)
+    clusters = await _cluster_anomalous_positions(session, spoofed)
     if not clusters:
         logger.info("No spatial clusters with >= %d vessels", MIN_CLUSTER_VESSELS)
         return 0
 
     zones_affected = 0
     for cluster in clusters:
+        # Create the spoofing target zone (red) — existing behavior
         zones_affected += await _upsert_zone(session, cluster)
+
+        # Collect pre-jump positions for vessels in this target cluster
+        cluster_mmsis = {m["mmsi"] for m in cluster}
+        pre_jump_positions = [
+            pre_jump_by_mmsi[mmsi] for mmsi in cluster_mmsis
+            if mmsi in pre_jump_by_mmsi
+        ]
+
+        # Create interference_area zone if 3+ distinct vessels have pre-jump positions
+        pre_jump_mmsis = {p["mmsi"] for p in pre_jump_positions}
+        if len(pre_jump_mmsis) >= MIN_CLUSTER_VESSELS:
+            # Tag all as interference_area for zone creation
+            for p in pre_jump_positions:
+                p["position_type"] = "pre_jump"
+            zones_affected += await _upsert_zone(session, pre_jump_positions)
 
     # Commit zones first so they're visible even if tagging is slow/fails
     await session.commit()
