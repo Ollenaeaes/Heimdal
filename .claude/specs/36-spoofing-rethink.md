@@ -2,7 +2,7 @@
 
 **Slug:** `spoofing-rethink`
 **Created:** 2026-03-24
-**Status:** approved
+**Status:** completed
 **Priority:** critical
 **Supersedes:** Specs 24 (spoofing-detection-backend) and 27 (spoofing-detection-frontend) — those specs treated spoofing as vessel-level blame signals. This spec rethinks the approach: vessels are victims of area-based GNSS interference, not suspects.
 

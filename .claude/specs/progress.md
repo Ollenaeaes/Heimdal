@@ -3,9 +3,22 @@
 This file is the implementation scratchpad. Read it at the start of every session. Update it after every completed story. It survives context resets and session changes.
 
 ## Notes for Next Session
-- New approved spec: 36-spoofing-rethink — ready for implementation
-- Supersedes draft specs 24 (spoofing-detection-backend) and 27 (spoofing-detection-frontend)
-- Key context: ~17,000 false positive anomaly events to bulk-resolve, area-based GNSS zone detection replaces vessel-level blame
+- 36-spoofing-rethink: COMPLETED on feature/spoofing-rethink branch. Ready for human review.
+- Prod deployment steps:
+  1. Backup DB: `docker compose exec postgres pg_dump -U heimdal -Fc heimdal > /data/raw/backup_before_spoof_rethink.dump`
+  2. Run migration 019 (bulk resolve): `docker compose exec postgres psql -U heimdal -d heimdal -f /docker-entrypoint-initdb.d/migrations/019_bulk_resolve_spoof_anomalies.sql`
+  3. Run migration 020 (gnss zones update): same pattern
+  4. Run rescore script: `python3 scripts/rescore_after_bulk_resolve.py --db-url postgresql://heimdal:PASSWORD@localhost:5432/heimdal`
+  5. Deploy services with `--no-deps --build` (never touch postgres container)
+
+### 36-spoofing-rethink (all 7 stories)
+- Story 1: Bulk-resolve migration — SQL migration + Python rescore script for ~17k false positive anomalies
+- Story 2: Disabled 4 spoof/speed rules — moved to rules/disabled/, cleaned constants.py, added skip in engine
+- Story 3: IACS domestic vessel exemption — passenger (60-69) and small (<60m) vessels with national authority class exempt
+- Story 4: GNSS zone detector — area-based detection using ST_ClusterDBSCAN, creates zones when 3+ vessels affected
+- Story 5: GNSS zones API — time-window queries with center+window+bbox params
+- Story 6: Polygon heatmap layer — fill layers colored by event_type and affected_count with temporal fade
+- Story 7: Time-window control bar — 30-day timeline, window presets, "Now" button, keyboard support
 
 ## Current Feature
 
