@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLookbackStore } from '../../hooks/useLookbackStore';
 import { RISK_COLORS } from '../../utils/riskColors';
 
@@ -23,12 +24,31 @@ export function AreaLookbackPanel() {
   const activate = useLookbackStore((s) => s.activate);
   const cancelDrawing = useLookbackStore((s) => s.cancelDrawing);
 
+  // Fetch available position data range
+  const { data: posRange } = useQuery({
+    queryKey: ['position-range'],
+    queryFn: async () => {
+      const res = await fetch('/api/vessels/position-range');
+      if (!res.ok) return null;
+      return res.json() as Promise<{ oldest: string | null; newest: string | null }>;
+    },
+  });
+
+  const oldestAvailable = posRange?.oldest ? posRange.oldest.slice(0, 16) : undefined;
+
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 7);
+    d.setDate(d.getDate() - 2);
     return d.toISOString().slice(0, 16);
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 16));
+
+  // Clamp start date to oldest available data
+  useEffect(() => {
+    if (oldestAvailable && startDate < oldestAvailable) {
+      setStartDate(oldestAvailable);
+    }
+  }, [oldestAvailable, startDate]);
 
   const [results, setResults] = useState<AreaVessel[]>([]);
   const [selectedMmsis, setSelectedMmsis] = useState<Set<number>>(new Set());
@@ -129,11 +149,17 @@ export function AreaLookbackPanel() {
             <input
               type="datetime-local"
               value={startDate}
+              min={oldestAvailable}
               max={endDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="w-full px-2 py-1 text-xs bg-[#1F2937] text-gray-300 border border-[#374151] rounded focus:border-blue-500 focus:outline-none"
               data-testid="area-lookback-start"
             />
+            {oldestAvailable && (
+              <span className="text-[0.55rem] text-slate-600 mt-0.5 block">
+                Data available from {new Date(oldestAvailable).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+              </span>
+            )}
           </div>
           <div>
             <label className="text-[0.65rem] text-slate-500 block mb-1">End</label>

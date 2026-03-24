@@ -229,6 +229,23 @@ async def vessel_snapshot(
     ]
 
 
+@router.get("/vessels/position-range")
+async def position_range():
+    """Return the min and max timestamps of available position data."""
+    session_factory = get_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            text("SELECT MIN(timestamp), MAX(timestamp) FROM vessel_positions")
+        )
+        row = result.first()
+    if not row or not row[0]:
+        return {"oldest": None, "newest": None}
+    return {
+        "oldest": row[0].isoformat(),
+        "newest": row[1].isoformat(),
+    }
+
+
 @router.get("/vessels/area-history")
 async def area_history(
     polygon: str = Query(..., description="JSON array of [lon, lat] coordinate pairs"),

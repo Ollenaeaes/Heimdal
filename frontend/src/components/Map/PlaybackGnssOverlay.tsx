@@ -58,9 +58,9 @@ export function calculateOpacityFactor(
   const detectedMs = new Date(detectedAt).getTime();
   const windowMs = windowToMs(windowSize);
   const ageMs = Math.abs(currentMs - detectedMs);
-  const ageHours = ageMs / 3_600_000;
-  const windowHours = windowMs / 3_600_000;
-  return Math.max(0.2, 1 - ageHours / windowHours);
+  const ratio = Math.min(1, ageMs / windowMs);
+  // Quadratic falloff — zones fade quickly then linger faintly
+  return Math.max(0.05, 1 - ratio * ratio);
 }
 
 /**

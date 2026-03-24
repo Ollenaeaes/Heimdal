@@ -68,8 +68,9 @@ function addTemporalFade(
       }
 
       const ageMs = centerMs - new Date(detectedAt).getTime();
-      const ageHours = ageMs / 3_600_000;
-      const opacityFactor = Math.max(0.2, 1 - ageHours / windowHours);
+      const ratio = Math.min(1, Math.abs(ageMs) / (windowHours * 3_600_000));
+      // Quadratic falloff — zones fade quickly then linger faintly
+      const opacityFactor = Math.max(0.05, 1 - ratio * ratio);
 
       return {
         ...feature,

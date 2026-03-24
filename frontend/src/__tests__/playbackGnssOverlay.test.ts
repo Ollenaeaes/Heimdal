@@ -94,31 +94,31 @@ describe('calculateOpacityFactor', () => {
     expect(opacity).toBeCloseTo(1.0);
   });
 
-  it('returns 0.2 (minimum) for zones at or beyond window edge', () => {
-    // 6h window = 6 hours total. Zone 6 hours old: ageHours/windowHours = 6/6 = 1, opacity = max(0.2, 0) = 0.2
+  it('returns minimum for zones at or beyond window edge', () => {
+    // 6h window. Zone 6h old: ratio=1, opacity = max(0.05, 1 - 1*1) = 0.05
     const opacity = calculateOpacityFactor('2025-06-15T06:00:00Z', currentTime, '6h');
-    expect(opacity).toBeCloseTo(0.2);
+    expect(opacity).toBeCloseTo(0.05);
   });
 
-  it('returns intermediate values for zones between center and edge', () => {
-    // 6h window. Zone 3h old: ageHours/windowHours = 3/6 = 0.5, opacity = 1 - 0.5 = 0.5
+  it('returns intermediate values for zones between center and edge (quadratic)', () => {
+    // 6h window. Zone 3h old: ratio=0.5, opacity = 1 - 0.25 = 0.75
     const opacity = calculateOpacityFactor('2025-06-15T09:00:00Z', currentTime, '6h');
-    expect(opacity).toBeCloseTo(0.5);
+    expect(opacity).toBeCloseTo(0.75);
   });
 
   it('handles future zones (detected_at after currentTime)', () => {
-    // 6h window. Zone 1h in the future: abs distance = 1h, ageHours/windowHours = 1/6 ≈ 0.167
+    // 6h window. Zone 1h in future: ratio=1/6, opacity = 1 - (1/6)^2 ≈ 0.972
     const opacity = calculateOpacityFactor('2025-06-15T13:00:00Z', currentTime, '6h');
-    expect(opacity).toBeCloseTo(1 - 1 / 6);
+    expect(opacity).toBeCloseTo(1 - (1 / 6) ** 2);
   });
 
   it('uses correct window durations for each size', () => {
-    // 1h window, zone 30min old: age=0.5h, windowHours=1, opacity = 1 - 0.5/1 = 0.5
+    // 1h window, zone 30min old: ratio=0.5, opacity = 1 - 0.25 = 0.75
     const opacity1h = calculateOpacityFactor('2025-06-15T11:30:00Z', currentTime, '1h');
-    expect(opacity1h).toBeCloseTo(0.5);
+    expect(opacity1h).toBeCloseTo(0.75);
 
-    // 3h window, zone 30min old: age=0.5h, windowHours=3, opacity = 1 - 0.5/3 ≈ 0.833
+    // 3h window, zone 30min old: ratio=0.5/3≈0.167, opacity = 1 - 0.028 ≈ 0.972
     const opacity3h = calculateOpacityFactor('2025-06-15T11:30:00Z', currentTime, '3h');
-    expect(opacity3h).toBeCloseTo(1 - 0.5 / 3);
+    expect(opacity3h).toBeCloseTo(1 - (0.5 / 3) ** 2);
   });
 });
