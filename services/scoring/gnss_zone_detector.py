@@ -91,11 +91,24 @@ async def detect_gnss_zones(session: AsyncSession) -> int:
         zones_affected += await _upsert_zone(session, cluster)
 
         # Collect pre-jump positions for vessels in this target cluster
+        # Only include pre-jump positions within 500km of the target centroid
+        # to exclude GPS glitches from unrelated parts of the world
+        target_lat = sum(m["lat"] for m in cluster) / len(cluster)
+        target_lon = sum(m["lon"] for m in cluster) / len(cluster)
+        MAX_PRE_JUMP_DISTANCE_KM = 500
+
         cluster_mmsis = {m["mmsi"] for m in cluster}
-        pre_jump_positions = [
-            pre_jump_by_mmsi[mmsi] for mmsi in cluster_mmsis
-            if mmsi in pre_jump_by_mmsi
-        ]
+        pre_jump_positions = []
+        for mmsi in cluster_mmsis:
+            if mmsi not in pre_jump_by_mmsi:
+                continue
+            p = pre_jump_by_mmsi[mmsi]
+            # Rough distance check (1 degree ≈ 111km at equator)
+            dlat = abs(p["lat"] - target_lat) * 111
+            dlon = abs(p["lon"] - target_lon) * 111 * 0.6  # cos(55°) ≈ 0.6 for Baltic
+            dist_km = (dlat**2 + dlon**2) ** 0.5
+            if dist_km <= MAX_PRE_JUMP_DISTANCE_KM:
+                pre_jump_positions.append(p)
 
         # Create interference_area zone if 3+ distinct vessels have pre-jump positions
         pre_jump_mmsis = {p["mmsi"] for p in pre_jump_positions}
