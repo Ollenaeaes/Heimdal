@@ -2,6 +2,11 @@
 
 This file is the implementation scratchpad. Read it at the start of every session. Update it after every completed story. It survives context resets and session changes.
 
+## Notes for Next Session
+- New approved spec: 36-spoofing-rethink — ready for implementation
+- Supersedes draft specs 24 (spoofing-detection-backend) and 27 (spoofing-detection-frontend)
+- Key context: ~17,000 false positive anomaly events to bulk-resolve, area-based GNSS zone detection replaces vessel-level blame
+
 ## Current Feature
 
 **Spec:** Wave Plan — 28 specs across 13 waves (Capability Modules)
