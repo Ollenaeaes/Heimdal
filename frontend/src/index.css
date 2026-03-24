@@ -32,6 +32,17 @@ html, body, #root {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
+/* SAR popup — strip maplibre default chrome */
+.sar-popup .maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.sar-popup .maplibregl-popup-tip {
+  display: none !important;
+}
+
 /* Ensure Cesium viewer fills its container */
 .cesium-viewer,
 .cesium-widget,

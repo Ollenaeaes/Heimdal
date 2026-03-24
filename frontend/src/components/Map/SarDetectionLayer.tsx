@@ -210,13 +210,25 @@ export function SarDetectionLayer({ visible }: SarDetectionLayerProps) {
           longitude={popup.lon}
           latitude={popup.lat}
           onClose={handleClosePopup}
-          closeButton={true}
+          closeButton={false}
           closeOnClick={false}
-          className="text-xs"
+          className="sar-popup"
+          anchor="bottom"
+          offset={12}
         >
-          <div className="bg-slate-800 text-white p-2 rounded text-xs min-w-[200px]">
-            <div className="font-bold mb-1.5">
-              {p.is_dark ? 'Dark Ship Detection' : 'SAR Detection'}
+          <div className="bg-[#0B1120] border border-slate-700 text-white p-3 rounded-lg text-xs min-w-[220px] shadow-xl shadow-black/50">
+            {/* Header with close button */}
+            <div className="flex items-start justify-between mb-2">
+              <div className="font-bold text-sm">
+                {p.is_dark ? 'Dark Ship' : 'SAR Detection'}
+              </div>
+              <button
+                onClick={handleClosePopup}
+                className="ml-3 -mt-0.5 -mr-1 w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              </button>
             </div>
 
             <div className="space-y-0.5 text-gray-400">
@@ -230,10 +242,10 @@ export function SarDetectionLayer({ visible }: SarDetectionLayerProps) {
                 <div>Category: <span className="text-gray-300">{p.matched_category}</span></div>
               )}
               {p.matching_score != null && (
-                <div>Match confidence: <span className="text-gray-300">{(p.matching_score * 100).toFixed(0)}%</span></div>
+                <div>Match confidence: <span className="text-gray-300">{(Number(p.matching_score) * 100).toFixed(0)}%</span></div>
               )}
               {p.fishing_score != null && (
-                <div>Fishing score: <span className="text-gray-300">{(p.fishing_score * 100).toFixed(0)}%</span></div>
+                <div>Fishing score: <span className="text-gray-300">{(Number(p.fishing_score) * 100).toFixed(0)}%</span></div>
               )}
             </div>
 
@@ -258,21 +270,21 @@ export function SarDetectionLayer({ visible }: SarDetectionLayerProps) {
                   )}
                   {p.matched_vessel_last_seen && (
                     <div className="text-gray-500">
-                      Last AIS: {timeAgo(p.matched_vessel_last_seen)}
+                      Last AIS: {timeAgo(String(p.matched_vessel_last_seen))}
                     </div>
                   )}
                   <button
                     onClick={handleGoToVessel}
                     className="mt-1.5 w-full text-center px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
                   >
-                    Open vessel →
+                    Open vessel
                   </button>
                 </div>
               </div>
             )}
 
             {p.is_dark && (
-              <div className="mt-2 px-1.5 py-0.5 bg-red-900/40 border border-red-700/50 rounded text-red-300 text-center">
+              <div className="mt-2 px-1.5 py-1 bg-red-900/40 border border-red-700/50 rounded text-red-300 text-center text-[0.65rem]">
                 No AIS transmission detected
               </div>
             )}
