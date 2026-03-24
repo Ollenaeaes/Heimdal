@@ -21,7 +21,7 @@ This file is read at the start of every session. It captures mistakes, patterns,
 
 - (2026-03-16) **NEVER rebuild or recreate the prod postgres container.** All schema changes must be SQL migrations applied via `psql -f`. Rebuilding wipes all data — equasis imports, manual enrichment, watchlists, and scoring history are irreplaceable. Use `--no-deps` when deploying other services.
 - (2026-03-16) **The timescaledb-ha image uses `/home/postgres/pgdata` as PGDATA**, not `/var/lib/postgresql/data`. The volume mount must point to `/home/postgres/pgdata` or data is stored in the container's ephemeral filesystem and lost on recreation.
-- (2026-03-16) **Always dump before any infra change:** `docker compose exec postgres pg_dump -U heimdal -Fc heimdal > /data/raw/backup.dump`. The `/data/raw/` path is a host bind mount that survives container operations.
+- (2026-03-16) **Always dump before any infra change.** Disk space on Hostinger VPS is limited — pipe the backup directly to the local machine instead of storing on the server: `ssh root@76.13.248.226 "docker exec heimdal-postgres-1 pg_dump -U heimdal -Fc heimdal" > local_backup.dump`. Only use server-side dumps as a last resort.
 
 ## Mistakes to Avoid
 
