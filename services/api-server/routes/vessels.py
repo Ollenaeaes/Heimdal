@@ -291,7 +291,7 @@ async def area_history(
     async with session_factory() as session:
         try:
             # Set statement timeout separately (asyncpg doesn't allow multi-statement)
-            await session.execute(text("SET LOCAL statement_timeout = '30s'"))
+            await session.execute(text("SET LOCAL statement_timeout = '60s'"))
             result = await session.execute(sql, {
                 "start": start,
                 "end": end,
