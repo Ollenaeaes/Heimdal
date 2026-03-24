@@ -260,6 +260,10 @@ async def _cluster_anomalous_positions(
             WITH anomalous(mmsi, lat, lon, ts, implied_speed_kn, position_type) AS (
                 VALUES {values_sql}
             ),
+            typed AS (
+                SELECT mmsi, lat::float8, lon::float8, ts, implied_speed_kn::float8, position_type
+                FROM anomalous
+            ),
             clustered AS (
                 SELECT
                     mmsi,
@@ -273,7 +277,7 @@ async def _cluster_anomalous_positions(
                         eps := :cluster_radius,
                         minpoints := :min_pts
                     ) OVER () AS cluster_id
-                FROM anomalous
+                FROM typed
             )
             SELECT
                 cluster_id,
