@@ -47,12 +47,34 @@ async def get_gfw_events(
             offset=offset,
         )
 
-    # Apply end-time filter in-memory (the repository only supports start_after)
-    if end:
-        rows = [
-            r for r in rows
-            if r.get("start_time") is not None and r["start_time"] <= end
-        ]
+        # Apply end-time filter in-memory (the repository only supports start_after)
+        if end:
+            rows = [
+                r for r in rows
+                if r.get("start_time") is not None and r["start_time"] <= end
+            ]
+
+        # Batch-fetch vessel info for all MMSIs (vessel + encounter partners)
+        all_mmsis = set()
+        for r in rows:
+            if r.get("mmsi"):
+                all_mmsis.add(r["mmsi"])
+            if r.get("encounter_mmsi"):
+                all_mmsis.add(r["encounter_mmsi"])
+
+        vessel_lookup: dict = {}
+        if all_mmsis:
+            from sqlalchemy import text
+            vp_result = await session.execute(
+                text(
+                    "SELECT mmsi, ship_name, flag_country, ship_type_text, "
+                    "risk_tier, risk_score "
+                    "FROM vessel_profiles WHERE mmsi = ANY(:mmsis)"
+                ),
+                {"mmsis": list(all_mmsis)},
+            )
+            for v in vp_result.mappings().all():
+                vessel_lookup[v["mmsi"]] = dict(v)
 
     # Transform to frontend-expected camelCase format
     items = []
@@ -67,6 +89,9 @@ async def get_gfw_events(
             except Exception:
                 pass
 
+        vessel = vessel_lookup.get(r.get("mmsi")) if r.get("mmsi") else None
+        partner = vessel_lookup.get(r.get("encounter_mmsi")) if r.get("encounter_mmsi") else None
+
         items.append({
             "id": str(r.get("id", r.get("gfw_event_id", ""))),
             "type": r.get("event_type"),
@@ -75,9 +100,13 @@ async def get_gfw_events(
             "lat": r.get("lat"),
             "lon": r.get("lon"),
             "vesselMmsi": r.get("mmsi"),
-            "vesselName": None,  # enriched later if needed
+            "vesselName": vessel["ship_name"] if vessel else None,
+            "vesselFlag": vessel["flag_country"] if vessel else None,
+            "vesselType": vessel["ship_type_text"] if vessel else None,
+            "vesselRiskTier": vessel["risk_tier"] if vessel else None,
             "encounterPartnerMmsi": r.get("encounter_mmsi"),
-            "encounterPartnerName": None,
+            "encounterPartnerName": partner["ship_name"] if partner else None,
+            "encounterPartnerFlag": partner["flag_country"] if partner else None,
             "portName": r.get("port_name"),
             "durationHours": duration_hours,
         })

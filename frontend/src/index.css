@@ -32,7 +32,7 @@ html, body, #root {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-/* SAR popup — strip maplibre default chrome */
+/* Map popups (SAR, GFW events) — strip maplibre default chrome */
 .sar-popup .maplibregl-popup-content {
   background: transparent !important;
   padding: 0 !important;
