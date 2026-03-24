@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { SpeedSlider } from './SpeedSlider';
 
 export interface GnssTimeBarProps {
   visible: boolean;
@@ -49,6 +50,14 @@ export function GnssTimeBar({
   const now = useMemo(() => new Date(), []);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Playback state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(60); // 1 min/sec default
+  const rafRef = useRef<number>(0);
+  const lastFrameRef = useRef<number>(0);
+  const centerTimeRef = useRef(centerTime);
+  useEffect(() => { centerTimeRef.current = centerTime; }, [centerTime]);
+
   const sliderValue = useMemo(() => dateToSliderValue(centerTime, now), [centerTime, now]);
   const windowHours = WINDOW_HOURS[windowSize] ?? 24;
   const halfWindowHours = windowHours / 2;
@@ -67,6 +76,41 @@ export function GnssTimeBar({
     };
   }, []);
 
+  // Animation loop
+  useEffect(() => {
+    if (!isPlaying) {
+      lastFrameRef.current = 0;
+      return;
+    }
+
+    function tick(now: number) {
+      if (lastFrameRef.current === 0) {
+        lastFrameRef.current = now;
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      const deltaMs = now - lastFrameRef.current;
+      lastFrameRef.current = now;
+
+      const advanceMs = deltaMs * playbackSpeed;
+      const nextTime = new Date(centerTimeRef.current.getTime() + advanceMs);
+
+      // Stop at "now"
+      if (nextTime.getTime() >= Date.now()) {
+        onCenterTimeChange(new Date());
+        setIsPlaying(false);
+        return;
+      }
+
+      onCenterTimeChange(nextTime);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [isPlaying, playbackSpeed, onCenterTimeChange]);
+
   const debouncedCenterTimeChange = useCallback(
     (date: Date) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -79,6 +123,7 @@ export function GnssTimeBar({
 
   const handleSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      setIsPlaying(false);
       const value = Number(e.target.value);
       const date = sliderValueToDate(value, now);
       debouncedCenterTimeChange(date);
@@ -93,6 +138,12 @@ export function GnssTimeBar({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (e.key === ' ') {
+        e.preventDefault();
+        setIsPlaying((p) => !p);
+        return;
+      }
+
       let nudgeHours = 0;
       if (e.key === 'ArrowLeft') nudgeHours = e.shiftKey ? -6 : -1;
       else if (e.key === 'ArrowRight') nudgeHours = e.shiftKey ? 6 : 1;
@@ -115,8 +166,26 @@ export function GnssTimeBar({
         {formatUTC(centerTime)}
       </div>
 
-      {/* Preset buttons + Now */}
+      {/* Preset buttons + Now + Playback controls */}
       <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-sm rounded-lg px-2 py-1.5 border border-slate-700/50">
+        {/* Play/Pause button */}
+        <button
+          onClick={() => setIsPlaying(!isPlaying)}
+          className="text-slate-300 hover:text-amber-400 transition-colors mr-1"
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16" rx="1" />
+              <rect x="14" y="4" width="4" height="16" rx="1" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          )}
+        </button>
+
         <span className="text-[10px] text-slate-500 uppercase tracking-wider mr-1">GNSS</span>
         {WINDOW_PRESETS.map((preset) => (
           <button
@@ -138,6 +207,14 @@ export function GnssTimeBar({
         >
           Now
         </button>
+
+        {/* Speed slider — visible when playing */}
+        {isPlaying && (
+          <>
+            <div className="w-px h-4 bg-slate-700 mx-1" />
+            <SpeedSlider value={playbackSpeed} onChange={setPlaybackSpeed} />
+          </>
+        )}
       </div>
 
       {/* Timeline slider with window highlight */}
