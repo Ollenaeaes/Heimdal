@@ -12,11 +12,9 @@ export interface GnssTimeBarProps {
 const SLIDER_RANGE_HOURS = 30 * 24; // 30 days in hours
 
 const WINDOW_HOURS: Record<string, number> = {
+  '1h': 1,
+  '3h': 3,
   '6h': 6,
-  '12h': 12,
-  '24h': 24,
-  '3d': 72,
-  '7d': 168,
 };
 
 const WINDOW_PRESETS = Object.keys(WINDOW_HOURS);

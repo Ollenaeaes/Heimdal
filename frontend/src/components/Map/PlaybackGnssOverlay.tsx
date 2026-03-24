@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
-import type { FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
+import type { CircleLayerSpecification } from 'maplibre-gl';
 import { useLookbackStore } from '../../hooks/useLookbackStore';
 
 /**
@@ -15,12 +15,10 @@ function windowToMs(w: '1h' | '3h' | '6h'): number {
 }
 
 /**
- * Filter zones from the cache that overlap with the current playback time window.
- * A zone is visible if: detected_at <= currentTime + windowHalf AND expires_at >= currentTime - windowHalf.
- *
+ * Filter positions from the cache that fall within the current playback time window.
  * Exported for testing.
  */
-export function filterZonesByTime(
+export function filterPositionsByTime(
   features: GeoJSON.Feature[],
   currentTime: Date,
   windowSize: '1h' | '3h' | '6h',
@@ -32,59 +30,10 @@ export function filterZonesByTime(
 
   return features.filter((feature) => {
     const detectedAt = feature.properties?.detected_at;
-    const expiresAt = feature.properties?.expires_at;
-    if (!detectedAt || !expiresAt) return false;
-
-    const detectedMs = new Date(detectedAt).getTime();
-    const expiresMs = new Date(expiresAt).getTime();
-
-    return detectedMs <= windowEnd && expiresMs >= windowStart;
+    if (!detectedAt) return false;
+    const ms = new Date(detectedAt).getTime();
+    return ms >= windowStart && ms <= windowEnd;
   });
-}
-
-/**
- * Calculate opacity_factor for a zone relative to the playback currentTime.
- * Zones detected closer to currentTime are more opaque.
- * Ranges from 1.0 (detected at currentTime) to 0.2 (at edge of window).
- *
- * Exported for testing.
- */
-export function calculateOpacityFactor(
-  detectedAt: string,
-  currentTime: Date,
-  windowSize: '1h' | '3h' | '6h',
-): number {
-  const currentMs = currentTime.getTime();
-  const detectedMs = new Date(detectedAt).getTime();
-  const windowMs = windowToMs(windowSize);
-  const ageMs = Math.abs(currentMs - detectedMs);
-  const ratio = Math.min(1, ageMs / windowMs);
-  // Quadratic falloff — zones fade quickly then linger faintly
-  return Math.max(0.05, 1 - ratio * ratio);
-}
-
-/**
- * Add opacity_factor to each filtered feature based on temporal proximity to playhead.
- */
-function addTemporalFade(
-  features: GeoJSON.Feature[],
-  currentTime: Date,
-  windowSize: '1h' | '3h' | '6h',
-): GeoJSON.FeatureCollection {
-  return {
-    type: 'FeatureCollection',
-    features: features.map((feature) => {
-      const detectedAt = feature.properties?.detected_at;
-      const opacityFactor = detectedAt
-        ? calculateOpacityFactor(detectedAt, currentTime, windowSize)
-        : 1;
-
-      return {
-        ...feature,
-        properties: { ...feature.properties, opacity_factor: opacityFactor },
-      };
-    }),
-  };
 }
 
 /**
@@ -92,20 +41,15 @@ function addTemporalFade(
  */
 function computeFetchWindow(dateRange: { start: Date; end: Date }): string {
   const totalHours = (dateRange.end.getTime() - dateRange.start.getTime()) / 3_600_000;
+  if (totalHours <= 1) return '1h';
+  if (totalHours <= 3) return '3h';
   if (totalHours <= 6) return '6h';
-  if (totalHours <= 12) return '12h';
-  if (totalHours <= 24) return '24h';
-  if (totalHours <= 72) return '3d';
-  if (totalHours <= 168) return '7d';
-  return '30d';
+  // For longer ranges, we need to fetch all positions in the range directly
+  return `${Math.ceil(totalHours)}h`;
 }
 
 /**
- * PlaybackGnssOverlay renders GNSS interference zones during lookback playback.
- *
- * It reads the pre-fetched gnssZonesCache, filters zones by the current playhead
- * time and overlay window, applies temporal fade, and renders polygons using the
- * same paint styles as GnssHeatmap.
+ * PlaybackGnssOverlay renders GNSS spoofed position dots during lookback playback.
  */
 export function PlaybackGnssOverlay() {
   const showGnssOverlay = useLookbackStore((s) => s.showGnssOverlay);
@@ -115,7 +59,7 @@ export function PlaybackGnssOverlay() {
   const dateRange = useLookbackStore((s) => s.dateRange);
   const setGnssZonesCache = useLookbackStore((s) => s.setGnssZonesCache);
 
-  // Pre-fetch GNSS zones when overlay is toggled on
+  // Pre-fetch all GNSS positions for the playback date range
   useEffect(() => {
     if (!showGnssOverlay) {
       setGnssZonesCache(null);
@@ -132,9 +76,9 @@ export function PlaybackGnssOverlay() {
 
     let cancelled = false;
 
-    fetch(`/api/gnss-zones?${params}`)
+    fetch(`/api/gnss-positions?${params}`)
       .then((res) => {
-        if (!res.ok) throw new Error(`GNSS zones fetch failed: ${res.status}`);
+        if (!res.ok) throw new Error(`GNSS positions fetch failed: ${res.status}`);
         return res.json();
       })
       .then((data: GeoJSON.FeatureCollection) => {
@@ -143,7 +87,7 @@ export function PlaybackGnssOverlay() {
         }
       })
       .catch((err) => {
-        console.error('Failed to fetch GNSS zones for playback:', err);
+        console.error('Failed to fetch GNSS positions for playback:', err);
       });
 
     return () => {
@@ -151,63 +95,42 @@ export function PlaybackGnssOverlay() {
     };
   }, [showGnssOverlay, dateRange, setGnssZonesCache]);
 
-  // Filter and fade zones based on current playhead time
+  // Filter positions by current playhead time
   const data = useMemo(() => {
     if (!gnssZonesCache) return null;
-    const filtered = filterZonesByTime(gnssZonesCache.features, currentTime, gnssOverlayWindow);
-    return addTemporalFade(filtered, currentTime, gnssOverlayWindow);
+    const filtered = filterPositionsByTime(gnssZonesCache.features, currentTime, gnssOverlayWindow);
+    return { type: 'FeatureCollection' as const, features: filtered };
   }, [gnssZonesCache, currentTime, gnssOverlayWindow]);
 
-  // Paint styles matching GnssHeatmap
-  const fillPaint: FillLayerSpecification['paint'] = {
-    'fill-color': [
-      'case',
-      ['==', ['get', 'event_type'], 'jamming'],
-      [
-        'interpolate', ['linear'], ['get', 'affected_count'],
-        1, 'rgba(147,51,234,0.3)',
-        15, 'rgba(99,102,241,0.8)',
-      ],
-      ['==', ['get', 'event_type'], 'interference_area'],
-      [
-        'interpolate', ['linear'], ['get', 'affected_count'],
-        1, 'rgba(6,182,212,0.3)',
-        15, 'rgba(14,116,144,0.8)',
-      ],
-      [
-        'interpolate', ['linear'], ['get', 'affected_count'],
-        1, 'rgba(249,115,22,0.3)',
-        15, 'rgba(239,68,68,0.8)',
-      ],
-    ],
-    'fill-opacity': ['get', 'opacity_factor'],
+  const spoofedPaint: CircleLayerSpecification['paint'] = {
+    'circle-color': 'rgba(239,68,68,0.7)',
+    'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 2, 6, 4, 10, 6],
+    'circle-stroke-width': 0.5,
+    'circle-stroke-color': 'rgba(239,68,68,0.5)',
   };
 
-  const linePaint: LineLayerSpecification['paint'] = {
-    'line-color': [
-      'case',
-      ['==', ['get', 'event_type'], 'jamming'],
-      'rgba(99,102,241,0.9)',
-      ['==', ['get', 'event_type'], 'interference_area'],
-      'rgba(6,182,212,0.9)',
-      'rgba(239,68,68,0.9)',
-    ],
-    'line-width': 1,
+  const realPaint: CircleLayerSpecification['paint'] = {
+    'circle-color': 'rgba(6,182,212,0.6)',
+    'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 2, 6, 3, 10, 5],
+    'circle-stroke-width': 0.5,
+    'circle-stroke-color': 'rgba(6,182,212,0.4)',
   };
 
   if (!showGnssOverlay || !data) return null;
 
   return (
-    <Source id="playback-gnss-zones" type="geojson" data={data}>
+    <Source id="playback-gnss-positions" type="geojson" data={data}>
       <Layer
-        id="playback-gnss-zones-fill"
-        type="fill"
-        paint={fillPaint}
+        id="playback-gnss-spoofed-dots"
+        type="circle"
+        filter={['==', ['get', 'point_type'], 'spoofed']}
+        paint={spoofedPaint}
       />
       <Layer
-        id="playback-gnss-zones-outline"
-        type="line"
-        paint={linePaint}
+        id="playback-gnss-real-dots"
+        type="circle"
+        filter={['==', ['get', 'point_type'], 'real']}
+        paint={realPaint}
       />
     </Source>
   );

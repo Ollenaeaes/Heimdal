@@ -1,172 +1,93 @@
 import { useMemo } from 'react';
 import { Source, Layer } from 'react-map-gl/maplibre';
 import { useQuery } from '@tanstack/react-query';
-import type { FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
+import type { CircleLayerSpecification } from 'maplibre-gl';
 
 export interface GnssHeatmapProps {
   visible: boolean;
   centerTime?: Date;
-  windowSize?: string; // "6h" | "12h" | "24h" | "3d" | "7d"
-}
-
-/** Severity to heatmap weight mapping. Exported for tests. */
-export function severityWeight(severity: string): number {
-  switch (severity) {
-    case 'critical': return 3;
-    case 'high': return 2;
-    case 'moderate': return 1;
-    default: return 0.5;
-  }
+  windowSize?: string; // "1h" | "3h" | "6h"
 }
 
 /**
- * @deprecated Use the new polygon-based GNSS zone API instead.
- * Convert spoofing events to GeoJSON FeatureCollection (legacy point-based format).
- */
-export function buildGnssSpoofingGeoJson(
-  events: { lat: number; lon: number; severity: string }[],
-): GeoJSON.FeatureCollection {
-  return {
-    type: 'FeatureCollection',
-    features: events.map((e) => ({
-      type: 'Feature' as const,
-      geometry: { type: 'Point' as const, coordinates: [e.lon, e.lat] },
-      properties: {
-        severity: e.severity,
-        weight: severityWeight(e.severity),
-      },
-    })),
-  };
-}
-
-/** Parse a window size string like "6h", "24h", "3d", "7d" into hours. */
-function parseWindowHours(windowSize: string): number {
-  const match = windowSize.match(/^(\d+)(h|d)$/);
-  if (!match) return 24;
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  return unit === 'd' ? value * 24 : value;
-}
-
-/** Add opacity_factor to each feature based on age relative to the time window. */
-function addTemporalFade(
-  geojson: GeoJSON.FeatureCollection,
-  centerTime: Date,
-  windowHours: number,
-): GeoJSON.FeatureCollection {
-  const centerMs = centerTime.getTime();
-
-  return {
-    type: 'FeatureCollection',
-    features: geojson.features.map((feature) => {
-      const detectedAt = feature.properties?.detected_at;
-      if (!detectedAt) {
-        return {
-          ...feature,
-          properties: { ...feature.properties, opacity_factor: 1 },
-        };
-      }
-
-      const ageMs = centerMs - new Date(detectedAt).getTime();
-      const ratio = Math.min(1, Math.abs(ageMs) / (windowHours * 3_600_000));
-      // Quadratic falloff — zones fade quickly then linger faintly
-      const opacityFactor = Math.max(0.05, 1 - ratio * ratio);
-
-      return {
-        ...feature,
-        properties: { ...feature.properties, opacity_factor: opacityFactor },
-      };
-    }),
-  };
-}
-
-/**
- * Renders GNSS interference zones as filled polygons with color intensity
- * based on affected_count, event_type, and temporal fade.
+ * Renders GNSS spoofed positions as dots on the map.
  *
- * Spoofing zones use a red/orange spectrum, jamming zones use purple/blue.
- * Opacity decreases for older zones within the time window.
+ * Red dots: where GPS says the vessel is (spoofing target)
+ * Cyan dots: where the vessel actually was (interference area)
  */
 export function GnssHeatmap({
   visible,
   centerTime,
-  windowSize = '24h',
+  windowSize = '1h',
 }: GnssHeatmapProps) {
   const effectiveCenterTime = centerTime ?? new Date();
-  const windowHours = parseWindowHours(windowSize);
 
-  const { data: rawData } = useQuery<GeoJSON.FeatureCollection>({
-    queryKey: ['gnssZones', effectiveCenterTime.toISOString(), windowSize],
+  const { data } = useQuery<GeoJSON.FeatureCollection>({
+    queryKey: ['gnssPositions', effectiveCenterTime.toISOString(), windowSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         center: effectiveCenterTime.toISOString(),
         window: windowSize,
       });
-      const res = await fetch(`/api/gnss-zones?${params}`);
-      if (!res.ok) throw new Error(`GNSS zones fetch failed: ${res.status}`);
+      const res = await fetch(`/api/gnss-positions?${params}`);
+      if (!res.ok) throw new Error(`GNSS positions fetch failed: ${res.status}`);
       return res.json();
     },
     enabled: visible,
     refetchInterval: 60_000,
   });
 
-  const data = useMemo(() => {
-    if (!rawData) return null;
-    return addTemporalFade(rawData, effectiveCenterTime, windowHours);
-  }, [rawData, effectiveCenterTime, windowHours]);
-
-  const fillPaint: FillLayerSpecification['paint'] = {
-    'fill-color': [
-      'case',
-      ['==', ['get', 'event_type'], 'jamming'],
-      // Jamming: purple/blue spectrum based on affected_count
-      [
-        'interpolate', ['linear'], ['get', 'affected_count'],
-        1, 'rgba(147,51,234,0.3)',
-        15, 'rgba(99,102,241,0.8)',
-      ],
-      ['==', ['get', 'event_type'], 'interference_area'],
-      // Interference area (pre-jump positions): cyan spectrum
-      [
-        'interpolate', ['linear'], ['get', 'affected_count'],
-        1, 'rgba(6,182,212,0.3)',
-        15, 'rgba(14,116,144,0.8)',
-      ],
-      // Spoofing target (default): red/orange spectrum based on affected_count
-      [
-        'interpolate', ['linear'], ['get', 'affected_count'],
-        1, 'rgba(249,115,22,0.3)',
-        15, 'rgba(239,68,68,0.8)',
-      ],
+  const spoofedPaint: CircleLayerSpecification['paint'] = {
+    'circle-color': [
+      'interpolate', ['linear'], ['get', 'deviation_km'],
+      80, 'rgba(249,115,22,0.6)',   // orange at threshold
+      200, 'rgba(239,68,68,0.8)',   // red at high deviation
+      500, 'rgba(220,38,38,0.9)',   // deep red at extreme
     ],
-    'fill-opacity': ['get', 'opacity_factor'],
+    'circle-radius': [
+      'interpolate', ['linear'], ['zoom'],
+      3, 2,
+      6, 4,
+      10, 6,
+    ],
+    'circle-stroke-width': 0.5,
+    'circle-stroke-color': 'rgba(239,68,68,0.5)',
   };
 
-  const linePaint: LineLayerSpecification['paint'] = {
-    'line-color': [
-      'case',
-      ['==', ['get', 'event_type'], 'jamming'],
-      'rgba(99,102,241,0.9)',
-      ['==', ['get', 'event_type'], 'interference_area'],
-      'rgba(6,182,212,0.9)',
-      'rgba(239,68,68,0.9)',
+  const realPaint: CircleLayerSpecification['paint'] = {
+    'circle-color': [
+      'interpolate', ['linear'], ['get', 'deviation_km'],
+      80, 'rgba(6,182,212,0.5)',    // light cyan at threshold
+      200, 'rgba(6,182,212,0.7)',   // cyan
+      500, 'rgba(14,116,144,0.9)', // teal at extreme
     ],
-    'line-width': 1,
+    'circle-radius': [
+      'interpolate', ['linear'], ['zoom'],
+      3, 2,
+      6, 3,
+      10, 5,
+    ],
+    'circle-stroke-width': 0.5,
+    'circle-stroke-color': 'rgba(6,182,212,0.4)',
   };
 
   if (!visible || !data) return null;
 
   return (
-    <Source id="gnss-zones" type="geojson" data={data}>
+    <Source id="gnss-positions" type="geojson" data={data}>
+      {/* Spoofed positions — red dots (where GPS says vessel is) */}
       <Layer
-        id="gnss-zones-fill"
-        type="fill"
-        paint={fillPaint}
+        id="gnss-spoofed-dots"
+        type="circle"
+        filter={['==', ['get', 'point_type'], 'spoofed']}
+        paint={spoofedPaint}
       />
+      {/* Real positions — cyan dots (where vessel actually was) */}
       <Layer
-        id="gnss-zones-outline"
-        type="line"
-        paint={linePaint}
+        id="gnss-real-dots"
+        type="circle"
+        filter={['==', ['get', 'point_type'], 'real']}
+        paint={realPaint}
       />
     </Source>
   );

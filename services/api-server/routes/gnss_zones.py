@@ -137,6 +137,77 @@ async def get_gnss_zones(
     }
 
 
+@router.get("/gnss-positions")
+async def get_gnss_spoofed_positions(
+    center: str | None = Query(None, description="Center of time window (ISO datetime). Default: now"),
+    window: str | None = Query(None, description="Window size: 1h, 3h, 6h. Default: 1h"),
+):
+    """Return spoofed vessel positions as GeoJSON points for dot-based rendering.
+
+    Returns two point types per spoofed position:
+    - spoofed: where GPS says the vessel is (red dots)
+    - real: interpolated actual position (cyan dots)
+    """
+    window_hours_map = {"1h": 1, "3h": 3, "6h": 6}
+    wh = window_hours_map.get(window or "1h", 1)
+
+    if center:
+        try:
+            center_dt = datetime.fromisoformat(center)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid center datetime")
+    else:
+        center_dt = datetime.now(timezone.utc)
+
+    half = timedelta(hours=wh / 2)
+    window_start = center_dt - half
+    window_end = center_dt + half
+
+    session_factory = get_session()
+    async with session_factory() as session:
+        result = await session.execute(
+            text("""
+                SELECT mmsi, detected_at, spoofed_lat, spoofed_lon,
+                       real_lat, real_lon, event_type, deviation_km
+                FROM gnss_spoofed_positions
+                WHERE detected_at BETWEEN :ws AND :we
+                ORDER BY detected_at
+            """),
+            {"ws": window_start, "we": window_end},
+        )
+        rows = result.mappings().all()
+
+    features = []
+    for row in rows:
+        # Spoofed position (where GPS says vessel is)
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [float(row["spoofed_lon"]), float(row["spoofed_lat"])]},
+            "properties": {
+                "mmsi": row["mmsi"],
+                "detected_at": row["detected_at"].isoformat(),
+                "point_type": "spoofed",
+                "event_type": row["event_type"],
+                "deviation_km": float(row["deviation_km"]) if row["deviation_km"] else None,
+            },
+        })
+        # Real position (interpolated actual location)
+        if row["real_lat"] is not None and row["real_lon"] is not None:
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [float(row["real_lon"]), float(row["real_lat"])]},
+                "properties": {
+                    "mmsi": row["mmsi"],
+                    "detected_at": row["detected_at"].isoformat(),
+                    "point_type": "real",
+                    "event_type": row["event_type"],
+                    "deviation_km": float(row["deviation_km"]) if row["deviation_km"] else None,
+                },
+            })
+
+    return {"type": "FeatureCollection", "features": features}
+
+
 @router.get("/gnss-spoofing-events")
 async def get_spoofing_events(start: str | None = None, end: str | None = None):
     """Return spoofing event locations for heatmap rendering.
