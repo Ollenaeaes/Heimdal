@@ -251,6 +251,7 @@ async def area_history(
     polygon: str = Query(..., description="JSON array of [lon, lat] coordinate pairs"),
     start: datetime = Query(...),
     end: datetime = Query(...),
+    risk_tier: Optional[str] = Query(None, description="Comma-separated risk tiers to filter (e.g. 'red,blacklisted')"),
 ):
     """Return vessels that appeared within a polygon during a time range."""
     # Parse polygon JSON
@@ -287,8 +288,20 @@ async def area_history(
         "coordinates": [coords],
     })
 
+    # Parse risk tier filter
+    tier_filter = ""
+    params: dict = {
+        "start": start,
+        "end": end,
+        "polygon_geojson": geojson_polygon,
+    }
+    if risk_tier:
+        tiers = [t.strip() for t in risk_tier.split(",") if t.strip()]
+        if tiers:
+            tier_filter = "    AND vp.mmsi IN (SELECT mmsi FROM vessel_profiles WHERE risk_tier = ANY(:risk_tiers)) "
+            params["risk_tiers"] = tiers
+
     # Use ST_Intersects on native geography (no ::geometry cast) so the GIST index is used.
-    # ST_GeogFromText wraps the GeoJSON polygon as geography to match the column type.
     sql = text(
         "SELECT sub.mmsi, vp2.ship_name, vp2.flag_country, vp2.risk_tier, sub.position_count "
         "FROM ("
@@ -296,6 +309,7 @@ async def area_history(
         "  FROM vessel_positions vp "
         "  WHERE vp.timestamp BETWEEN :start AND :end "
         "    AND ST_Intersects(vp.position, ST_GeogFromText(ST_AsText(ST_GeomFromGeoJSON(:polygon_geojson)))) "
+        f"{tier_filter}"
         "  GROUP BY vp.mmsi "
         "  ORDER BY position_count DESC "
         "  LIMIT 500"
@@ -309,11 +323,7 @@ async def area_history(
         try:
             # Set statement timeout separately (asyncpg doesn't allow multi-statement)
             await session.execute(text("SET LOCAL statement_timeout = '60s'"))
-            result = await session.execute(sql, {
-                "start": start,
-                "end": end,
-                "polygon_geojson": geojson_polygon,
-            })
+            result = await session.execute(sql, params)
             rows = result.mappings().all()
         except Exception as exc:
             logger.warning("Area history query failed: %s", exc)

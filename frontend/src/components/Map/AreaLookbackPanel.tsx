@@ -50,6 +50,7 @@ export function AreaLookbackPanel() {
     }
   }, [oldestAvailable, startDate]);
 
+  const [riskFilter, setRiskFilter] = useState<string>('all');
   const [results, setResults] = useState<AreaVessel[]>([]);
   const [selectedMmsis, setSelectedMmsis] = useState<Set<number>>(new Set());
   const [isSearching, setIsSearching] = useState(false);
@@ -68,6 +69,9 @@ export function AreaLookbackPanel() {
         start: new Date(startDate + ':00Z').toISOString(),
         end: new Date(endDate + ':00Z').toISOString(),
       });
+      if (riskFilter !== 'all') {
+        params.set('risk_tier', riskFilter);
+      }
 
       const res = await fetch(`/api/vessels/area-history?${params}`);
       if (!res.ok) {
@@ -85,7 +89,7 @@ export function AreaLookbackPanel() {
     } finally {
       setIsSearching(false);
     }
-  }, [areaPolygon, startDate, endDate]);
+  }, [areaPolygon, startDate, endDate, riskFilter]);
 
   const toggleVessel = useCallback((mmsi: number) => {
     setSelectedMmsis((prev) => {
@@ -172,6 +176,25 @@ export function AreaLookbackPanel() {
               data-testid="area-lookback-end"
             />
           </div>
+        </div>
+
+        {/* Risk tier filter */}
+        <div>
+          <label className="text-[0.65rem] text-slate-500 block mb-1">Risk filter</label>
+          <select
+            value={riskFilter}
+            onChange={(e) => setRiskFilter(e.target.value)}
+            className="w-full px-2 py-1 text-xs bg-[#1F2937] text-gray-300 border border-[#374151] rounded focus:border-blue-500 focus:outline-none"
+            data-testid="area-lookback-risk-filter"
+          >
+            <option value="all">All vessels</option>
+            <option value="blacklisted">Blacklisted only</option>
+            <option value="red,blacklisted">Red + Blacklisted</option>
+            <option value="yellow,red,blacklisted">Yellow + Red + Blacklisted</option>
+            <option value="red">Red only</option>
+            <option value="yellow">Yellow only</option>
+            <option value="green">Green only</option>
+          </select>
         </div>
 
         {/* Search button */}
