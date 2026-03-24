@@ -44,6 +44,8 @@ CLUSTER_RADIUS_DEG = 0.25     # ~15 nautical miles in degrees at mid-latitudes
 BUFFER_M = 9_260              # 5 nautical miles in metres
 ZONE_EXPIRY_HOURS = 24        # How long a zone stays active
 LOOKBACK_MINUTES = 60         # How far back to scan positions
+CARDINAL_THRESHOLD_DEG = 5    # Max deviation from N/S/E/W to classify as jamming
+MAX_PRE_JUMP_DISTANCE_KM = 500  # Max distance from target centroid for interference_area
 
 # Speed of light sanity constant: metres-per-second for 1 knot
 _KNOTS_TO_MPS = 0.514444
@@ -72,51 +74,89 @@ async def detect_gnss_zones(session: AsyncSession) -> int:
         logger.info("No anomalous positions found in the last %d minutes", LOOKBACK_MINUTES)
         return 0
 
-    # Separate spoofed and pre-jump positions
-    spoofed = [p for p in anomalous if p.get("position_type") == "spoofed"]
-    pre_jump_by_mmsi: dict[int, dict[str, Any]] = {}
-    for p in anomalous:
-        if p.get("position_type") == "pre_jump":
-            pre_jump_by_mmsi[p["mmsi"]] = p
+    # Classify each jump as spoofing or jamming by bearing
+    import math
+    spoofing_posts: list[dict[str, Any]] = []   # spoofed destination positions
+    spoofing_pres: dict[int, dict[str, Any]] = {}  # pre-jump positions keyed by mmsi
+    jamming_pres: list[dict[str, Any]] = []     # pre-jump positions for jamming victims
 
-    # Cluster only the spoofed positions (finding target clusters like Kaliningrad)
-    clusters = await _cluster_anomalous_positions(session, spoofed)
-    if not clusters:
-        logger.info("No spatial clusters with >= %d vessels", MIN_CLUSTER_VESSELS)
-        return 0
+    for p in anomalous:
+        if p.get("position_type") != "spoofed":
+            continue
+
+        # Compute bearing of the jump
+        dlat = p["lat"] - p.get("prev_lat", p["lat"])
+        dlon = p["lon"] - p.get("prev_lon", p["lon"])
+        bearing = math.degrees(math.atan2(dlon, dlat)) if (dlat != 0 or dlon != 0) else 0
+        cardinal_dev = abs(bearing - round(bearing / 90) * 90)
+
+        if cardinal_dev < CARDINAL_THRESHOLD_DEG:
+            # Jamming: cardinal direction jump — use the pre-jump position
+            if p.get("prev_lat") is not None:
+                jamming_pres.append({
+                    "mmsi": p["mmsi"], "lat": p["prev_lat"], "lon": p["prev_lon"],
+                    "timestamp": p.get("prev_timestamp", p["timestamp"]),
+                    "implied_speed_kn": p["implied_speed_kn"],
+                    "position_wkt": p.get("prev_position_wkt", ""),
+                    "position_type": "jamming",
+                })
+        else:
+            # Spoofing: non-cardinal jump to specific target
+            spoofing_posts.append(p)
+            if p.get("prev_lat") is not None:
+                spoofing_pres[p["mmsi"]] = {
+                    "mmsi": p["mmsi"], "lat": p["prev_lat"], "lon": p["prev_lon"],
+                    "timestamp": p.get("prev_timestamp", p["timestamp"]),
+                    "implied_speed_kn": p["implied_speed_kn"],
+                    "position_wkt": p.get("prev_position_wkt", ""),
+                    "position_type": "pre_jump",
+                }
+
+    logger.info(
+        "Classified %d spoofing jumps (%d vessels) and %d jamming jumps",
+        len(spoofing_posts), len(spoofing_pres), len(jamming_pres),
+    )
 
     zones_affected = 0
-    for cluster in clusters:
-        # Create the spoofing target zone (red) — existing behavior
-        zones_affected += await _upsert_zone(session, cluster)
 
-        # Collect pre-jump positions for vessels in this target cluster
-        # Only include pre-jump positions within 500km of the target centroid
-        # to exclude GPS glitches from unrelated parts of the world
-        target_lat = sum(m["lat"] for m in cluster) / len(cluster)
-        target_lon = sum(m["lon"] for m in cluster) / len(cluster)
-        MAX_PRE_JUMP_DISTANCE_KM = 500
+    # --- Spoofing: cluster destination positions, create target + interference zones ---
+    if spoofing_posts:
+        clusters = await _cluster_anomalous_positions(session, spoofing_posts)
+        for cluster in clusters:
+            # Force event_type to 'spoofing' for target zones
+            for m in cluster:
+                m["position_type"] = "spoofed"
+            zones_affected += await _upsert_zone(session, cluster)
 
-        cluster_mmsis = {m["mmsi"] for m in cluster}
-        pre_jump_positions = []
-        for mmsi in cluster_mmsis:
-            if mmsi not in pre_jump_by_mmsi:
-                continue
-            p = pre_jump_by_mmsi[mmsi]
-            # Rough distance check (1 degree ≈ 111km at equator)
-            dlat = abs(p["lat"] - target_lat) * 111
-            dlon = abs(p["lon"] - target_lon) * 111 * 0.6  # cos(55°) ≈ 0.6 for Baltic
-            dist_km = (dlat**2 + dlon**2) ** 0.5
-            if dist_km <= MAX_PRE_JUMP_DISTANCE_KM:
-                pre_jump_positions.append(p)
+            # Collect pre-jump positions within 500km of target centroid
+            target_lat = sum(m["lat"] for m in cluster) / len(cluster)
+            target_lon = sum(m["lon"] for m in cluster) / len(cluster)
+            cos_lat = math.cos(math.radians(target_lat))
 
-        # Create interference_area zone if 3+ distinct vessels have pre-jump positions
-        pre_jump_mmsis = {p["mmsi"] for p in pre_jump_positions}
-        if len(pre_jump_mmsis) >= MIN_CLUSTER_VESSELS:
-            # Tag all as interference_area for zone creation
-            for p in pre_jump_positions:
-                p["position_type"] = "pre_jump"
-            zones_affected += await _upsert_zone(session, pre_jump_positions)
+            cluster_mmsis = {m["mmsi"] for m in cluster}
+            pre_jump_positions = []
+            for mmsi in cluster_mmsis:
+                if mmsi not in spoofing_pres:
+                    continue
+                p = spoofing_pres[mmsi]
+                dlat_km = abs(p["lat"] - target_lat) * 111
+                dlon_km = abs(p["lon"] - target_lon) * 111 * cos_lat
+                dist_km = (dlat_km**2 + dlon_km**2) ** 0.5
+                if dist_km <= MAX_PRE_JUMP_DISTANCE_KM:
+                    pre_jump_positions.append(p)
+
+            pre_jump_mmsis = {p["mmsi"] for p in pre_jump_positions}
+            if len(pre_jump_mmsis) >= MIN_CLUSTER_VESSELS:
+                zones_affected += await _upsert_zone(session, pre_jump_positions)
+
+    # --- Jamming: cluster pre-jump positions (where vessels actually were) ---
+    if jamming_pres:
+        clusters = await _cluster_anomalous_positions(session, jamming_pres)
+        for cluster in clusters:
+            # Force event_type to 'jamming'
+            for m in cluster:
+                m["position_type"] = "jamming"
+            zones_affected += await _upsert_zone(session, cluster)
 
     # Commit zones first so they're visible even if tagging is slow/fails
     await session.commit()
@@ -232,6 +272,7 @@ async def _find_anomalous_positions(
     for r in rows:
         row = dict(r)
         # Post-jump position (where GPS says the vessel jumped to)
+        # Include prev_lat/prev_lon so bearing can be computed for classification
         positions.append({
             "mmsi": row["mmsi"],
             "lat": row["lat"],
@@ -240,6 +281,10 @@ async def _find_anomalous_positions(
             "implied_speed_kn": row["implied_speed_kn"],
             "position_wkt": row["position_wkt"],
             "position_type": "spoofed",
+            "prev_lat": row.get("prev_lat"),
+            "prev_lon": row.get("prev_lon"),
+            "prev_timestamp": row.get("prev_timestamp"),
+            "prev_position_wkt": row.get("prev_position_wkt"),
         })
         # Pre-jump position (where the vessel actually was)
         if row.get("prev_lat") is not None and row.get("prev_lon") is not None:
@@ -508,14 +553,18 @@ async def _upsert_zone(
 def _classify_event_type(cluster: list[dict[str, Any]]) -> str:
     """Classify a cluster by its dominant position type.
 
-    - 'interference_area': majority of positions are pre-jump (where vessels
-      actually were when their GPS was spoofed)
-    - 'spoofing': majority of positions are spoofed (where GPS dragged them to)
-    - 'jamming': reserved for future AIS gap-based detection
+    - 'spoofing': positions dragged to a specific target (non-cardinal bearing)
+    - 'interference_area': pre-jump positions of spoofing victims
+    - 'jamming': cardinal-direction jumps (GPS loss causing N/S/E/W drift)
     """
-    pre_jump_count = sum(1 for m in cluster if m.get("position_type") == "pre_jump")
-    total = len(cluster)
-    if total > 0 and pre_jump_count > total / 2:
+    type_counts: dict[str, int] = {}
+    for m in cluster:
+        ptype = m.get("position_type", "spoofed")
+        type_counts[ptype] = type_counts.get(ptype, 0) + 1
+
+    if type_counts.get("jamming", 0) > 0:
+        return "jamming"
+    if type_counts.get("pre_jump", 0) > type_counts.get("spoofed", 0):
         return "interference_area"
     return "spoofing"
 
