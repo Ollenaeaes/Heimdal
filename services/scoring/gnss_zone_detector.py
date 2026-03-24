@@ -383,7 +383,7 @@ async def _upsert_zone(
                     affected_mmsis  = :affected_mmsis,
                     event_type      = :event_type,
                     peak_severity   = :peak_severity,
-                    details         = details || :new_details::jsonb
+                    details         = details || CAST(:new_details AS jsonb)
                 WHERE id = :zone_id
             """),
             {
@@ -542,7 +542,7 @@ async def _tag_affected_vessels(session: AsyncSession) -> None:
         await session.execute(
             text("""
                 UPDATE vessel_profiles
-                SET gnss_affected = :zone_info::jsonb
+                SET gnss_affected = CAST(:zone_info AS jsonb)
                 WHERE mmsi = ANY(:mmsis)
             """),
             {
