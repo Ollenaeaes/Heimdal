@@ -102,6 +102,11 @@ export function TimelineBar() {
     [handleScrub],
   );
 
+  const showGnssOverlay = useLookbackStore((s) => s.showGnssOverlay);
+  const gnssOverlayWindow = useLookbackStore((s) => s.gnssOverlayWindow);
+  const toggleGnssOverlay = useLookbackStore((s) => s.toggleGnssOverlay);
+  const setGnssOverlayWindow = useLookbackStore((s) => s.setGnssOverlayWindow);
+
   const tracksLoaded = tracks.size;
   const isLoading = tracksLoaded === 0;
 
@@ -185,6 +190,36 @@ export function TimelineBar() {
           <span className="text-xs text-slate-500 ml-1">
             {tracksLoaded} track{tracksLoaded !== 1 ? 's' : ''}
           </span>
+        )}
+
+        {/* GNSS overlay toggle */}
+        <label className="flex items-center gap-1 ml-2 cursor-pointer select-none" data-testid="timeline-gnss-toggle">
+          <input
+            type="checkbox"
+            checked={showGnssOverlay}
+            onChange={toggleGnssOverlay}
+            className="w-3 h-3 accent-blue-500"
+          />
+          <span className="text-[0.65rem] text-slate-400">GNSS</span>
+        </label>
+
+        {showGnssOverlay && (
+          <div className="flex items-center gap-0.5" data-testid="timeline-gnss-window">
+            {(['1h', '3h', '6h'] as const).map((w) => (
+              <button
+                key={w}
+                onClick={() => setGnssOverlayWindow(w)}
+                className={`px-1 py-0.5 text-[0.6rem] font-mono rounded transition-colors ${
+                  gnssOverlayWindow === w
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                }`}
+                data-testid={`timeline-gnss-window-${w}`}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
         )}
 
         {/* Close button */}

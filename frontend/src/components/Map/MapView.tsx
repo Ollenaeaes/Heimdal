@@ -10,6 +10,7 @@ import { VesselLayer } from './VesselLayer';
 import { StaticOverlays } from './StaticOverlays';
 import { InfrastructureLayer } from './InfrastructureLayer';
 import { GnssHeatmap } from './GnssHeatmap';
+import { PlaybackGnssOverlay } from './PlaybackGnssOverlay';
 import { GnssTimeBar } from './SpoofingTimeControls';
 import { DuplicateMmsiLayer } from './DuplicateMmsiLayer';
 import { NetworkLayer } from './NetworkLayer';
@@ -99,6 +100,7 @@ function MapView(props: MapViewProps) {
       {!lookbackActive && <TrackTrails />}
       {!lookbackActive && <TrackTrail />}
       <GnssHeatmap visible={props.showGnssZones ?? false} centerTime={gnssCenterTime} windowSize={gnssWindowSize} />
+      <PlaybackGnssOverlay />
       <DuplicateMmsiLayer visible={props.showGnssZones ?? false} />
       <NetworkLayer visible={props.showNetwork ?? false} />
       <GfwEventLayer visible={props.showGfwEvents ?? false} />
