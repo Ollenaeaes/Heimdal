@@ -99,13 +99,21 @@ async def _find_anomalous_positions(
     """Return positions whose implied speed from their predecessor exceeds
     the threshold.
 
-    Each row contains: mmsi, lat, lon, timestamp, implied_speed_kn, position
-    (WKT for later PostGIS operations).
+    For each anomalous pair, emits TWO rows:
+    - The post-jump (spoofed) position with position_type='spoofed'
+    - The pre-jump (real) position with position_type='pre_jump'
+
+    This allows DBSCAN to cluster both the spoofing target area AND the
+    real interference footprint separately.
+
+    Each row contains: mmsi, lat, lon, timestamp, implied_speed_kn,
+    position_wkt, position_type.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=LOOKBACK_MINUTES)
 
     # Use a window function to pair consecutive positions per vessel and
     # compute implied speed via ST_Distance on geography (returns metres).
+    # Returns both the post-jump AND pre-jump positions.
     result = await session.execute(
         text("""
             WITH ordered AS (
@@ -116,7 +124,9 @@ async def _find_anomalous_positions(
                     ST_Y(position::geometry) AS lat,
                     ST_X(position::geometry) AS lon,
                     LAG(position)   OVER w AS prev_position,
-                    LAG("timestamp") OVER w AS prev_timestamp
+                    LAG("timestamp") OVER w AS prev_timestamp,
+                    ST_Y(LAG(position) OVER w ::geometry) AS prev_lat,
+                    ST_X(LAG(position) OVER w ::geometry) AS prev_lon
                 FROM vessel_positions
                 WHERE "timestamp" >= :cutoff
                 WINDOW w AS (PARTITION BY mmsi ORDER BY "timestamp")
@@ -128,6 +138,10 @@ async def _find_anomalous_positions(
                     position,
                     lat,
                     lon,
+                    prev_lat,
+                    prev_lon,
+                    prev_timestamp,
+                    prev_position,
                     CASE
                         WHEN prev_position IS NOT NULL
                              AND EXTRACT(EPOCH FROM ("timestamp" - prev_timestamp)) > 0
@@ -146,8 +160,12 @@ async def _find_anomalous_positions(
                 "timestamp",
                 lat,
                 lon,
+                prev_lat,
+                prev_lon,
+                prev_timestamp,
                 implied_speed_kn,
-                ST_AsText(position::geometry) AS position_wkt
+                ST_AsText(position::geometry) AS position_wkt,
+                ST_AsText(prev_position::geometry) AS prev_position_wkt
             FROM with_speed
             WHERE implied_speed_kn > :speed_threshold
             ORDER BY "timestamp"
@@ -164,7 +182,40 @@ async def _find_anomalous_positions(
         "Found %d anomalous position pairs (implied speed > %d kn) in the last %d min",
         len(rows), SPEED_THRESHOLD_KN, LOOKBACK_MINUTES,
     )
-    return [dict(r) for r in rows]
+
+    # Emit both post-jump (spoofed) and pre-jump (real) positions
+    positions: list[dict[str, Any]] = []
+    for r in rows:
+        row = dict(r)
+        # Post-jump position (where GPS says the vessel jumped to)
+        positions.append({
+            "mmsi": row["mmsi"],
+            "lat": row["lat"],
+            "lon": row["lon"],
+            "timestamp": row["timestamp"],
+            "implied_speed_kn": row["implied_speed_kn"],
+            "position_wkt": row["position_wkt"],
+            "position_type": "spoofed",
+        })
+        # Pre-jump position (where the vessel actually was)
+        if row.get("prev_lat") is not None and row.get("prev_lon") is not None:
+            positions.append({
+                "mmsi": row["mmsi"],
+                "lat": row["prev_lat"],
+                "lon": row["prev_lon"],
+                "timestamp": row["prev_timestamp"],
+                "implied_speed_kn": row["implied_speed_kn"],
+                "position_wkt": row["prev_position_wkt"],
+                "position_type": "pre_jump",
+            })
+
+    logger.info(
+        "Emitted %d positions (%d spoofed + %d pre-jump) for clustering",
+        len(positions),
+        sum(1 for p in positions if p["position_type"] == "spoofed"),
+        sum(1 for p in positions if p["position_type"] == "pre_jump"),
+    )
+    return positions
 
 
 # ---------------------------------------------------------------------------
@@ -193,19 +244,20 @@ async def _cluster_anomalous_positions(
     }
     for i, row in enumerate(anomalous):
         values_parts.append(
-            f"(:mmsi_{i}, :lat_{i}, :lon_{i}, :ts_{i}, :speed_{i})"
+            f"(:mmsi_{i}, :lat_{i}, :lon_{i}, :ts_{i}, :speed_{i}, :ptype_{i})"
         )
         params[f"mmsi_{i}"] = row["mmsi"]
         params[f"lat_{i}"] = row["lat"]
         params[f"lon_{i}"] = row["lon"]
         params[f"ts_{i}"] = row["timestamp"]
         params[f"speed_{i}"] = row["implied_speed_kn"]
+        params[f"ptype_{i}"] = row.get("position_type", "spoofed")
 
     values_sql = ",\n".join(values_parts)
 
     result = await session.execute(
         text(f"""
-            WITH anomalous(mmsi, lat, lon, ts, implied_speed_kn) AS (
+            WITH anomalous(mmsi, lat, lon, ts, implied_speed_kn, position_type) AS (
                 VALUES {values_sql}
             ),
             clustered AS (
@@ -215,6 +267,7 @@ async def _cluster_anomalous_positions(
                     lon,
                     ts,
                     implied_speed_kn,
+                    position_type,
                     ST_ClusterDBSCAN(
                         ST_SetSRID(ST_MakePoint(lon, lat), 4326),
                         eps := :cluster_radius,
@@ -228,7 +281,8 @@ async def _cluster_anomalous_positions(
                 lat,
                 lon,
                 ts,
-                implied_speed_kn
+                implied_speed_kn,
+                position_type
             FROM clustered
             WHERE cluster_id IS NOT NULL
             ORDER BY cluster_id, ts
@@ -404,17 +458,17 @@ async def _upsert_zone(
 
 
 def _classify_event_type(cluster: list[dict[str, Any]]) -> str:
-    """Classify a cluster as 'spoofing' or 'jamming'.
+    """Classify a cluster by its dominant position type.
 
-    Spoofing: positions are present but displaced (high implied speed).
-    Jamming: would manifest as AIS gaps — but since this detector works on
-    positions that *do* exist with anomalous speeds, the default is 'spoofing'.
-
-    A future enhancement could cross-reference with AIS gap data to detect
-    jamming zones.
+    - 'interference_area': majority of positions are pre-jump (where vessels
+      actually were when their GPS was spoofed)
+    - 'spoofing': majority of positions are spoofed (where GPS dragged them to)
+    - 'jamming': reserved for future AIS gap-based detection
     """
-    # All positions in this pipeline have anomalous implied speed, meaning
-    # AIS data IS being received but positions jump — classic spoofing pattern.
+    pre_jump_count = sum(1 for m in cluster if m.get("position_type") == "pre_jump")
+    total = len(cluster)
+    if total > 0 and pre_jump_count > total / 2:
+        return "interference_area"
     return "spoofing"
 
 

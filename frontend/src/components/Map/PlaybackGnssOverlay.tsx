@@ -168,6 +168,12 @@ export function PlaybackGnssOverlay() {
         1, 'rgba(147,51,234,0.3)',
         15, 'rgba(99,102,241,0.8)',
       ],
+      ['==', ['get', 'event_type'], 'interference_area'],
+      [
+        'interpolate', ['linear'], ['get', 'affected_count'],
+        1, 'rgba(6,182,212,0.3)',
+        15, 'rgba(14,116,144,0.8)',
+      ],
       [
         'interpolate', ['linear'], ['get', 'affected_count'],
         1, 'rgba(249,115,22,0.3)',
@@ -182,6 +188,8 @@ export function PlaybackGnssOverlay() {
       'case',
       ['==', ['get', 'event_type'], 'jamming'],
       'rgba(99,102,241,0.9)',
+      ['==', ['get', 'event_type'], 'interference_area'],
+      'rgba(6,182,212,0.9)',
       'rgba(239,68,68,0.9)',
     ],
     'line-width': 1,
