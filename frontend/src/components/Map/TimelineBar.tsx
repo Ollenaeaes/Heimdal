@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useLookbackStore } from '../../hooks/useLookbackStore';
-
-const SPEEDS = [1, 10, 100, 500] as const;
+import { SpeedSlider } from './SpeedSlider';
 
 function formatTime(date: Date): string {
   return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
@@ -157,23 +156,8 @@ export function TimelineBar() {
           )}
         </button>
 
-        {/* Speed buttons */}
-        <div className="flex items-center gap-1">
-          {SPEEDS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setSpeed(s)}
-              className={`px-1.5 py-0.5 text-[0.65rem] font-mono rounded transition-colors ${
-                playbackSpeed === s
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
-              }`}
-              data-testid={`timeline-speed-${s}`}
-            >
-              {s}x
-            </button>
-          ))}
-        </div>
+        {/* Speed slider */}
+        <SpeedSlider value={playbackSpeed} onChange={setSpeed} />
 
         {/* Current timestamp */}
         <span className="font-mono text-xs text-slate-300 ml-2" data-testid="timeline-timestamp">
