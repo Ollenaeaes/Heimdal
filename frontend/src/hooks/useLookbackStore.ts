@@ -25,6 +25,11 @@ export interface LookbackState {
   playbackSpeed: number;
   currentTime: Date;
 
+  // GNSS overlay during playback
+  showGnssOverlay: boolean;
+  gnssOverlayWindow: '1h' | '3h' | '6h';
+  gnssZonesCache: GeoJSON.FeatureCollection | null;
+
   // Track data (keyed by MMSI)
   tracks: Map<number, TrackPoint[]>;
   trackErrors: Map<number, string>;
@@ -44,6 +49,9 @@ export interface LookbackState {
   startDrawing: () => void;
   finishDrawing: (polygon: [number, number][]) => void;
   cancelDrawing: () => void;
+  toggleGnssOverlay: () => void;
+  setGnssOverlayWindow: (w: '1h' | '3h' | '6h') => void;
+  setGnssZonesCache: (data: GeoJSON.FeatureCollection | null) => void;
 }
 
 const defaultDateRange = () => {
@@ -65,8 +73,12 @@ export const useLookbackStore = create<LookbackState>((set, get) => ({
   isDrawing: false,
 
   isPlaying: false,
-  playbackSpeed: 1,
+  playbackSpeed: 60,
   currentTime: new Date(),
+
+  showGnssOverlay: false,
+  gnssOverlayWindow: '6h',
+  gnssZonesCache: null,
 
   tracks: new Map(),
   trackErrors: new Map(),
@@ -100,7 +112,7 @@ export const useLookbackStore = create<LookbackState>((set, get) => ({
       isActive: true,
       isPlaying: false,
       currentTime: dateRange.start,
-      playbackSpeed: 1,
+      playbackSpeed: 60,
     });
   },
 
@@ -117,6 +129,8 @@ export const useLookbackStore = create<LookbackState>((set, get) => ({
       trackErrors: new Map(),
       currentTime: new Date(),
       dateRange: defaultDateRange(),
+      showGnssOverlay: false,
+      gnssZonesCache: null,
     }),
 
   play: () => set({ isPlaying: true }),
@@ -154,4 +168,11 @@ export const useLookbackStore = create<LookbackState>((set, get) => ({
 
   cancelDrawing: () =>
     set({ isDrawing: false, areaPolygon: null }),
+
+  toggleGnssOverlay: () =>
+    set((state) => ({ showGnssOverlay: !state.showGnssOverlay })),
+
+  setGnssOverlayWindow: (w) => set({ gnssOverlayWindow: w }),
+
+  setGnssZonesCache: (data) => set({ gnssZonesCache: data }),
 }));
