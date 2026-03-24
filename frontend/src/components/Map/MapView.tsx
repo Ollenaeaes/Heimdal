@@ -76,6 +76,8 @@ function MapView(props: MapViewProps) {
   }, [selectVessel]);
 
   return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <GnssLegend visible={props.showGnssZones ?? false} />
     <Map
       ref={mapRef}
       initialViewState={{
@@ -110,7 +112,6 @@ function MapView(props: MapViewProps) {
       <AreaDrawingTool />
       <HoverTooltip />
       {lookbackActive && <TimelineBar />}
-      <GnssLegend visible={props.showGnssZones ?? false} />
       <GnssTimeBar
         visible={props.showGnssZones ?? false}
         centerTime={gnssCenterTime}
@@ -119,6 +120,7 @@ function MapView(props: MapViewProps) {
         onWindowSizeChange={setGnssWindowSize}
       />
     </Map>
+    </div>
   );
 }
 
