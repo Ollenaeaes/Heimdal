@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 CLUSTER_RADIUS_DEG = 0.25     # ~15nm for spoofing target clusters (tight)
 CLUSTER_RADIUS_WIDE_DEG = 0.5 # ~30nm for interference area / jamming clusters
 MIN_CLUSTER_POINTS = 5        # Minimum points per cluster
-ZONE_DURATION_HOURS = 1.5     # Each zone lasts 1.5h from its midpoint time
+ZONE_DURATION_HOURS = 0.75    # Each zone lasts 45min from its midpoint time
 TIME_WINDOW_HOURS = 3         # Group positions into 3-hour windows
 
 

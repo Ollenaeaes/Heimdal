@@ -75,9 +75,12 @@ function MapView(props: MapViewProps) {
     selectVessel(Number(mmsi));
   }, [selectVessel]);
 
+  const showGnssOverlay = useLookbackStore((s) => s.showGnssOverlay);
+  const legendVisible = (props.showGnssZones ?? false) || (lookbackActive && showGnssOverlay);
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-    <GnssLegend visible={props.showGnssZones ?? false} />
+    <GnssLegend visible={legendVisible} />
     <Map
       ref={mapRef}
       initialViewState={{
