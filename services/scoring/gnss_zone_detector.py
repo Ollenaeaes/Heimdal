@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 MIN_CLUSTER_VESSELS = 3       # Minimum distinct MMSIs per zone
 SPEED_THRESHOLD_KN = 45       # Implied speed threshold (knots)
 CLUSTER_RADIUS_DEG = 0.25     # ~15 nautical miles in degrees at mid-latitudes
+CLUSTER_RADIUS_WIDE_DEG = 1.0 # ~60 nautical miles — for pre-jump/jamming clustering
 BUFFER_M = 9_260              # 5 nautical miles in metres
 ZONE_EXPIRY_HOURS = 24        # How long a zone stays active
 LOOKBACK_MINUTES = 60         # How far back to scan positions
@@ -147,13 +148,21 @@ async def detect_gnss_zones(session: AsyncSession) -> int:
 
             pre_jump_mmsis = {p["mmsi"] for p in pre_jump_positions}
             if len(pre_jump_mmsis) >= MIN_CLUSTER_VESSELS:
-                zones_affected += await _upsert_zone(session, pre_jump_positions)
+                # Cluster pre-jump positions with wider radius to form regional zones
+                pre_clusters = await _cluster_anomalous_positions(
+                    session, pre_jump_positions, cluster_radius=CLUSTER_RADIUS_WIDE_DEG
+                )
+                for pc in pre_clusters:
+                    for m in pc:
+                        m["position_type"] = "pre_jump"
+                    zones_affected += await _upsert_zone(session, pc)
 
     # --- Jamming: cluster pre-jump positions (where vessels actually were) ---
     if jamming_pres:
-        clusters = await _cluster_anomalous_positions(session, jamming_pres)
+        clusters = await _cluster_anomalous_positions(
+            session, jamming_pres, cluster_radius=CLUSTER_RADIUS_WIDE_DEG
+        )
         for cluster in clusters:
-            # Force event_type to 'jamming'
             for m in cluster:
                 m["position_type"] = "jamming"
             zones_affected += await _upsert_zone(session, cluster)
@@ -315,6 +324,7 @@ async def _find_anomalous_positions(
 async def _cluster_anomalous_positions(
     session: AsyncSession,
     anomalous: list[dict[str, Any]],
+    cluster_radius: float | None = None,
 ) -> list[list[dict[str, Any]]]:
     """Cluster anomalous positions using PostGIS ST_ClusterDBSCAN.
 
@@ -328,7 +338,7 @@ async def _cluster_anomalous_positions(
     # into ST_ClusterDBSCAN inside the database.
     values_parts: list[str] = []
     params: dict[str, Any] = {
-        "cluster_radius": CLUSTER_RADIUS_DEG,
+        "cluster_radius": cluster_radius if cluster_radius is not None else CLUSTER_RADIUS_DEG,
         "min_pts": MIN_CLUSTER_VESSELS,
     }
     for i, row in enumerate(anomalous):
