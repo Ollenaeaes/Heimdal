@@ -11,7 +11,7 @@ Algorithm
    consecutive pairs.
 3. Flag position pairs where implied speed exceeds SPEED_THRESHOLD_KN.
 4. Cluster anomalous positions with PostGIS ST_ClusterDBSCAN (eps =
-   CLUSTER_RADIUS_M, minPoints = MIN_CLUSTER_VESSELS).
+   CLUSTER_RADIUS_DEG, minPoints = MIN_CLUSTER_VESSELS).
 5. For each cluster with 3+ distinct MMSIs:
    - If an active zone overlaps (geometry intersection + within 24 h):
      update it (merge MMSIs, push expires_at forward).
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 MIN_CLUSTER_VESSELS = 3       # Minimum distinct MMSIs per zone
 SPEED_THRESHOLD_KN = 45       # Implied speed threshold (knots)
-CLUSTER_RADIUS_M = 27_780     # 15 nautical miles in metres
+CLUSTER_RADIUS_DEG = 0.25     # ~15 nautical miles in degrees at mid-latitudes
 BUFFER_M = 9_260              # 5 nautical miles in metres
 ZONE_EXPIRY_HOURS = 24        # How long a zone stays active
 LOOKBACK_MINUTES = 60         # How far back to scan positions
@@ -188,7 +188,7 @@ async def _cluster_anomalous_positions(
     # into ST_ClusterDBSCAN inside the database.
     values_parts: list[str] = []
     params: dict[str, Any] = {
-        "cluster_radius": CLUSTER_RADIUS_M,
+        "cluster_radius": CLUSTER_RADIUS_DEG,
         "min_pts": MIN_CLUSTER_VESSELS,
     }
     for i, row in enumerate(anomalous):
@@ -216,7 +216,7 @@ async def _cluster_anomalous_positions(
                     ts,
                     implied_speed_kn,
                     ST_ClusterDBSCAN(
-                        ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography,
+                        ST_SetSRID(ST_MakePoint(lon, lat), 4326),
                         eps := :cluster_radius,
                         minpoints := :min_pts
                     ) OVER () AS cluster_id
@@ -309,7 +309,7 @@ async def _upsert_zone(
             "min_time": now - timedelta(hours=ZONE_EXPIRY_HOURS),
             "lat": centroid_lat,
             "lon": centroid_lon,
-            "buffer": CLUSTER_RADIUS_M,
+            "buffer": 27780,  # 15nm in meters for ST_DWithin geography
         },
     )
     row = existing.mappings().first()
