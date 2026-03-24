@@ -244,13 +244,13 @@ async def _cluster_anomalous_positions(
     }
     for i, row in enumerate(anomalous):
         values_parts.append(
-            f"(:mmsi_{i}, :lat_{i}, :lon_{i}, :ts_{i}, :speed_{i}, :ptype_{i})"
+            f"(:mmsi_{i}::int, :lat_{i}::float8, :lon_{i}::float8, :ts_{i}::timestamptz, :speed_{i}::float8, :ptype_{i}::text)"
         )
         params[f"mmsi_{i}"] = row["mmsi"]
-        params[f"lat_{i}"] = row["lat"]
-        params[f"lon_{i}"] = row["lon"]
+        params[f"lat_{i}"] = float(row["lat"])
+        params[f"lon_{i}"] = float(row["lon"])
         params[f"ts_{i}"] = row["timestamp"]
-        params[f"speed_{i}"] = row["implied_speed_kn"]
+        params[f"speed_{i}"] = float(row["implied_speed_kn"])
         params[f"ptype_{i}"] = row.get("position_type", "spoofed")
 
     values_sql = ",\n".join(values_parts)
@@ -259,10 +259,6 @@ async def _cluster_anomalous_positions(
         text(f"""
             WITH anomalous(mmsi, lat, lon, ts, implied_speed_kn, position_type) AS (
                 VALUES {values_sql}
-            ),
-            typed AS (
-                SELECT mmsi, lat::float8, lon::float8, ts, implied_speed_kn::float8, position_type
-                FROM anomalous
             ),
             clustered AS (
                 SELECT
@@ -277,7 +273,7 @@ async def _cluster_anomalous_positions(
                         eps := :cluster_radius,
                         minpoints := :min_pts
                     ) OVER () AS cluster_id
-                FROM typed
+                FROM anomalous
             )
             SELECT
                 cluster_id,
