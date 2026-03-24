@@ -376,12 +376,14 @@ async def _upsert_zone(
     peak_severity = _severity_from_speed(peak_speed)
 
     # Check for existing active zone that overlaps spatially and temporally
+    # Only merge with zones of the same type (spoofing with spoofing, interference with interference)
     existing = await session.execute(
         text("""
             SELECT id, affected_mmsis, affected_count
             FROM gnss_interference_zones
             WHERE expires_at > :now
               AND detected_at > :min_time
+              AND event_type = :event_type
               AND ST_DWithin(
                     geometry,
                     ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
@@ -393,6 +395,7 @@ async def _upsert_zone(
         {
             "now": now,
             "min_time": now - timedelta(hours=ZONE_EXPIRY_HOURS),
+            "event_type": event_type,
             "lat": centroid_lat,
             "lon": centroid_lon,
             "buffer": 27780,  # 15nm in meters for ST_DWithin geography
