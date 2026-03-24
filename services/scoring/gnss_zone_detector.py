@@ -81,8 +81,15 @@ async def detect_gnss_zones(session: AsyncSession) -> int:
     for cluster in clusters:
         zones_affected += await _upsert_zone(session, cluster)
 
-    await _tag_affected_vessels(session)
+    # Commit zones first so they're visible even if tagging is slow/fails
     await session.commit()
+
+    try:
+        await _tag_affected_vessels(session)
+        await session.commit()
+    except Exception:
+        logger.warning("Failed to tag affected vessels, zones were still committed", exc_info=True)
+        await session.rollback()
 
     logger.info("GNSS zone detection complete: %d zones created/updated", zones_affected)
     return zones_affected
