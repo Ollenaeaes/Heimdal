@@ -12,6 +12,7 @@ import { InfrastructureLayer } from './InfrastructureLayer';
 import { GnssHeatmap } from './GnssHeatmap';
 import { PlaybackGnssOverlay } from './PlaybackGnssOverlay';
 import { GnssTimeBar } from './SpoofingTimeControls';
+import { GnssLegend } from './GnssLegend';
 import { DuplicateMmsiLayer } from './DuplicateMmsiLayer';
 import { NetworkLayer } from './NetworkLayer';
 import { GfwEventLayer } from './GfwEventLayer';
@@ -109,6 +110,7 @@ function MapView(props: MapViewProps) {
       <AreaDrawingTool />
       <HoverTooltip />
       {lookbackActive && <TimelineBar />}
+      <GnssLegend visible={props.showGnssZones ?? false} />
       <GnssTimeBar
         visible={props.showGnssZones ?? false}
         centerTime={gnssCenterTime}
