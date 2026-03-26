@@ -14,9 +14,26 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 
 ## Current Feature
 
-**Spec:** 39-local-dev-bootstrap
-**Branch:** feature/local-dev-bootstrap
-**Status:** completed
+**Spec:** 42-graph-model-and-scoring
+**Branch:** feat/signal-scoring-engine
+**Status:** Story 6 completed
+
+### 42-graph-model-and-scoring Story 6: Signal-Based Scoring Engine
+- services/graph_builder/signal_scorer.py — SignalScorer class with evaluate_vessel(imo), evaluates A1-A11, B1-B7, C1-C5 signals from PostgreSQL, loads D signals from vessel_signals table
+- services/graph_builder/score_calculator.py — pure function compute_score(signals, is_sanctioned) with classification thresholds (0-3 green, 4-5 yellow, 6-8 red, >=9 red) and override rules
+- Old scoring rules moved to services/scoring/rules/legacy/ (git mv, not deleted)
+- A10 and B4 are stubs (will be implemented in Story 7)
+- Signal dataclass: signal_id, weight, details, source_data
+- Constants: IACS_MEMBERS, PERMISSIVE_FLAG_STATES, HIGH_RISK_JURISDICTIONS
+- 39 tests all passing (17 score_calculator + 11 signal evaluator + 4 helpers + 7 integration)
+
+### 42-graph-model-and-scoring Story 5: Geographic Inference Engine
+- Migration 026_vessel_signals.sql — vessel_signals table with dedup index
+- services/geographic_inference/engine.py — GeographicInference class with evaluate_vessel(mmsi)
+- Signals implemented: D1 (GoF loiter), D2 (Kola loiter), D3 (Baltic transit), D4 (Barents transit), D5 (MMSI/flag mismatch), D6 (STS with blacklisted), D7 (loiter-then-vanish)
+- Geographic zones defined as WKT polygon constants (GoF approaches, Kola Bay, Baltic corridor, Barents corridor, non-Russian Baltic terminals, Melkøya)
+- Uses sync psycopg2 pattern (same as graph_builder)
+- 15 tests all passing
 
 ## Stories Completed
 
