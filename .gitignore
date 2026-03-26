@@ -36,5 +36,8 @@ data/temp/
 # Raw AIS data (ingested at runtime)
 data/raw/
 
+# Local tools / scratch
+tmp/
+
 # Claude Code agent worktrees
 .claude/worktrees/

@@ -23,6 +23,16 @@ This file is read at the start of every session. It captures mistakes, patterns,
 - (2026-03-16) **The timescaledb-ha image uses `/home/postgres/pgdata` as PGDATA**, not `/var/lib/postgresql/data`. The volume mount must point to `/home/postgres/pgdata` or data is stored in the container's ephemeral filesystem and lost on recreation.
 - (2026-03-16) **Always dump before any infra change.** Disk space on Hostinger VPS is limited — pipe the backup directly to the local machine instead of storing on the server: `ssh root@76.13.248.226 "docker exec heimdal-postgres-1 pg_dump -U heimdal -Fc heimdal" > local_backup.dump`. Only use server-side dumps as a last resort.
 
+## Infrastructure / VPS
+
+- (2026-03-25) **Hostinger KVM 2 VPS has 2 CPUs / 8GB RAM — never over-provision Docker resource limits.** Adding adsb-ingest pushed always-on CPU limits to 2.5 (> 2 available). Hostinger auto-throttles via `ct_set_limits` actions when sustained CPU > ~70%. This risks OOM-killing postgres and losing data. Always sum all container CPU/RAM limits before deploying a new service and keep total ≤ 80% of VPS capacity (1.6 CPUs / 6.4GB for always-on).
+- (2026-03-25) **Right-sized limits (post-fix):** postgres 0.75 CPU/3G, ais-ingest 0.3/384M, adsb-ingest 0.3/384M, api-server 0.4/768M = **1.75 CPU / 4.5G always-on**. Batch jobs (batch-pipeline 0.75/2G, cold-archiver 0.75/2G) run in `batch` profile so they don't stack on top permanently.
+- (2026-03-25) **Postgres tuning must match container RAM limit.** `shared_buffers` should be ~15-25% of container RAM limit, `effective_cache_size` ~60-70%. With 3G container limit: shared_buffers=512MB, effective_cache_size=2GB, work_mem=8MB, maintenance_work_mem=128MB.
+- (2026-03-25) **Never use `LEFT JOIN LATERAL` on `vessel_positions` for bulk queries.** The hypertable has no index on `mmsi` — only on `timestamp`. A lateral join per vessel does a full table scan per row, taking 4-6 minutes per query. Use denormalized columns in `vessel_profiles` (e.g. `last_cog`, `last_sog`, `last_heading`) instead. TODO: add `(mmsi, timestamp DESC)` index and `last_cog/sog/heading` columns to `vessel_profiles`.
+- (2026-03-25) **Set `statement_timeout` on the database.** Currently set to 30s via `ALTER DATABASE`. Without it, slow queries pile up and spiral postgres to 265% CPU. The API server re-spawns queries faster than they complete, creating a death spiral.
+- (2026-03-25) **TimescaleDB hypertables don't support `CREATE INDEX CONCURRENTLY`.** Use regular `CREATE INDEX` — TimescaleDB handles per-chunk indexing internally. Plan index creation during low-load periods since it briefly locks writes.
+- (2026-03-25) **The batch-pipeline cron runs every 5 minutes** (`--load-only`) and every 2 hours (full). Each run spawns a new container. If runs don't finish before the next starts, containers pile up (found 5 simultaneous containers eating 5GB RAM). Cron backup at `/tmp/crontab.bak` on VPS. Re-enable with: `crontab /tmp/crontab.bak`.
+
 ## Mistakes to Avoid
 
 - (2026-03-12) When parallel subagents all modify `main.py` (adding router imports), verify the final state after all complete — concurrent edits can conflict or duplicate lines.
