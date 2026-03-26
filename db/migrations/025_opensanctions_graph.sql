@@ -49,8 +49,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_os_relationships_unique
 -- =============================================================
 CREATE TABLE IF NOT EXISTS os_vessel_links (
     entity_id    TEXT NOT NULL REFERENCES os_entities(entity_id) ON DELETE CASCADE,
-    imo          INTEGER,
-    mmsi         INTEGER,
+    imo          BIGINT,
+    mmsi         BIGINT,
     confidence   REAL NOT NULL DEFAULT 1.0,
     match_method TEXT NOT NULL,   -- 'imo_exact', 'mmsi_exact', 'name_exact'
     PRIMARY KEY (entity_id, match_method)

@@ -20,8 +20,13 @@ from typing import Any, Generator
 
 logger = logging.getLogger("opensanctions.extractor")
 
-# FTM schemas we store as entity nodes
-ENTITY_SCHEMAS = {"Vessel", "Company", "Person", "Organization", "LegalEntity"}
+# FTM schemas of primary interest (for stats breakdown)
+PRIMARY_ENTITY_SCHEMAS = {"Vessel", "Company", "Person", "Organization", "LegalEntity"}
+
+# We store ALL non-relationship entities as nodes so that relationship FKs
+# always resolve. Entities outside PRIMARY_ENTITY_SCHEMAS (e.g. Address,
+# Identification, Security) may have incomplete data but are needed as
+# relationship endpoints.
 
 # FTM schemas that represent relationships
 RELATIONSHIP_SCHEMAS = {
@@ -294,8 +299,16 @@ def stream_extract(
                 stats.lines_skipped += 1
                 continue
 
-            # Entity node
-            if schema in ENTITY_SCHEMAS:
+            # Relationship edge (check first — relationships are also entities in FTM)
+            if schema in RELATIONSHIP_SCHEMAS:
+                rel = _parse_relationship(raw)
+                if rel:
+                    batch.relationships.append(rel)
+                    stats.relationships_by_type[rel.rel_type] = (
+                        stats.relationships_by_type.get(rel.rel_type, 0) + 1
+                    )
+            # Entity node — store ALL non-relationship schemas so FK references resolve
+            else:
                 record = _parse_entity(raw)
                 batch.entities.append(record)
                 stats.entities_by_type[schema] = stats.entities_by_type.get(schema, 0) + 1
@@ -305,18 +318,6 @@ def stream_extract(
                     links = _extract_vessel_links(raw)
                     batch.vessel_links.extend(links)
                     stats.vessel_links += len(links)
-
-            # Relationship edge
-            elif schema in RELATIONSHIP_SCHEMAS:
-                rel = _parse_relationship(raw)
-                if rel:
-                    batch.relationships.append(rel)
-                    stats.relationships_by_type[rel.rel_type] = (
-                        stats.relationships_by_type.get(rel.rel_type, 0) + 1
-                    )
-                # Also store Ownership/Directorship/etc as entities themselves
-                # (they have an ID and properties that might be useful)
-                # Skip — they don't map to our entity types
 
             # Flush batch
             if batch.size >= batch_size:

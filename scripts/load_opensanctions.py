@@ -94,24 +94,34 @@ def persist_batch(conn, batch: ExtractionBatch) -> dict[str, int]:
         )
         counts["entities"] += 1
 
-    # Upsert relationships
+    # Upsert relationships — use savepoints to skip FK violations
+    # (relationships may reference entities with schemas we don't extract)
+    skipped_rels = 0
     for rel in batch.relationships:
-        cur.execute(
-            """
-            INSERT INTO os_relationships (rel_type, source_entity_id, target_entity_id, properties, first_seen, last_seen)
-            VALUES (%s, %s, %s, %s, NOW(), NOW())
-            ON CONFLICT (rel_type, source_entity_id, target_entity_id) DO UPDATE SET
-                properties = EXCLUDED.properties,
-                last_seen = NOW()
-            """,
-            (
-                rel.rel_type,
-                rel.source_entity_id,
-                rel.target_entity_id,
-                json.dumps(rel.properties),
-            ),
-        )
-        counts["relationships"] += 1
+        cur.execute("SAVEPOINT rel_sp")
+        try:
+            cur.execute(
+                """
+                INSERT INTO os_relationships (rel_type, source_entity_id, target_entity_id, properties, first_seen, last_seen)
+                VALUES (%s, %s, %s, %s, NOW(), NOW())
+                ON CONFLICT (rel_type, source_entity_id, target_entity_id) DO UPDATE SET
+                    properties = EXCLUDED.properties,
+                    last_seen = NOW()
+                """,
+                (
+                    rel.rel_type,
+                    rel.source_entity_id,
+                    rel.target_entity_id,
+                    json.dumps(rel.properties),
+                ),
+            )
+            cur.execute("RELEASE SAVEPOINT rel_sp")
+            counts["relationships"] += 1
+        except Exception:
+            cur.execute("ROLLBACK TO SAVEPOINT rel_sp")
+            skipped_rels += 1
+    if skipped_rels:
+        logger.debug("Skipped %d relationships with missing entity references", skipped_rels)
 
     # Upsert vessel links
     for link in batch.vessel_links:
