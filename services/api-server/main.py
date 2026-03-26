@@ -112,6 +112,7 @@ def create_app() -> FastAPI:
     from routes.positions_poll import router as positions_poll_router
     from routes.maritime_zones import router as maritime_zones_router
     from routes.iacs import router as iacs_router
+    from routes.adsb import router as adsb_router
 
     app.include_router(health_router)
     app.include_router(positions_poll_router)
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(gnss_zones_router)
     app.include_router(maritime_zones_router)
     app.include_router(iacs_router)
+    app.include_router(adsb_router)
 
     # WebSocket routes — only include if Redis is available
     if settings.redis_url:

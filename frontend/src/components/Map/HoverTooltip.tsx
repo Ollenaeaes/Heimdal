@@ -30,7 +30,21 @@ interface InfraTooltipData {
   routeType: string;
 }
 
-export type TooltipData = VesselTooltipData | InfraTooltipData;
+interface AircraftTooltipData {
+  type: 'aircraft';
+  x: number;
+  y: number;
+  icaoHex: string;
+  callsign: string | null;
+  registration: string | null;
+  description: string | null;
+  category: string | null;
+  country: string | null;
+  altBaro: number | null;
+  groundSpeed: number | null;
+}
+
+export type TooltipData = VesselTooltipData | InfraTooltipData | AircraftTooltipData;
 
 /**
  * HoverTooltip — shows vessel/infrastructure info on hover.
@@ -63,6 +77,34 @@ export function HoverTooltip() {
             x: e.point.x,
             y: e.point.y,
             mmsi: Number(props.mmsi),
+          });
+          return;
+        }
+      }
+
+      // Check aircraft layer
+      const acLayers = ['adsb-aircraft-icons'].filter(
+        (id) => !!map.getLayer(id),
+      );
+      const acFeatures = acLayers.length > 0
+        ? map.queryRenderedFeatures(e.point, { layers: acLayers })
+        : [];
+      if (acFeatures.length > 0) {
+        const props = acFeatures[0].properties;
+        if (props?.icao_hex) {
+          map.getCanvas().style.cursor = 'pointer';
+          setTooltip({
+            type: 'aircraft',
+            x: e.point.x,
+            y: e.point.y,
+            icaoHex: props.icao_hex,
+            callsign: props.callsign || null,
+            registration: props.registration || null,
+            description: props.description || null,
+            category: props.category || null,
+            country: props.country || null,
+            altBaro: props.alt_baro != null ? Number(props.alt_baro) : null,
+            groundSpeed: props.ground_speed != null ? Number(props.ground_speed) : null,
           });
           return;
         }
@@ -134,6 +176,58 @@ export function HoverTooltip() {
             <div className="mt-0.5 text-slate-400" style={{ fontSize: 11 }}>
               {routeLabel}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (tooltip.type === 'aircraft') {
+    const CATEGORY_COLORS: Record<string, string> = {
+      military: '#f59e0b',
+      coast_guard: '#06b6d4',
+      police: '#3b82f6',
+      government: '#8b5cf6',
+    };
+    const accentColor = CATEGORY_COLORS[tooltip.category ?? ''] ?? '#9ca3af';
+    const title = tooltip.callsign || tooltip.registration || tooltip.icaoHex.toUpperCase();
+    const subtitle = [
+      tooltip.description,
+      tooltip.country,
+      tooltip.category?.replace(/_/g, ' '),
+    ].filter(Boolean).join(' · ');
+    const speed = tooltip.groundSpeed != null ? `${tooltip.groundSpeed.toFixed(0)}kn` : null;
+    const alt = tooltip.altBaro != null ? `FL${Math.round(tooltip.altBaro / 100)}` : null;
+
+    return (
+      <div
+        className="pointer-events-none absolute z-50"
+        style={{ left: tooltip.x + 12, top: tooltip.y - 12, maxWidth: 300 }}
+      >
+        <div
+          className="flex overflow-hidden rounded"
+          style={{ backgroundColor: 'rgba(30, 41, 59, 0.92)' }}
+        >
+          <div className="w-1 shrink-0" style={{ backgroundColor: accentColor }} />
+          <div className="min-w-0 px-2.5 py-1.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="truncate font-semibold tracking-wide text-white" style={{ fontSize: 11 }}>
+                {title.toUpperCase()}
+              </span>
+              <span className="shrink-0 font-mono text-slate-400" style={{ fontSize: 10 }}>
+                {tooltip.icaoHex.toUpperCase()}
+              </span>
+            </div>
+            {subtitle && (
+              <div className="mt-0.5 truncate text-slate-400" style={{ fontSize: 11 }}>
+                {subtitle}
+              </div>
+            )}
+            {(speed || alt) && (
+              <div className="mt-0.5 text-slate-300" style={{ fontSize: 11 }}>
+                {[alt, speed].filter(Boolean).join(' · ')}
+              </div>
+            )}
           </div>
         </div>
       </div>

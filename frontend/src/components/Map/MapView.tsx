@@ -13,6 +13,7 @@ import { GnssHeatmap } from './GnssHeatmap';
 import { PlaybackGnssOverlay } from './PlaybackGnssOverlay';
 import { GnssTimeBar } from './SpoofingTimeControls';
 import { GnssLegend } from './GnssLegend';
+import { AircraftLayer } from './AircraftLayer';
 import { DuplicateMmsiLayer } from './DuplicateMmsiLayer';
 import { NetworkLayer } from './NetworkLayer';
 import { GfwEventLayer } from './GfwEventLayer';
@@ -105,6 +106,7 @@ function MapView(props: MapViewProps) {
       {!lookbackActive && <TrackTrails />}
       {!lookbackActive && <TrackTrail />}
       <GnssHeatmap visible={props.showGnssZones ?? false} centerTime={gnssCenterTime} windowSize={gnssWindowSize} />
+      <AircraftLayer />
       <PlaybackGnssOverlay />
       <DuplicateMmsiLayer visible={props.showGnssZones ?? false} />
       <NetworkLayer visible={props.showNetwork ?? false} />
