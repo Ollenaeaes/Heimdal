@@ -139,9 +139,10 @@ class SignalScorer:
         pg_conn: psycopg2 connection. If None, creates one from DATABASE_URL.
     """
 
-    def __init__(self, pg_conn: Any | None = None):
+    def __init__(self, pg_conn: Any | None = None, graph: Any | None = None):
         self._owns_pg = pg_conn is None
         self.pg = pg_conn or _get_pg_connection()
+        self.graph = graph  # FalkorDB graph handle for A10/B4 fleet propagation
 
     def close(self) -> None:
         if self._owns_pg and self.pg:
@@ -382,9 +383,18 @@ class SignalScorer:
     def _evaluate_a10(self, imo: int) -> list[Signal]:
         """A10: ISM company fleet risk — fleet sibling is blacklisted/red.
 
-        Stub — will be implemented in Story 7 (graph-based fleet risk propagation).
+        Requires FalkorDB graph. Returns empty if no graph available.
         """
-        return []
+        if self.graph is None:
+            return []
+
+        from services.graph_builder.fleet_propagation import evaluate_a10
+        results = evaluate_a10(self.graph, imo)
+        return [
+            Signal(signal_id=r.signal_id, weight=r.weight,
+                   details=r.details, source_data=r.source_data)
+            for r in results
+        ]
 
     def _evaluate_a11(self, imo: int, inspections: list[dict]) -> list[Signal]:
         """A11: Rapid port hopping — inspected at >= 2 different ports in
@@ -589,9 +599,18 @@ class SignalScorer:
     def _evaluate_b4(self, imo: int) -> list[Signal]:
         """B4: Owner fleet risk — owner's other vessel is blacklisted/red.
 
-        Stub — will be implemented in Story 7 (graph-based fleet risk propagation).
+        Requires FalkorDB graph. Returns empty if no graph available.
         """
-        return []
+        if self.graph is None:
+            return []
+
+        from services.graph_builder.fleet_propagation import evaluate_b4
+        results = evaluate_b4(self.graph, imo)
+        return [
+            Signal(signal_id=r.signal_id, weight=r.weight,
+                   details=r.details, source_data=r.source_data)
+            for r in results
+        ]
 
     def _evaluate_b5(self, imo: int) -> list[Signal]:
         """B5: >= 2 ownership changes in last 2 years."""
