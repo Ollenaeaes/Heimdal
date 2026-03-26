@@ -2,7 +2,7 @@
 
 **Slug:** `graph-model-and-scoring`
 **Created:** 2026-03-26
-**Status:** approved
+**Status:** completed
 **Priority:** critical
 **Depends on:** 39-local-dev-bootstrap, 40-paris-mou-pipeline, 41-opensanctions-ownership-graph
 **Replaces:** Existing scoring system (services/scoring/), existing network_edges table, existing network_scorer.py, existing network_builder.py

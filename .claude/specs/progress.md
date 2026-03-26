@@ -346,15 +346,30 @@ This file is the implementation scratchpad. Read it at the start of every sessio
 - All 15 pre-existing test failures unchanged, zero new regressions
 - Commits: 5 commits on feature/lookback-and-export branch
 
+### 42-graph-model-and-scoring (all 9 stories)
+- Story 1: FalkorDB service in docker-compose.dev.yml (port 6380, persistent volume), FalkorDBConfig in shared/config.py, shared/db/graph.py client wrapper
+- Story 2: Graph schema in services/graph_builder/schema.py — 6 node types (Vessel, Company, Person, ClassSociety, FlagState, PIClub), 7 edge types (OWNED_BY, MANAGED_BY, CLASSED_BY, FLAGGED_AS, INSURED_BY, DIRECTED_BY, STS_PARTNER), indexes, IG P&I Club seed data
+- Story 3: GraphBuilder class — builds graph from Paris MoU (temporal transitions for class/flag/insurer changes), OpenSanctions (ownership chains, sanctions as Vessel attributes), IACS (class status updates). Idempotent via MERGE, batch Cypher with UNWIND
+- Story 4: AIS enrichment — updates Vessel nodes with last_seen data from vessel_profiles, STS_PARTNER edges from GFW encounters and sts_proximity anomalies
+- Story 5: Geographic inference engine — D1-D7 signals (staging loiter, Russian-origin transits, MMSI/flag mismatch, STS with blacklisted, loiter-then-vanish). Migration 026_vessel_signals.sql
+- Story 6: Signal-based scoring engine — A1-A11, B1-B7, C1-C5 signal catalogue. Thresholds: 0-3 green, 4-5 yellow, 6-8 red. Override rules. Old rules moved to services/scoring/rules/legacy/
+- Story 7: Fleet risk propagation — A10 (ISM company fleet, weight 2) and B4 (owner fleet, weight 3) via FalkorDB graph traversal. One-directional, no cascade
+- Story 8: GraphPipeline class — 8-stage pipeline (build → AIS → inference → score → propagate → update). Full, incremental, and single-vessel modes
+- Story 9: Export/import scripts for FalkorDB RDB dump + vessel_signals pg_dump. Makefile targets
+- Tests: 107 passed, 1 skipped (redis-cli)
+- Commits: 9 commits on feature/graph-model-and-scoring branch
+
 ## Current Feature
 
-**Spec:** 31-auth-backend + 32-auth-frontend + 33-user-notifications (Waves 15-16)
-**Branch:** TBD (feature/user-auth)
-**Status:** Specs drafted, ready for approval
+**Spec:** 42-graph-model-and-scoring
+**Branch:** feature/graph-model-and-scoring
+**Status:** completed
 
 ### What's next
 
-Wave 15 — User Authentication:
+Spec 42 complete. All 9 stories implemented. Ready for human review.
+
+Remaining specs from original roadmap:
 - Spec 31 (auth-backend): 7 stories — users table, SMTP, JWT, register/confirm/login, middleware, inactivity lifecycle
 - Spec 32 (auth-frontend): 5 stories — auth store, login modal, confirm page, HUD menu, feature gating
 
