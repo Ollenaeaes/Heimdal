@@ -417,12 +417,24 @@ Spec 30 complete. All stories implemented.
 - Tests: 88 total, all passing
 - Commits: 4 commits on feature/paris-mou-pipeline branch
 
+### 41-opensanctions-ownership-graph (all 4 stories)
+- Story 1: DB migration 025_opensanctions_graph.sql — os_entities, os_relationships, os_vessel_links tables with GIN/B-tree indexes
+  - Tests: 23 tests
+- Story 2: FTM entity extractor — streaming NDJSON parser for Vessel/Company/Person/Organization/LegalEntity entities, Ownership/Directorship relationships, IMO/MMSI vessel links
+  - Tests: 32 tests
+- Story 3: Historical batch load script — scripts/load_opensanctions.py with psycopg2 upserts, --stats/--stats-only flags
+  - Tests: 12 tests
+- Story 4: Daily incremental sync — services/opensanctions/sync.py reuses download script + extractor, no deletion policy, Dockerfile for batch profile
+  - Tests: 9 tests
+- Tests: 76 total, all passing
+- Commits: 4 commits on feature/opensanctions-ownership-graph branch
+
 ## Notes for Next Session
 
+- Spec 41 opensanctions-ownership-graph COMPLETED on feature/opensanctions-ownership-graph branch. Ready for human review.
 - Spec 40 paris-mou-pipeline COMPLETED on feature/paris-mou-pipeline branch. Ready for human review.
-- To run historical ingest: `python3 scripts/ingest_paris_mou.py --file data/paris_mou/GetPublicFile_20260325_0345.xml.zip`
-- Migration 024 must be applied via `psql -f` in prod (DB safety rule)
-- VPS weekly update: add `paris-mou-update` service to docker-compose batch profile, cron on Sundays 03:00
-- 26 inspections with non-numeric IMOs (P-prefix, pleasure craft) are correctly skipped by parser
-- P&I IG membership derivation deferred — XML has authority codes not names; needs cross-reference table
-- Spec 42 (scoring) will consume PSC data via these tables
+- Migration 025 must be applied via `psql -f` in prod (DB safety rule)
+- To run historical load: `python3 scripts/load_opensanctions.py --file data/opensanctions/default.json --db-url $DATABASE_URL --stats`
+- VPS daily sync: add `opensanctions-sync` service to docker-compose batch profile, cron daily at 04:00
+- Sanction entities (single-endpoint) are captured via entity.target=True flag, not as relationship edges
+- Spec 42 (graph model) will consume os_entities/os_relationships tables to build ownership chains

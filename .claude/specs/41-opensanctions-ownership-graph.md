@@ -2,7 +2,7 @@
 
 **Slug:** `opensanctions-ownership-graph`
 **Created:** 2026-03-26
-**Status:** approved
+**Status:** completed
 **Priority:** high
 **Depends on:** 39-local-dev-bootstrap (for testing locally)
 
