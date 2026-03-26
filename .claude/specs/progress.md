@@ -3,28 +3,20 @@
 This file is the implementation scratchpad. Read it at the start of every session. Update it after every completed story. It survives context resets and session changes.
 
 ## Notes for Next Session
+- 39-local-dev-bootstrap: COMPLETED on feature/local-dev-bootstrap branch. Ready for human review.
+- To use: `make dev-up` starts the stack, `make sync-data` pulls prod data, `make dev-reset` for clean slate.
 - 36-spoofing-rethink: COMPLETED on feature/spoofing-rethink branch. Ready for human review.
-- Prod deployment steps:
-  1. Backup DB: `docker compose exec postgres pg_dump -U heimdal -Fc heimdal > /data/raw/backup_before_spoof_rethink.dump`
-  2. Run migration 019 (bulk resolve): `docker compose exec postgres psql -U heimdal -d heimdal -f /docker-entrypoint-initdb.d/migrations/019_bulk_resolve_spoof_anomalies.sql`
-  3. Run migration 020 (gnss zones update): same pattern
-  4. Run rescore script: `python3 scripts/rescore_after_bulk_resolve.py --db-url postgresql://heimdal:PASSWORD@localhost:5432/heimdal`
-  5. Deploy services with `--no-deps --build` (never touch postgres container)
 
-### 36-spoofing-rethink (all 7 stories)
-- Story 1: Bulk-resolve migration — SQL migration + Python rescore script for ~17k false positive anomalies
-- Story 2: Disabled 4 spoof/speed rules — moved to rules/disabled/, cleaned constants.py, added skip in engine
-- Story 3: IACS domestic vessel exemption — passenger (60-69) and small (<60m) vessels with national authority class exempt
-- Story 4: GNSS zone detector — area-based detection using ST_ClusterDBSCAN, creates zones when 3+ vessels affected
-- Story 5: GNSS zones API — time-window queries with center+window+bbox params
-- Story 6: Polygon heatmap layer — fill layers colored by event_type and affected_count with temporal fade
-- Story 7: Time-window control bar — 30-day timeline, window presets, "Now" button, keyboard support
+### 39-local-dev-bootstrap (all 3 stories)
+- Story 1: Fixed docker-compose.dev.yml — pgdata mount, Redis, auto-migration service
+- Story 2: Extended sync_dev_data.py — added --with-iacs and --with-equasis flags
+- Story 3: Makefile targets — dev-reset, dev-shell, dev-test, updated sync-data
 
 ## Current Feature
 
-**Spec:** Wave Plan — 28 specs across 13 waves (Capability Modules)
-**Branch:** feature/operations-centre-theme
-**Status:** Wave 12 complete
+**Spec:** 39-local-dev-bootstrap
+**Branch:** feature/local-dev-bootstrap
+**Status:** completed
 
 ## Stories Completed
 

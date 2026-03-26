@@ -19,12 +19,45 @@ services:
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
-      - pgdata_dev:/var/lib/postgresql/data
+      - pgdata_dev:/home/postgres/pgdata
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U heimdal -d heimdal"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build: ./db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: heimdal
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-heimdal_dev}
+      POSTGRES_DB: heimdal
+      PGPASSWORD: ${DB_PASSWORD:-heimdal_dev}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "=== Running migrations ==="
+        for migration in $$(ls /docker-entrypoint-initdb.d/migrations/*.sql | sort); do
+          filename=$$(basename "$$migration")
+          echo "--- Applying: $$filename ---"
+          psql -h postgres -U heimdal -d heimdal -f "$$migration"
+        done
+        echo "=== All migrations applied ==="
 
   api-server:
     build:
@@ -36,10 +69,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
       DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+      # REDIS_URL not set — api-server runs without Redis (batch mode).
+      # The redis Python package isn't in the Docker image.
+      # Set REDIS_URL=redis://redis:6379/0 after adding redis to requirements.
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import urllib.request,urllib.error;\ntry: urllib.request.urlopen(\"http://localhost:8000/api/health\")\nexcept urllib.error.HTTPError: pass'"]
       interval: 5s
@@ -54,6 +94,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
       GFW_API_TOKEN: ${GFW_API_TOKEN}
@@ -71,3 +113,4 @@ services:
 
 volumes:
   pgdata_dev:
+  redis_dev:
