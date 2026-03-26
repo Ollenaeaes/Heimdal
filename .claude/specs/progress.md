@@ -404,11 +404,25 @@ Spec 30 complete. All stories implemented.
   - Tests: 19 tests
 - Commits: 8 commits on feature/equasis-upload branch
 
+### 40-paris-mou-pipeline (all 4 stories)
+- Story 1: DB migration 024_psc_inspections.sql — psc_inspections, psc_deficiencies, psc_certificates, psc_flag_performance tables with 6 indexes and 87 flag state seed data
+  - Tests: 15 tests
+- Story 2: XML parser — lxml iterparse for 135MB+ THETIS XML, extracts inspections/deficiencies/certificates, derives detention and ISM flags, supports .xml and .xml.zip
+  - Validated against real data: 16,418 inspections, 672 detained, 9,917 with deficiencies
+  - Tests: 39 tests
+- Story 3: Historical batch ingest script — CLI with --dry-run, --file, --download-only; DES API auth/download; ON CONFLICT upsert; commits per file
+  - Tests: 19 tests
+- Story 4: Incremental update service — weekly VPS job, psc_download_log tracking table, diffs API vs processed, Dockerfile for batch profile
+  - Tests: 15 tests
+- Tests: 88 total, all passing
+- Commits: 4 commits on feature/paris-mou-pipeline branch
+
 ## Notes for Next Session
 
-- Spec 30 lookback-and-export complete on branch `feature/lookback-and-export`
-- Ready for local testing, then merge to main
-- Build and deploy frontend with `npx vite build` (no `tsc` needed in Docker)
-- Backend needs `pyarrow>=15.0` added to api-server container
-- No DB schema changes — no migration needed, safe for prod deploy with `--no-deps`
-- The old replay system (TrackReplay, ReplayOverlay, useReplayStore) is fully removed
+- Spec 40 paris-mou-pipeline COMPLETED on feature/paris-mou-pipeline branch. Ready for human review.
+- To run historical ingest: `python3 scripts/ingest_paris_mou.py --file data/paris_mou/GetPublicFile_20260325_0345.xml.zip`
+- Migration 024 must be applied via `psql -f` in prod (DB safety rule)
+- VPS weekly update: add `paris-mou-update` service to docker-compose batch profile, cron on Sundays 03:00
+- 26 inspections with non-numeric IMOs (P-prefix, pleasure craft) are correctly skipped by parser
+- P&I IG membership derivation deferred — XML has authority codes not names; needs cross-reference table
+- Spec 42 (scoring) will consume PSC data via these tables
