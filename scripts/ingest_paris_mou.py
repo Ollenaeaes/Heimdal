@@ -189,6 +189,12 @@ def insert_inspections_batch(conn, inspections: list[dict]) -> dict:
                   %(certificate_source)s)
     """
 
+    def _empty_to_none(val):
+        """Convert empty strings to None for proper SQL NULL handling."""
+        if val == "":
+            return None
+        return val
+
     cur = conn.cursor()
 
     for record in inspections:
@@ -202,37 +208,40 @@ def insert_inspections_batch(conn, inspections: list[dict]) -> dict:
                 stats["skipped"] += 1
                 continue
 
-            # Prepare inspection row
+            # Prepare inspection row — sanitize empty strings to None for DATE columns
             row = {
                 "inspection_id": record["inspection_id"],
                 "imo": record["imo"],
-                "ship_name": record.get("ship_name"),
-                "flag_state": record.get("flag_state"),
-                "ship_type": record.get("ship_type"),
+                "ship_name": _empty_to_none(record.get("ship_name")),
+                "flag_state": _empty_to_none(record.get("flag_state")),
+                "ship_type": _empty_to_none(record.get("ship_type")),
                 "gross_tonnage": record.get("gross_tonnage"),
-                "keel_laid_date": record.get("keel_laid_date"),
+                "keel_laid_date": _empty_to_none(record.get("keel_laid_date")),
                 "inspection_date": record["inspection_date"],
-                "inspection_end_date": record.get("inspection_end_date"),
-                "inspection_type": record.get("inspection_type"),
-                "inspection_port": record.get("inspection_port"),
-                "port_country": record.get("port_country"),
-                "reporting_authority": record.get("reporting_authority"),
+                "inspection_end_date": _empty_to_none(record.get("inspection_end_date")),
+                "inspection_type": _empty_to_none(record.get("inspection_type")),
+                "inspection_port": _empty_to_none(record.get("inspection_port")),
+                "port_country": _empty_to_none(record.get("port_country")),
+                "reporting_authority": _empty_to_none(record.get("reporting_authority")),
                 "detained": record.get("detained", False),
                 "deficiency_count": record.get("deficiency_count", 0),
                 "ism_deficiency": record.get("ism_deficiency", False),
-                "ro_at_inspection": record.get("ro_at_inspection"),
-                "pi_provider_at_inspection": record.get("pi_provider_at_inspection"),
+                "ro_at_inspection": _empty_to_none(record.get("ro_at_inspection")),
+                "pi_provider_at_inspection": _empty_to_none(record.get("pi_provider_at_inspection")),
                 "pi_is_ig_member": record.get("pi_is_ig_member"),
-                "ism_company_imo": record.get("ism_company_imo"),
-                "ism_company_name": record.get("ism_company_name"),
+                "ism_company_imo": _empty_to_none(record.get("ism_company_imo")),
+                "ism_company_name": _empty_to_none(record.get("ism_company_name")),
                 "raw_data": json.dumps(record.get("raw_data", {})),
             }
 
+            # Use savepoint so one bad record doesn't abort the whole transaction
+            cur.execute("SAVEPOINT sp_inspection")
             cur.execute(inspection_sql, row)
             result = cur.fetchone()
 
             if result is None:
                 # ON CONFLICT DO NOTHING — duplicate
+                cur.execute("RELEASE SAVEPOINT sp_inspection")
                 stats["skipped"] += 1
                 continue
 
@@ -245,16 +254,22 @@ def insert_inspections_batch(conn, inspections: list[dict]) -> dict:
                 cur.execute(deficiency_sql, deficiency)
                 stats["deficiencies"] += 1
 
-            # Insert certificates
+            # Insert certificates — sanitize date fields
             for cert in record.get("certificates", []):
                 cert["inspection_id"] = db_id
+                cert["expiry_date"] = _empty_to_none(cert.get("expiry_date"))
+                cert["issue_date"] = _empty_to_none(cert.get("issue_date"))
                 cur.execute(certificate_sql, cert)
                 stats["certificates"] += 1
+
+            cur.execute("RELEASE SAVEPOINT sp_inspection")
 
         except Exception:
             logger.exception(
                 "Error inserting inspection %s", record.get("inspection_id")
             )
+            cur.execute("ROLLBACK TO SAVEPOINT sp_inspection")
+            cur.execute("RELEASE SAVEPOINT sp_inspection")
             stats["skipped"] += 1
             continue
 

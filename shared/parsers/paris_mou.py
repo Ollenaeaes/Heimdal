@@ -208,7 +208,9 @@ def _parse_inspection(inspection_elem) -> dict | None:
 
         # Strip trailing 'Z' from date strings for cleaner ISO format
         def _clean_date(d: str | None) -> str | None:
-            if d and d.endswith("Z"):
+            if not d:
+                return None
+            if d.endswith("Z"):
                 return d[:-1]
             return d
 
