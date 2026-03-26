@@ -47,10 +47,9 @@ async def get_recent_positions(
                 SELECT vp.mmsi,
                        vp.last_lat AS lat,
                        vp.last_lon AS lon,
-                       lp.sog,
-                       lp.cog,
-                       lp.heading,
-                       lp.nav_status,
+                       vp.last_sog AS sog,
+                       vp.last_cog AS cog,
+                       vp.last_heading AS heading,
                        vp.last_position_time AS timestamp,
                        vp.risk_tier,
                        vp.risk_score,
@@ -59,12 +58,6 @@ async def get_recent_positions(
                        vp.length,
                        vp.width
                 FROM vessel_profiles vp
-                LEFT JOIN LATERAL (
-                    SELECT sog, cog, heading, nav_status
-                    FROM vessel_positions
-                    WHERE mmsi = vp.mmsi
-                    ORDER BY timestamp DESC LIMIT 1
-                ) lp ON true
                 WHERE vp.updated_at > :since
                   AND vp.last_lat IS NOT NULL
                   AND vp.last_lon IS NOT NULL
@@ -83,14 +76,14 @@ async def get_recent_positions(
             "sog": row[3],
             "cog": row[4],
             "heading": row[5],
-            "nav_status": row[6],
-            "timestamp": row[7].isoformat() if row[7] else None,
-            "risk_tier": row[8] or "green",
-            "risk_score": row[9] or 0,
-            "ship_name": row[10],
-            "ship_type": row[11],
-            "length": row[12],
-            "width": row[13],
+            "nav_status": None,
+            "timestamp": row[6].isoformat() if row[6] else None,
+            "risk_tier": row[7] or "green",
+            "risk_score": row[8] or 0,
+            "ship_name": row[9],
+            "ship_type": row[10],
+            "length": row[11],
+            "width": row[12],
         })
 
     return {

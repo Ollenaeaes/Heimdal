@@ -36,17 +36,17 @@ services:
       retries: 5
     command: >
       postgres
-      -c shared_buffers=1GB
-      -c effective_cache_size=3GB
-      -c work_mem=16MB
-      -c maintenance_work_mem=256MB
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
       -c max_connections=30
-      -c max_wal_size=1GB
+      -c max_wal_size=512MB
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 4G
+          cpus: '0.75'
+          memory: 3G
 
   # ---------------------------------------------------------------------------
   # Always-on Services
@@ -68,8 +68,26 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.3'
+          memory: 384M
+
+  adsb-ingest:
+    build: ./services/adsb-ingest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data/adsb:/app/data:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 384M
 
   api-server:
     build:
@@ -96,8 +114,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 1G
+          cpus: '0.4'
+          memory: 768M
 
   # ---------------------------------------------------------------------------
   # Scheduled Services (run via host cron or docker compose run)
@@ -125,8 +143,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 3G
+          cpus: '0.75'
+          memory: 2G
 
   iacs-tracker:
     build: ./services/iacs-tracker
@@ -161,8 +179,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 4G
+          cpus: '0.75'
+          memory: 2G
 
 # =============================================================================
 # Persistent Volumes

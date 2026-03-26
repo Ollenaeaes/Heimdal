@@ -55,7 +55,7 @@ class EnrichmentConfig(BaseSettings):
 
 
 class GfwConfig(BaseSettings):
-    enabled: bool = True
+    enabled: bool = False
     base_url: str = "https://gateway.api.globalfishingwatch.org/v3"
     rate_limit_per_second: int = 10
     events_lookback_days: int = 30

@@ -167,8 +167,6 @@ async def stage_enrich(mmsis: set[int]) -> None:
     logger.info("=== STAGE 3: ENRICH ===")
     start = time.monotonic()
 
-    from gfw_client import GFWClient
-    from gisis_mars import GISISClient, MARSClient
     from runner import enrich_batch
     from sanctions_matcher import SanctionsIndex
     from shared.db.connection import get_session
@@ -182,8 +180,8 @@ async def stage_enrich(mmsis: set[int]) -> None:
         logger.warning("No sanctions data — sanctions matching skipped")
         sanctions_index = None
 
-    # Load AOIs from config
-    aois = _load_aois()
+    # Load AOIs from config (only needed if GFW is enabled)
+    aois = _load_aois() if settings.gfw.enabled else []
 
     # Determine which vessels need enrichment based on tier and last enrichment time
     session_factory = get_session()
@@ -195,7 +193,14 @@ async def stage_enrich(mmsis: set[int]) -> None:
 
     logger.info("Enriching %d vessels", len(mmsis_to_enrich))
 
-    async with GFWClient() as gfw_client:
+    # Only create GFW client if enabled — otherwise pass None
+    gfw_client = None
+    if settings.gfw.enabled:
+        from gfw_client import GFWClient
+        gfw_ctx = GFWClient()
+        gfw_client = await gfw_ctx.__aenter__()
+
+    try:
         async with session_factory() as session:
             result = await enrich_batch(
                 mmsis_to_enrich,
@@ -206,6 +211,9 @@ async def stage_enrich(mmsis: set[int]) -> None:
                 aois=aois,
             )
             await session.commit()
+    finally:
+        if gfw_client is not None:
+            await gfw_ctx.__aexit__(None, None, None)
 
     elapsed = time.monotonic() - start
     logger.info(
@@ -294,10 +302,20 @@ async def run_pipeline(load_only: bool = False) -> None:
     pool = await asyncpg.create_pool(dsn, min_size=2, max_size=5)
 
     try:
-        # Stage 1: Load raw files into DB
-        mmsis = await stage_load(pool)
+        if load_only:
+            # Standalone load mode (legacy — ais-ingest handles this in real-time now)
+            mmsis = await stage_load(pool)
+        else:
+            # Score all vessels that received data since last run
+            async with pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT DISTINCT mmsi FROM vessel_positions
+                    WHERE timestamp > NOW() - INTERVAL '2 hours'
+                """)
+                mmsis = {r["mmsi"] for r in rows}
 
-        if not load_only:
+            logger.info("Found %d vessels with recent data to score", len(mmsis))
+
             # Stage 2: Score vessels with new data
             await stage_score(mmsis)
 
