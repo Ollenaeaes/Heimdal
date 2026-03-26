@@ -52,6 +52,8 @@ def sync_vessels(prod_url: str, hours: int):
     prod_conn = psycopg2.connect(prod_url)
     prod_conn.set_session(readonly=True)
     prod_cur = prod_conn.cursor()
+    # Override the 30s statement_timeout for bulk reads
+    prod_cur.execute("SET statement_timeout = '300s'")
 
     # Fetch distinct MMSIs from recent positions
     logger.info("Fetching vessel MMSIs with positions in last %d hours...", hours)
@@ -83,19 +85,30 @@ def sync_vessels(prod_url: str, hours: int):
     profile_cols = [desc[0] for desc in prod_cur.description]
     logger.info("Fetched %d vessel profiles", len(profiles))
 
-    # Fetch vessel_positions
-    logger.info("Fetching vessel positions (last %d hours)...", hours)
-    prod_cur.execute(
-        "SELECT mmsi, ST_Y(position::geometry) AS lat, ST_X(position::geometry) AS lon, "
-        "sog, cog, heading, rot, nav_status, timestamp "
-        "FROM vessel_positions "
-        "WHERE timestamp > NOW() - INTERVAL '%s hours' "
-        "ORDER BY timestamp",
-        (hours,)
-    )
-    positions = prod_cur.fetchall()
-    pos_cols = [desc[0] for desc in prod_cur.description]
-    logger.info("Fetched %d positions", len(positions))
+    # Fetch vessel_positions in time chunks to avoid timeout/OOM
+    logger.info("Fetching vessel positions (last %d hours) in 6-hour chunks...", hours)
+    chunk_hours = 6
+    positions = []
+    pos_cols = None
+    for offset_h in range(0, hours, chunk_hours):
+        end_h = offset_h
+        start_h = min(offset_h + chunk_hours, hours)
+        logger.info("  Fetching chunk: -%dh to -%dh...", start_h, end_h)
+        prod_cur.execute(
+            "SELECT mmsi, ST_Y(position::geometry) AS lat, ST_X(position::geometry) AS lon, "
+            "sog, cog, heading, rot, nav_status, timestamp "
+            "FROM vessel_positions "
+            "WHERE timestamp > NOW() - INTERVAL '%s hours' "
+            "AND timestamp <= NOW() - INTERVAL '%s hours' "
+            "ORDER BY timestamp",
+            (start_h, end_h)
+        )
+        chunk = prod_cur.fetchall()
+        if pos_cols is None:
+            pos_cols = [desc[0] for desc in prod_cur.description]
+        positions.extend(chunk)
+        logger.info("  Got %d positions in this chunk (%d total)", len(chunk), len(positions))
+    logger.info("Fetched %d positions total", len(positions))
 
     prod_cur.close()
     prod_conn.close()
@@ -245,9 +258,13 @@ def sync_maritime(prod_url: str):
     prod_conn.set_session(readonly=True)
     prod_cur = prod_conn.cursor()
 
-    # Fetch maritime_zones
+    # Fetch maritime_zones (actual prod columns)
     prod_cur.execute(
-        "SELECT id, zone_type, name, sovereign1, sovereign2, "
+        "SET statement_timeout = '300s'"
+    )
+    prod_cur.execute(
+        "SELECT id, zone_type, mrgid, geoname, sovereign, iso_sov, "
+        "territory, iso_ter, pol_type, area_km2, metadata, "
         "ST_AsText(ST_Simplify(geometry::geometry, 0.01)) AS geom_wkt "
         "FROM maritime_zones"
     )
@@ -255,10 +272,11 @@ def sync_maritime(prod_url: str):
     zone_cols = [desc[0] for desc in prod_cur.description]
     logger.info("Fetched %d maritime zones from prod", len(zones))
 
-    # Fetch maritime_boundaries
+    # Fetch maritime_boundaries (actual prod columns)
     prod_cur.execute(
-        "SELECT id, boundary_type, name, sovereign1, sovereign2, "
-        "ST_AsText(ST_Simplify(geometry::geometry, 0.01)) AS geom_wkt "
+        "SELECT id, boundary_type, line_id, line_name, line_type, "
+        "sovereign1, sovereign2, eez1, eez2, length_km, metadata, "
+        "ST_AsText(ST_Simplify(geometry::geometry, 0.001)) AS geom_wkt "
         "FROM maritime_boundaries"
     )
     boundaries = prod_cur.fetchall()
@@ -280,9 +298,13 @@ def sync_maritime(prod_url: str):
         data = dict(zip(zone_cols, row))
         if not data.get("geom_wkt"):
             continue
+        if data.get("metadata") and not isinstance(data["metadata"], str):
+            data["metadata"] = json.dumps(data["metadata"])
         dev_cur.execute("""
-            INSERT INTO maritime_zones (id, zone_type, name, sovereign1, sovereign2, geometry)
-            VALUES (%(id)s, %(zone_type)s, %(name)s, %(sovereign1)s, %(sovereign2)s,
+            INSERT INTO maritime_zones (id, zone_type, mrgid, geoname, sovereign, iso_sov,
+                territory, iso_ter, pol_type, area_km2, metadata, geometry)
+            VALUES (%(id)s, %(zone_type)s, %(mrgid)s, %(geoname)s, %(sovereign)s, %(iso_sov)s,
+                    %(territory)s, %(iso_ter)s, %(pol_type)s, %(area_km2)s, %(metadata)s,
                     ST_GeogFromText(%(geom_wkt)s))
             ON CONFLICT (id) DO NOTHING
         """, data)
@@ -300,9 +322,13 @@ def sync_maritime(prod_url: str):
         data = dict(zip(boundary_cols, row))
         if not data.get("geom_wkt"):
             continue
+        if data.get("metadata") and not isinstance(data["metadata"], str):
+            data["metadata"] = json.dumps(data["metadata"])
         dev_cur.execute("""
-            INSERT INTO maritime_boundaries (id, boundary_type, name, sovereign1, sovereign2, geometry)
-            VALUES (%(id)s, %(boundary_type)s, %(name)s, %(sovereign1)s, %(sovereign2)s,
+            INSERT INTO maritime_boundaries (id, boundary_type, line_id, line_name, line_type,
+                sovereign1, sovereign2, eez1, eez2, length_km, metadata, geometry)
+            VALUES (%(id)s, %(boundary_type)s, %(line_id)s, %(line_name)s, %(line_type)s,
+                    %(sovereign1)s, %(sovereign2)s, %(eez1)s, %(eez2)s, %(length_km)s, %(metadata)s,
                     ST_GeogFromText(%(geom_wkt)s))
             ON CONFLICT (id) DO NOTHING
         """, data)

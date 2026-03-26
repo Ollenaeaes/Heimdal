@@ -77,7 +77,9 @@ services:
       - "${API_PORT:-8000}:8000"
     environment:
       DATABASE_URL: "postgresql+asyncpg://heimdal:${DB_PASSWORD:-heimdal_dev}@postgres:5432/heimdal"
-      REDIS_URL: "redis://redis:6379/0"
+      # REDIS_URL not set — api-server runs without Redis (batch mode).
+      # The redis Python package isn't in the Docker image.
+      # Set REDIS_URL=redis://redis:6379/0 after adding redis to requirements.
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import urllib.request,urllib.error;\ntry: urllib.request.urlopen(\"http://localhost:8000/api/health\")\nexcept urllib.error.HTTPError: pass'"]
       interval: 5s
