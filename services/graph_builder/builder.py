@@ -47,6 +47,7 @@ class BuildStats:
     edges: dict[str, int] = field(default_factory=lambda: {
         "OWNED_BY": 0, "MANAGED_BY": 0, "CLASSED_BY": 0,
         "FLAGGED_AS": 0, "INSURED_BY": 0, "DIRECTED_BY": 0,
+        "STS_PARTNER": 0,
     })
     transitions: int = 0
     elapsed: float = 0.0
@@ -725,6 +726,176 @@ class GraphBuilder:
                 self.stats.edges["CLASSED_BY"] += result.relationships_created
 
         logger.info("IACS: processed %d vessels", len(rows))
+
+    # ------------------------------------------------------------------
+    # AIS-Derived Data (Story 4)
+    # ------------------------------------------------------------------
+
+    def enrich_from_ais(self) -> None:
+        """Enrich graph with AIS-derived data from vessel_profiles and gfw_events.
+
+        Updates Vessel nodes with last_seen data and creates STS_PARTNER edges
+        from GFW encounter events and sts_proximity anomalies.
+
+        This is read-only on PostgreSQL — only writes to FalkorDB.
+        """
+        logger.info("Enriching graph from AIS data...")
+        self._update_vessel_positions()
+        self._create_sts_from_gfw()
+        self._create_sts_from_anomalies()
+        logger.info("AIS enrichment complete")
+
+    def _update_vessel_positions(self) -> None:
+        """Update Vessel nodes with last_seen data from vessel_profiles."""
+        with self.pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT mmsi, imo, last_lat, last_lon, last_position_time
+                FROM vessel_profiles
+                WHERE imo IS NOT NULL
+                  AND last_lat IS NOT NULL
+                  AND last_lon IS NOT NULL
+            """)
+            rows = cur.fetchall()
+
+        if not rows:
+            logger.info("No vessel profiles with positions found")
+            return
+
+        # Batch update in chunks
+        updated = 0
+        for i in range(0, len(rows), BATCH_SIZE):
+            chunk = [
+                {
+                    "imo": row["imo"],
+                    "mmsi": str(row["mmsi"]),
+                    "last_seen_lat": row["last_lat"],
+                    "last_seen_lon": row["last_lon"],
+                    "last_seen_date": str(row["last_position_time"]) if row["last_position_time"] else None,
+                }
+                for row in rows[i:i + BATCH_SIZE]
+            ]
+            result = self.graph.query(
+                """
+                UNWIND $batch AS row
+                MATCH (v:Vessel {imo: row.imo})
+                SET v.mmsi = row.mmsi,
+                    v.last_seen_lat = row.last_seen_lat,
+                    v.last_seen_lon = row.last_seen_lon,
+                    v.last_seen_date = row.last_seen_date
+                """,
+                {"batch": chunk},
+            )
+            updated += result.properties_set
+
+        logger.info("AIS positions: updated %d vessel properties from %d profiles", updated, len(rows))
+
+    def _create_sts_from_gfw(self) -> None:
+        """Create STS_PARTNER edges from GFW encounter events."""
+        with self.pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT g.mmsi, g.encounter_mmsi, g.start_time, g.lat, g.lon,
+                       EXTRACT(EPOCH FROM (g.end_time - g.start_time)) / 3600.0 AS duration_hours,
+                       vp1.imo AS imo1, vp2.imo AS imo2
+                FROM gfw_events g
+                JOIN vessel_profiles vp1 ON vp1.mmsi = g.mmsi
+                LEFT JOIN vessel_profiles vp2 ON vp2.mmsi = g.encounter_mmsi
+                WHERE g.event_type = 'encounter'
+                  AND g.encounter_mmsi IS NOT NULL
+                  AND vp1.imo IS NOT NULL
+            """)
+            rows = cur.fetchall()
+
+        sts_count = 0
+        for row in rows:
+            imo1 = row["imo1"]
+            imo2 = row["imo2"]
+            if not imo1 or not imo2:
+                continue
+
+            result = self.graph.query(
+                """
+                MERGE (v1:Vessel {imo: $imo1})
+                MERGE (v2:Vessel {imo: $imo2})
+                MERGE (v1)-[e:STS_PARTNER {event_date: $event_date}]->(v2)
+                ON CREATE SET
+                    e.latitude = $lat,
+                    e.longitude = $lon,
+                    e.duration_hours = $duration_hours
+                """,
+                {
+                    "imo1": imo1,
+                    "imo2": imo2,
+                    "event_date": str(row["start_time"].date()) if row["start_time"] else None,
+                    "lat": row["lat"],
+                    "lon": row["lon"],
+                    "duration_hours": round(row["duration_hours"], 1) if row["duration_hours"] else None,
+                },
+            )
+            sts_count += result.relationships_created
+
+        self.stats.edges["STS_PARTNER"] += sts_count
+        logger.info("GFW encounters: created %d STS_PARTNER edges from %d events", sts_count, len(rows))
+
+    def _create_sts_from_anomalies(self) -> None:
+        """Create STS_PARTNER edges from sts_proximity anomaly events."""
+        with self.pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT a.mmsi, a.details, a.created_at,
+                       vp.imo
+                FROM anomaly_events a
+                JOIN vessel_profiles vp ON vp.mmsi = a.mmsi
+                WHERE a.rule_id = 'sts_proximity'
+                  AND vp.imo IS NOT NULL
+                  AND a.details IS NOT NULL
+            """)
+            rows = cur.fetchall()
+
+        sts_count = 0
+        for row in rows:
+            details = row["details"] or {}
+            partner_mmsi = details.get("partner_mmsi") or details.get("nearby_mmsi")
+            if not partner_mmsi:
+                continue
+
+            # Look up partner IMO
+            with self.pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT imo FROM vessel_profiles WHERE mmsi = %s AND imo IS NOT NULL",
+                    (int(partner_mmsi),),
+                )
+                partner = cur.fetchone()
+
+            if not partner:
+                continue
+
+            imo1 = row["imo"]
+            imo2 = partner["imo"]
+            event_date = str(row["created_at"].date()) if row["created_at"] else None
+            lat = details.get("lat") or details.get("latitude")
+            lon = details.get("lon") or details.get("longitude")
+
+            result = self.graph.query(
+                """
+                MERGE (v1:Vessel {imo: $imo1})
+                MERGE (v2:Vessel {imo: $imo2})
+                MERGE (v1)-[e:STS_PARTNER {event_date: $event_date}]->(v2)
+                ON CREATE SET
+                    e.latitude = $lat,
+                    e.longitude = $lon,
+                    e.source = 'sts_proximity'
+                """,
+                {
+                    "imo1": imo1,
+                    "imo2": imo2,
+                    "event_date": event_date,
+                    "lat": lat,
+                    "lon": lon,
+                },
+            )
+            sts_count += result.relationships_created
+
+        self.stats.edges["STS_PARTNER"] += sts_count
+        logger.info("STS proximity: created %d STS_PARTNER edges from %d anomalies", sts_count, len(rows))
 
 
 # ---------------------------------------------------------------------------
