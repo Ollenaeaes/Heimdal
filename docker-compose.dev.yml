@@ -38,6 +38,18 @@ services:
       timeout: 5s
       retries: 5
 
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "${FALKORDB_PORT:-6380}:6379"
+    volumes:
+      - falkordb_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   migrate:
     build: ./db
     depends_on:
@@ -114,3 +126,4 @@ services:
 volumes:
   pgdata_dev:
   redis_dev:
+  falkordb_dev:

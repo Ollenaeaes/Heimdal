@@ -6,3 +6,4 @@ asyncpg>=0.29,<1.0
 geoalchemy2>=0.14,<1.0
 redis[hiredis]>=5.0,<6.0
 pyyaml>=6.0,<7.0
+falkordb>=1.0,<2.0

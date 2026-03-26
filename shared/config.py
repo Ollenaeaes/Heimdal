@@ -91,6 +91,12 @@ class ColdStorageConfig(BaseSettings):
     retain_jsonl_days: int = 0  # delete JSONL immediately after Parquet creation
 
 
+class FalkorDBConfig(BaseSettings):
+    host: str = "localhost"
+    port: int = 6380
+    graph_name: str = "heimdal"
+
+
 class FrontendConfig(BaseSettings):
     initial_camera_lat: float = 20.0
     initial_camera_lon: float = 30.0
@@ -130,6 +136,7 @@ class Settings(BaseSettings):
     raw_storage: RawStorageConfig = Field(default_factory=RawStorageConfig)
     batch_pipeline: BatchPipelineConfig = Field(default_factory=BatchPipelineConfig)
     cold_storage: ColdStorageConfig = Field(default_factory=ColdStorageConfig)
+    falkordb: FalkorDBConfig = Field(default_factory=FalkorDBConfig)
 
     model_config = {
         "env_file": ".env",
@@ -172,6 +179,7 @@ def _merge_yaml(settings: Settings, yaml_data: dict[str, Any]) -> Settings:
         "raw_storage": "raw_storage",
         "batch_pipeline": "batch_pipeline",
         "cold_storage": "cold_storage",
+        "falkordb": "falkordb",
     }
     for yaml_key, attr_name in section_map.items():
         section = yaml_data.get(yaml_key)
