@@ -67,6 +67,20 @@ test: ## Run the test suite inside the api-server container
 shell-api: ## Open a bash shell in the api-server container
 	docker compose exec api-server bash
 
+# -- Graph Pipeline -----------------------------------------------------------
+
+graph-build: ## Run full graph build + scoring pipeline locally
+	python3 -m services.graph_builder.pipeline
+
+graph-incremental: ## Run incremental graph pipeline (only updated vessels)
+	python3 -m services.graph_builder.pipeline --incremental
+
+graph-score-vessel: ## Score a single vessel (usage: make graph-score-vessel IMO=9876543)
+	python3 -m services.graph_builder.pipeline --vessel $(IMO)
+
+graph-export: ## Export graph and signals for VPS transfer
+	python3 scripts/export_graph.py
+
 # -- Local Dev (with prod data) ------------------------------------------------
 
 dev-up: ## Start local dev stack (no AIS fetcher — use sync-data first)
@@ -146,5 +160,6 @@ help: ## Show this help
 
 .PHONY: up down reset logs logs-ingest logs-scoring migrate shell-db fetch-sanctions test shell-api help \
         iacs-bootstrap iacs-update iacs-check iacs-risk iacs-changes \
+        graph-build graph-incremental graph-score-vessel graph-export \
         dev-up dev-down dev-rebuild sync-data sync-raw dev-reset dev-shell dev-test dev-load dev-logs \
         oci-check oci-provision oci-setup oci-deploy oci-deploy-full oci-ssh oci-logs oci-status oci-ip
