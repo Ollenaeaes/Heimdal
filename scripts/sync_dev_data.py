@@ -2,13 +2,16 @@
 """Sync data from prod to local dev database.
 
 Sets up an SSH tunnel to prod, fetches vessel data (positions + profiles),
-infrastructure routes, and maritime zone boundaries.
+infrastructure routes, maritime zone boundaries, IACS class data, and Equasis data.
 
 Usage:
     python3 scripts/sync_dev_data.py                       # vessels only (last 12h)
     python3 scripts/sync_dev_data.py --hours 24            # vessels, last 24h
     python3 scripts/sync_dev_data.py --all                 # everything
     python3 scripts/sync_dev_data.py --skip-vessels --with-infrastructure --with-maritime
+    python3 scripts/sync_dev_data.py --with-iacs           # sync IACS class data
+    python3 scripts/sync_dev_data.py --with-equasis        # sync Equasis data
+    python3 scripts/sync_dev_data.py --hours 48 --with-iacs --with-equasis
 """
 
 from __future__ import annotations
@@ -311,6 +314,226 @@ def sync_maritime(prod_url: str):
     logger.info("--- Maritime done: %d zones, %d boundaries ---", zone_count, boundary_count)
 
 
+def sync_iacs(prod_url: str):
+    """Sync iacs_vessels_current and iacs_vessels_changes from prod."""
+    import psycopg2
+
+    logger.info("Syncing IACS data from prod...")
+    prod_conn = psycopg2.connect(prod_url)
+    prod_conn.set_session(readonly=True)
+    prod_cur = prod_conn.cursor()
+
+    # Fetch iacs_vessels_current
+    prod_cur.execute(
+        "SELECT imo, ship_name, class_society, date_of_survey, date_of_next_survey, "
+        "date_of_latest_status, status, reason, row_hash, all_entries, "
+        "first_seen, last_seen, snapshot_date "
+        "FROM iacs_vessels_current"
+    )
+    current_rows = prod_cur.fetchall()
+    current_cols = [desc[0] for desc in prod_cur.description]
+    logger.info("Fetched %d iacs_vessels_current rows from prod", len(current_rows))
+
+    # Fetch iacs_vessels_changes
+    prod_cur.execute(
+        "SELECT id, imo, ship_name, change_type, field_changed, "
+        "old_value, new_value, is_high_risk, detected_at, snapshot_date "
+        "FROM iacs_vessels_changes"
+    )
+    change_rows = prod_cur.fetchall()
+    change_cols = [desc[0] for desc in prod_cur.description]
+    logger.info("Fetched %d iacs_vessels_changes rows from prod", len(change_rows))
+
+    prod_cur.close()
+    prod_conn.close()
+
+    dev_conn = psycopg2.connect(LOCAL_DB_URL)
+    dev_cur = dev_conn.cursor()
+
+    # Upsert iacs_vessels_current (PK: imo)
+    current_count = 0
+    for row in current_rows:
+        data = dict(zip(current_cols, row))
+        # JSONB field
+        if data.get("all_entries") and not isinstance(data["all_entries"], str):
+            data["all_entries"] = json.dumps(data["all_entries"])
+
+        dev_cur.execute("""
+            INSERT INTO iacs_vessels_current (
+                imo, ship_name, class_society, date_of_survey, date_of_next_survey,
+                date_of_latest_status, status, reason, row_hash, all_entries,
+                first_seen, last_seen, snapshot_date
+            ) VALUES (
+                %(imo)s, %(ship_name)s, %(class_society)s, %(date_of_survey)s, %(date_of_next_survey)s,
+                %(date_of_latest_status)s, %(status)s, %(reason)s, %(row_hash)s, %(all_entries)s,
+                %(first_seen)s, %(last_seen)s, %(snapshot_date)s
+            )
+            ON CONFLICT (imo) DO UPDATE SET
+                ship_name = EXCLUDED.ship_name,
+                class_society = EXCLUDED.class_society,
+                date_of_survey = EXCLUDED.date_of_survey,
+                date_of_next_survey = EXCLUDED.date_of_next_survey,
+                date_of_latest_status = EXCLUDED.date_of_latest_status,
+                status = EXCLUDED.status,
+                reason = EXCLUDED.reason,
+                row_hash = EXCLUDED.row_hash,
+                all_entries = EXCLUDED.all_entries,
+                first_seen = EXCLUDED.first_seen,
+                last_seen = EXCLUDED.last_seen,
+                snapshot_date = EXCLUDED.snapshot_date
+        """, data)
+        current_count += 1
+
+    dev_conn.commit()
+    logger.info("Upserted %d iacs_vessels_current rows", current_count)
+
+    # Insert iacs_vessels_changes (append-only, ON CONFLICT DO NOTHING)
+    change_count = 0
+    for row in change_rows:
+        data = dict(zip(change_cols, row))
+        dev_cur.execute("""
+            INSERT INTO iacs_vessels_changes (
+                id, imo, ship_name, change_type, field_changed,
+                old_value, new_value, is_high_risk, detected_at, snapshot_date
+            ) VALUES (
+                %(id)s, %(imo)s, %(ship_name)s, %(change_type)s, %(field_changed)s,
+                %(old_value)s, %(new_value)s, %(is_high_risk)s, %(detected_at)s, %(snapshot_date)s
+            )
+            ON CONFLICT DO NOTHING
+        """, data)
+        change_count += 1
+
+    dev_conn.commit()
+    dev_cur.close()
+    dev_conn.close()
+    logger.info("--- IACS done: %d current, %d changes ---", current_count, change_count)
+
+
+def sync_equasis(prod_url: str):
+    """Sync equasis_data and equasis_company_uploads from prod.
+
+    NOTE: equasis_data has a FK on mmsi → vessel_profiles(mmsi).
+    Vessel profiles must be synced first (run without --skip-vessels).
+    """
+    import psycopg2
+
+    logger.info("Syncing Equasis data from prod...")
+    prod_conn = psycopg2.connect(prod_url)
+    prod_conn.set_session(readonly=True)
+    prod_cur = prod_conn.cursor()
+
+    # Fetch equasis_data
+    prod_cur.execute(
+        "SELECT id, mmsi, imo, upload_timestamp, edition_date, "
+        "ship_particulars, management, classification_status, classification_surveys, "
+        "safety_certificates, psc_inspections, name_history, flag_history, "
+        "company_history, raw_extracted "
+        "FROM equasis_data"
+    )
+    eq_rows = prod_cur.fetchall()
+    eq_cols = [desc[0] for desc in prod_cur.description]
+    logger.info("Fetched %d equasis_data rows from prod", len(eq_rows))
+
+    # Fetch equasis_company_uploads
+    prod_cur.execute(
+        "SELECT id, uploaded_at, company_imo, company_name, company_address, "
+        "edition_date, fleet_size, vessels_created, vessels_updated, edges_created, "
+        "inspection_synthesis, parsed_data, raw_text "
+        "FROM equasis_company_uploads"
+    )
+    company_rows = prod_cur.fetchall()
+    company_cols = [desc[0] for desc in prod_cur.description]
+    logger.info("Fetched %d equasis_company_uploads rows from prod", len(company_rows))
+
+    prod_cur.close()
+    prod_conn.close()
+
+    dev_conn = psycopg2.connect(LOCAL_DB_URL)
+    dev_cur = dev_conn.cursor()
+
+    # Check which MMSIs exist locally (for FK constraint)
+    dev_cur.execute("SELECT mmsi FROM vessel_profiles")
+    local_mmsis = {row[0] for row in dev_cur.fetchall()}
+
+    # Clear and re-insert equasis_data (serial id, idempotent via clear+insert)
+    dev_cur.execute("DELETE FROM equasis_data")
+    dev_conn.commit()
+
+    jsonb_fields = (
+        'ship_particulars', 'management', 'classification_status',
+        'classification_surveys', 'safety_certificates', 'psc_inspections',
+        'name_history', 'flag_history', 'company_history', 'raw_extracted',
+    )
+
+    eq_count = 0
+    skipped = 0
+    for row in eq_rows:
+        data = dict(zip(eq_cols, row))
+
+        # Skip rows whose mmsi doesn't exist locally (FK constraint)
+        if data["mmsi"] not in local_mmsis:
+            skipped += 1
+            continue
+
+        for field in jsonb_fields:
+            if data.get(field) and not isinstance(data[field], str):
+                data[field] = json.dumps(data[field])
+
+        dev_cur.execute("""
+            INSERT INTO equasis_data (
+                id, mmsi, imo, upload_timestamp, edition_date,
+                ship_particulars, management, classification_status, classification_surveys,
+                safety_certificates, psc_inspections, name_history, flag_history,
+                company_history, raw_extracted
+            ) VALUES (
+                %(id)s, %(mmsi)s, %(imo)s, %(upload_timestamp)s, %(edition_date)s,
+                %(ship_particulars)s, %(management)s, %(classification_status)s, %(classification_surveys)s,
+                %(safety_certificates)s, %(psc_inspections)s, %(name_history)s, %(flag_history)s,
+                %(company_history)s, %(raw_extracted)s
+            )
+        """, data)
+        eq_count += 1
+
+    dev_conn.commit()
+    if skipped:
+        logger.warning(
+            "Skipped %d equasis_data rows (mmsi not in local vessel_profiles). "
+            "Run vessel sync first to get all profiles.", skipped
+        )
+    logger.info("Inserted %d equasis_data rows", eq_count)
+
+    # Clear and re-insert equasis_company_uploads
+    dev_cur.execute("DELETE FROM equasis_company_uploads")
+    dev_conn.commit()
+
+    company_jsonb_fields = ('inspection_synthesis', 'parsed_data')
+
+    company_count = 0
+    for row in company_rows:
+        data = dict(zip(company_cols, row))
+        for field in company_jsonb_fields:
+            if data.get(field) and not isinstance(data[field], str):
+                data[field] = json.dumps(data[field])
+
+        dev_cur.execute("""
+            INSERT INTO equasis_company_uploads (
+                id, uploaded_at, company_imo, company_name, company_address,
+                edition_date, fleet_size, vessels_created, vessels_updated, edges_created,
+                inspection_synthesis, parsed_data, raw_text
+            ) VALUES (
+                %(id)s, %(uploaded_at)s, %(company_imo)s, %(company_name)s, %(company_address)s,
+                %(edition_date)s, %(fleet_size)s, %(vessels_created)s, %(vessels_updated)s, %(edges_created)s,
+                %(inspection_synthesis)s, %(parsed_data)s, %(raw_text)s
+            )
+        """, data)
+        company_count += 1
+
+    dev_conn.commit()
+    dev_cur.close()
+    dev_conn.close()
+    logger.info("--- Equasis done: %d data rows, %d company uploads ---", eq_count, company_count)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Sync data from prod to dev")
     parser.add_argument("--hours", type=int, default=12, help="Hours of position history (default: 12)")
@@ -320,6 +543,8 @@ def main():
     parser.add_argument("--no-tunnel", action="store_true", help="Skip SSH tunnel (if already set up)")
     parser.add_argument("--with-infrastructure", action="store_true", help="Also sync infrastructure routes")
     parser.add_argument("--with-maritime", action="store_true", help="Also sync maritime zones/boundaries")
+    parser.add_argument("--with-iacs", action="store_true", help="Also sync IACS class data")
+    parser.add_argument("--with-equasis", action="store_true", help="Also sync Equasis data")
     parser.add_argument("--all", action="store_true", help="Sync everything")
     parser.add_argument("--skip-vessels", action="store_true", help="Skip vessel data")
     args = parser.parse_args()
@@ -327,6 +552,8 @@ def main():
     if args.all:
         args.with_infrastructure = True
         args.with_maritime = True
+        args.with_iacs = True
+        args.with_equasis = True
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%H:%M:%S")
 
@@ -369,6 +596,17 @@ def main():
 
         if args.with_maritime:
             sync_maritime(prod_url)
+
+        if args.with_iacs:
+            sync_iacs(prod_url)
+
+        if args.with_equasis:
+            if args.skip_vessels:
+                logger.warning(
+                    "Syncing Equasis without vessels — equasis_data has a FK on "
+                    "vessel_profiles(mmsi). Rows with missing MMSIs will be skipped."
+                )
+            sync_equasis(prod_url)
 
     finally:
         if tunnel_proc:
