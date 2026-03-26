@@ -30,6 +30,9 @@ export interface LookbackState {
   gnssOverlayWindow: '1h' | '3h' | '6h';
   gnssZonesCache: GeoJSON.FeatureCollection | null;
 
+  // Aircraft overlay during playback
+  showAircraftOverlay: boolean;
+
   // Track data (keyed by MMSI)
   tracks: Map<number, TrackPoint[]>;
   trackErrors: Map<number, string>;
@@ -52,6 +55,7 @@ export interface LookbackState {
   toggleGnssOverlay: () => void;
   setGnssOverlayWindow: (w: '1h' | '3h' | '6h') => void;
   setGnssZonesCache: (data: GeoJSON.FeatureCollection | null) => void;
+  toggleAircraftOverlay: () => void;
 }
 
 const defaultDateRange = () => {
@@ -79,6 +83,7 @@ export const useLookbackStore = create<LookbackState>((set, get) => ({
   showGnssOverlay: false,
   gnssOverlayWindow: '6h',
   gnssZonesCache: null,
+  showAircraftOverlay: true,
 
   tracks: new Map(),
   trackErrors: new Map(),
@@ -131,6 +136,7 @@ export const useLookbackStore = create<LookbackState>((set, get) => ({
       dateRange: defaultDateRange(),
       showGnssOverlay: false,
       gnssZonesCache: null,
+      showAircraftOverlay: true,
     }),
 
   play: () => set({ isPlaying: true }),
@@ -175,4 +181,7 @@ export const useLookbackStore = create<LookbackState>((set, get) => ({
   setGnssOverlayWindow: (w) => set({ gnssOverlayWindow: w }),
 
   setGnssZonesCache: (data) => set({ gnssZonesCache: data }),
+
+  toggleAircraftOverlay: () =>
+    set((state) => ({ showAircraftOverlay: !state.showAircraftOverlay })),
 }));

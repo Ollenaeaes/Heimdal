@@ -105,6 +105,8 @@ export function TimelineBar() {
   const gnssOverlayWindow = useLookbackStore((s) => s.gnssOverlayWindow);
   const toggleGnssOverlay = useLookbackStore((s) => s.toggleGnssOverlay);
   const setGnssOverlayWindow = useLookbackStore((s) => s.setGnssOverlayWindow);
+  const showAircraftOverlay = useLookbackStore((s) => s.showAircraftOverlay);
+  const toggleAircraftOverlay = useLookbackStore((s) => s.toggleAircraftOverlay);
 
   const tracksLoaded = tracks.size;
   const isLoading = tracksLoaded === 0;
@@ -175,6 +177,17 @@ export function TimelineBar() {
             {tracksLoaded} track{tracksLoaded !== 1 ? 's' : ''}
           </span>
         )}
+
+        {/* Aircraft overlay toggle */}
+        <label className="flex items-center gap-1 ml-2 cursor-pointer select-none" data-testid="timeline-aircraft-toggle">
+          <input
+            type="checkbox"
+            checked={showAircraftOverlay}
+            onChange={toggleAircraftOverlay}
+            className="w-3 h-3 accent-amber-500"
+          />
+          <span className="text-[0.65rem] text-slate-400">Aircraft</span>
+        </label>
 
         {/* GNSS overlay toggle */}
         <label className="flex items-center gap-1 ml-2 cursor-pointer select-none" data-testid="timeline-gnss-toggle">

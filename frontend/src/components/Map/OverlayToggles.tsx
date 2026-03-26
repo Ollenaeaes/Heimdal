@@ -262,7 +262,7 @@ function LayerCheckboxes({
           onChange={() => toggle('showGnssZones')}
           className="accent-red-500"
         />
-        GNSS / Spoofing
+        GNSS / ADS-B
       </label>
       <label className="flex items-center gap-2 cursor-pointer" data-testid="network-toggle">
         <input
