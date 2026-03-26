@@ -695,7 +695,7 @@ class GeographicInference:
                         INSERT INTO vessel_signals
                             (mmsi, imo, signal_id, weight, triggered_at, details, source_data)
                         VALUES (%s, %s, %s, %s, NOW(), %s, %s)
-                        ON CONFLICT (mmsi, signal_id, (triggered_at::date))
+                        ON CONFLICT (mmsi, signal_id)
                         DO UPDATE SET
                             weight = EXCLUDED.weight,
                             details = EXCLUDED.details,

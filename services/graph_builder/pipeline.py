@@ -164,7 +164,7 @@ class GraphPipeline:
         ]
 
         # Check sanctioned status
-        is_sanctioned = scorer.is_vessel_sanctioned(imo)
+        is_sanctioned = scorer.is_sanctioned(imo)
         total_score, classification = compute_score(all_signals, is_sanctioned)
 
         # Update this vessel's profile
@@ -196,26 +196,26 @@ class GraphPipeline:
         """Run geographic inference for all vessels with positions."""
         from services.geographic_inference.engine import GeographicInference
 
-        geo = GeographicInference(pg_conn=self.pg)
+        geo = GeographicInference(conn=self.pg)
         with self.pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
-                SELECT DISTINCT mmsi FROM vessel_profiles
+                SELECT DISTINCT mmsi, imo FROM vessel_profiles
                 WHERE last_lat IS NOT NULL AND imo IS NOT NULL
             """)
-            mmsis = [row["mmsi"] for row in cur.fetchall()]
+            vessels = [(row["mmsi"], row["imo"]) for row in cur.fetchall()]
 
         total_signals = 0
-        for mmsi in mmsis:
+        for mmsi, imo in vessels:
             try:
                 signals = geo.evaluate_vessel(mmsi)
                 if signals:
-                    geo.store_signals(mmsi, signals)
+                    geo.store_signals(mmsi, imo, signals)
                     total_signals += len(signals)
             except Exception:
                 logger.exception("Geographic inference failed for MMSI %d", mmsi)
 
         self.pg.commit()
-        logger.info("Geographic inference: %d signals for %d vessels", total_signals, len(mmsis))
+        logger.info("Geographic inference: %d signals for %d vessels", total_signals, len(vessels))
         return total_signals
 
     def _score_all_vessels(self) -> dict:
@@ -240,7 +240,7 @@ class GraphPipeline:
                     for s in fleet_signals
                 ]
 
-                is_sanctioned = scorer.is_vessel_sanctioned(imo)
+                is_sanctioned = scorer.is_sanctioned(imo)
                 total_score, classification = compute_score(all_signals, is_sanctioned)
 
                 # Store signal details in vessel_signals table
@@ -272,8 +272,8 @@ class GraphPipeline:
                     INSERT INTO vessel_signals (mmsi, imo, signal_id, weight, triggered_at, details, source_data)
                     SELECT vp.mmsi, %s, %s, %s, NOW(), %s, %s
                     FROM vessel_profiles vp WHERE vp.imo = %s
-                    ON CONFLICT ON CONSTRAINT vessel_signals_mmsi_signal_id_triggered_at_idx
-                    DO UPDATE SET weight = EXCLUDED.weight, details = EXCLUDED.details
+                    ON CONFLICT (mmsi, signal_id)
+                    DO UPDATE SET weight = EXCLUDED.weight, details = EXCLUDED.details, triggered_at = NOW()
                 """, (imo, s.signal_id, s.weight, json.dumps(s.details), s.source_data, imo))
         self.pg.commit()
 

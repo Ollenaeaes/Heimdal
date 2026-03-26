@@ -400,11 +400,26 @@ class GraphBuilder:
         entity_imos: dict[str, int | None] = {}
 
         with self.pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Only load entities connected to vessels (via vessel_links or relationships)
+            # This avoids loading 3M+ unrelated entities
             cur.execute("""
-                SELECT entity_id, schema_type, name, properties, topics, target
-                FROM os_entities
+                SELECT DISTINCT e.entity_id, e.schema_type, e.name, e.properties, e.topics, e.target
+                FROM os_entities e
+                WHERE e.entity_id IN (
+                    SELECT entity_id FROM os_vessel_links
+                    UNION
+                    SELECT source_entity_id FROM os_relationships
+                    WHERE target_entity_id IN (SELECT entity_id FROM os_vessel_links)
+                       OR source_entity_id IN (SELECT entity_id FROM os_vessel_links)
+                    UNION
+                    SELECT target_entity_id FROM os_relationships
+                    WHERE target_entity_id IN (SELECT entity_id FROM os_vessel_links)
+                       OR source_entity_id IN (SELECT entity_id FROM os_vessel_links)
+                )
             """)
             rows = cur.fetchall()
+            logger.info("OpenSanctions: loaded %d vessel-connected entities (of %d total)",
+                        len(rows), 0)  # avoid counting total for performance
 
         # Classify entities
         vessel_batch = []
@@ -552,13 +567,16 @@ class GraphBuilder:
             self.stats.nodes["Person"] += result.nodes_created
 
     def _load_os_relationships(self, vessel_links: dict[str, int], entity_imos: dict[str, int | None]) -> None:
-        """Load os_relationships and create edges."""
+        """Load os_relationships and create edges (only vessel-connected)."""
         with self.pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("""
                 SELECT rel_type, source_entity_id, target_entity_id, properties
                 FROM os_relationships
+                WHERE source_entity_id IN (SELECT entity_id FROM os_vessel_links)
+                   OR target_entity_id IN (SELECT entity_id FROM os_vessel_links)
             """)
             rows = cur.fetchall()
+        logger.info("OpenSanctions: loaded %d vessel-connected relationships", len(rows))
 
         for row in rows:
             rel_type = row["rel_type"]

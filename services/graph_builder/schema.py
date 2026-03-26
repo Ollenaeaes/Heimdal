@@ -201,5 +201,5 @@ def _seed_pi_clubs(graph: Any) -> int:
         )
         if result.nodes_created > 0:
             created += 1
-    logger.info("pi_clubs_seeded", extra={"created": created, "total": len(IG_PI_CLUBS)})
+    logger.info("pi_clubs_seeded: %d created, %d total", created, len(IG_PI_CLUBS))
     return created

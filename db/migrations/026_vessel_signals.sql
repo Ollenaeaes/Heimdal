@@ -25,8 +25,9 @@ CREATE INDEX IF NOT EXISTS idx_vessel_signals_signal_id ON vessel_signals (signa
 -- Index for time-range queries
 CREATE INDEX IF NOT EXISTS idx_vessel_signals_triggered_at ON vessel_signals (triggered_at DESC);
 
--- Composite index for dedup checks (same vessel + signal + day)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_vessel_signals_dedup
-    ON vessel_signals (mmsi, signal_id, (triggered_at::date));
+-- Composite unique constraint for dedup checks (same vessel + signal)
+-- One active signal per vessel per signal_id at a time
+CREATE UNIQUE INDEX IF NOT EXISTS vessel_signals_mmsi_signal_id_triggered_at_idx
+    ON vessel_signals (mmsi, signal_id);
 
 COMMIT;
