@@ -78,8 +78,24 @@ dev-rebuild: ## Rebuild and restart only the api-server (preserves DB)
 dev-down: ## Stop local dev stack
 	docker compose -f docker-compose.dev.yml down
 
-sync-data: ## Sync raw AIS data from production (default: last 3 days)
+sync-data: ## Sync prod data to local DB (48h positions + profiles + IACS + equasis)
+	python3 scripts/sync_dev_data.py --hours 48 --all
+
+sync-raw: ## Sync raw AIS files from production (default: last 3 days)
 	bash scripts/sync-data.sh $(DAYS)
+
+dev-reset: ## Drop local DB, recreate, apply migrations, and run sync
+	docker compose -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.dev.yml up -d
+	@echo "Waiting for migrations to complete..."
+	@docker compose -f docker-compose.dev.yml wait migrate 2>/dev/null || sleep 10
+	$(MAKE) sync-data
+
+dev-shell: ## Open a psql shell to the local database
+	docker compose -f docker-compose.dev.yml exec postgres psql -U heimdal -d heimdal
+
+dev-test: ## Run test suite against local database
+	docker compose -f docker-compose.dev.yml exec api-server pytest
 
 dev-load: ## Run batch pipeline locally to load synced data
 	docker compose -f docker-compose.dev.yml --profile batch run --rm batch-pipeline
@@ -130,5 +146,5 @@ help: ## Show this help
 
 .PHONY: up down reset logs logs-ingest logs-scoring migrate shell-db fetch-sanctions test shell-api help \
         iacs-bootstrap iacs-update iacs-check iacs-risk iacs-changes \
-        dev-up dev-down sync-data dev-load dev-logs \
+        dev-up dev-down dev-rebuild sync-data sync-raw dev-reset dev-shell dev-test dev-load dev-logs \
         oci-check oci-provision oci-setup oci-deploy oci-deploy-full oci-ssh oci-logs oci-status oci-ip
