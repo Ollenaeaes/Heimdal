@@ -50,10 +50,11 @@ class BatchWriter:
         self._vessel_updates: dict[int, dict] = {}  # mmsi -> profile data
         self._pool: asyncpg.Pool | None = None
         self._flush_task: asyncio.Task | None = None
+        self._flush_lock = asyncio.Lock()
 
     async def start(self):
         """Create connection pool and start periodic flush."""
-        self._pool = await asyncpg.create_pool(self.dsn, min_size=2, max_size=10)
+        self._pool = await asyncpg.create_pool(self.dsn, min_size=1, max_size=3)
         self._flush_task = asyncio.create_task(self._periodic_flush())
 
     async def stop(self):
@@ -104,6 +105,11 @@ class BatchWriter:
 
     async def _flush(self):
         """Flush position buffer and vessel updates to database."""
+        async with self._flush_lock:
+            await self._flush_locked()
+
+    async def _flush_locked(self):
+        """Flush implementation — must be called under _flush_lock."""
         if not self._position_buffer and not self._vessel_updates:
             return
 
@@ -137,15 +143,21 @@ class BatchWriter:
                             latest[mmsi] = p
 
                     await conn.executemany(
-                        """INSERT INTO vessel_profiles (mmsi, last_position_time, last_lat, last_lon, updated_at)
-                           VALUES ($1, $2, $3, $4, NOW())
+                        """INSERT INTO vessel_profiles
+                               (mmsi, last_position_time, last_lat, last_lon,
+                                last_sog, last_cog, last_heading, updated_at)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
                            ON CONFLICT (mmsi) DO UPDATE SET
                              last_position_time = EXCLUDED.last_position_time,
                              last_lat = EXCLUDED.last_lat,
                              last_lon = EXCLUDED.last_lon,
+                             last_sog = EXCLUDED.last_sog,
+                             last_cog = EXCLUDED.last_cog,
+                             last_heading = EXCLUDED.last_heading,
                              updated_at = NOW()""",
                         [
-                            (p[1], p[0], p[3], p[2])  # mmsi, timestamp, lat, lon
+                            (p[1], p[0], p[3], p[2], p[4], p[5], p[6])
+                            # mmsi, timestamp, lat, lon, sog, cog, heading
                             for p in latest.values()
                         ],
                     )

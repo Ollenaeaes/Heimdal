@@ -27,7 +27,6 @@ from shared.models.ais_message import PositionReport, ShipStaticData
 # we import without the services.ais_ingest prefix.
 from parser import parse_message, parse_vessel_extras
 from dedup import Deduplicator
-from file_writer import RawFileWriter
 from metrics import MetricsPublisher
 from writer import BatchWriter
 from websocket import AISWebSocket
@@ -155,10 +154,6 @@ async def _check_mmsi_collision(
 async def main():
     setup_logging("ais-ingest")
 
-    # Initialize raw file writer (always runs — durable source of truth)
-    raw_writer = RawFileWriter(base_path=settings.raw_storage.base_path)
-    await raw_writer.start()
-
     # Initialize Redis (optional — skip if no URL configured)
     redis = None
     dedup = None
@@ -189,12 +184,6 @@ async def main():
                 msg_count["total"], msg_count["parsed"], msg_count["written"],
                 msg_count["collision_dropped"],
             )
-
-        # Always write raw message to JSONL files
-        try:
-            await raw_writer.write_message(raw)
-        except Exception:
-            logger.exception("Raw file write failed")
 
         result = parse_message(raw)
         if result is None:
@@ -239,7 +228,6 @@ async def main():
     finally:
         await ws.stop()
         await writer.stop()
-        await raw_writer.stop()
         if redis:
             await redis.close()
 

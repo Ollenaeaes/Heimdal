@@ -109,10 +109,27 @@ class AISWebSocket:
         self._running = False
 
     def _subscription_message(self) -> dict:
-        """Build aisstream.io subscription message."""
+        """Build aisstream.io subscription message.
+
+        Bounding box format per AISstream docs: [[lat, lon], [lat, lon]].
+        Overlapping boxes do NOT produce duplicate messages.
+        """
         return {
             "APIKey": self.api_key,
-            "BoundingBoxes": [[[-180, -90], [180, 90]]],  # worldwide
+            "BoundingBoxes": [
+                [[53.85, -4.75], [72, 45.35]],       # Scandinavia, Baltic, Barents
+                [[33.5, -13.01], [59.63, -0.88]],     # Atlantic coast: Portugal → UK
+                [[30, -4.75], [42.75, 18.81]],         # West Mediterranean
+                [[41.05, 27.51], [47, 42]],            # Black Sea
+                [[19.56, 32.39], [30.6, 37.57]],       # Red Sea north
+                [[49.38, -1.76], [55.93, 3.16]],       # English Channel / Southern North Sea
+                [[22.42, 47.26], [30.92, 59.26]],      # Persian Gulf / Gulf of Oman
+                [[41.31, 2.37], [46.4, 20.39]],        # Central Mediterranean / Adriatic
+                [[10.3, 36.65], [24.69, 48.03]],       # Gulf of Aden / Arabian Sea
+                [[10.83, 46.97], [27.27, 63.19]],      # Indian Ocean west
+                [[52.32, 1.76], [56.59, 9.01]],        # Southern North Sea / German Bight
+                [[28.62, 18.11], [41.51, 36.65]],      # East Mediterranean / Egypt
+            ],
             "FilterMessageTypes": ["PositionReport", "ShipStaticData"],
         }
 
